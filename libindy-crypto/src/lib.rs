@@ -1,12 +1,17 @@
 extern crate amcl;
-//#[macro_use]
-//extern crate log;
+extern crate env_logger;
+#[macro_use]
+extern crate log;
 extern crate rand;
 extern crate sha1;
 
 // To use macros from util inside of other modules it must me loaded first.
 #[macro_use]
 mod utils;
+
+#[cfg(feature = "serialization")]
+#[macro_use]
+extern crate serde_derive;
 
 pub mod bls;
 pub mod errors;
