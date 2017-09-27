@@ -52,3 +52,7 @@ RUN virtualenv -p python3.5 /home/indy/test
 USER root
 RUN ln -sf /home/indy/test/bin/python /usr/local/bin/python3
 RUN ln -sf /home/indy/test/bin/pip /usr/local/bin/pip3
+
+RUN pip3 install -U pip plumbum
+RUN apt-get install -y ruby-dev
+RUN gem install fpm

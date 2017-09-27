@@ -180,9 +180,10 @@ def ubuntuPublishing() {
                 echo 'Publish Ubuntu files: Build docker image'
                 testEnv = dockerHelpers.build('indy-crypto', 'libindy-crypto/ci/ubuntu.dockerfile libindy-crypto/ci')
 
-                libindyCryptoDebPublishing(testEnv)
+                libindyCryptoDebPublishing(testEnv, version)
                 libindyCryptoCargoPublishing(testEnv, false)
-                pythonWrapperPublishing(testEnv, false)
+                pythonWrapperPypiPublishing(testEnv, false)
+                pythonWrapperDebPublishing(testEnv)
             }
             finally {
                 echo 'Publish Ubuntu files: Cleanup'
@@ -211,8 +212,8 @@ def windowsPublishing() {
                         bat "cargo build --release"
                     }
 
-                    withCredentials([file(credentialsId: 'EvernymRepoSSHKey', variable: 'evernym_repo_key')]) {
-                        sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${evernym_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER"
+                    withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+                        sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER"
                     }
                 }
             }
@@ -225,17 +226,32 @@ def windowsPublishing() {
     return version
 }
 
-def libindyCryptoDebPublishing(testEnv) {
+def libindyCryptoDebPublishing(testEnv, version) {
     dir('libindy-crypto') {
         testEnv.inside('-u 0:0') {
             sh 'chmod -R 755 ci/*.sh'
 
-            withCredentials([file(credentialsId: 'EvernymRepoSSHKey', variable: 'evernym_repo_key')]) {
-                sh "./ci/libindy_crypto-deb-build-and-upload.sh $version $evernym_repo_key $env.BRANCH_NAME $env.BUILD_NUMBER"
-                sh "rm -rf debian"
+            dir('sovrin-packaging') {
+                downloadPackagingUtils()
+            }
+
+            withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+                try {
+                    sh 'mkdir /root/.ssh && ln -sf $sovrin_repo_key /root/.ssh'
+                    sh "./ci/libindy_crypto-deb-build-and-upload.sh $version $env.BRANCH_NAME $env.BUILD_NUMBER"
+
+                    if (env.BRANCH_NAME == 'rc') {
+                        stash includes: 'debs/*', name: 'libindyCryptoDebs'
+                    }
+                }
+                finally {
+                    sh "rm -rf debian"
+                    sh 'rm -f ~/.ssh/$sovrin_repo_key'
+                }
             }
         }
     }
+
 }
 
 def getSuffix(isRelease, target) {
@@ -269,7 +285,7 @@ def libindyCryptoCargoPublishing(testEnv, isRelease) {
     }
 }
 
-def pythonWrapperPublishing(testEnv, isRelease) {
+def pythonWrapperPypiPublishing(testEnv, isRelease) {
     dir('wrappers/python') {
         def suffix = getSuffix(isRelease, "Pypi")
 
@@ -281,6 +297,32 @@ def pythonWrapperPublishing(testEnv, isRelease) {
                     python3.5 setup.py sdist
                     python3.5 -m twine upload dist/* --config-file .pypirc
                 '''
+            }
+        }
+    }
+}
+
+def pythonWrapperDebPublishing(testEnv) {
+    dir('wrappers/python') {
+        testEnv.inside {
+            sh 'chmod -R 755 ci/*.sh'
+
+            dir('sovrin-packaging') {
+                downloadPackagingUtils()
+            }
+
+            withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+                try {
+                    sh 'mkdir /home/indy/.ssh && ln -sf $sovrin_repo_key ~/.ssh'
+                    sh "./ci/python-wrapper-deb-build-and-upload.sh $env.BRANCH_NAME $env.BUILD_NUMBER"
+
+                    if (env.BRANCH_NAME == 'rc') {
+                        stash includes: 'debs/*', name: 'PythonWrapperDebs'
+                    }
+                }
+                finally {
+                    sh 'rm -f ~/.ssh/$sovrin_repo_key'
+                }
             }
         }
     }
@@ -302,7 +344,8 @@ def publishingRCtoStable() {
                 testEnv = dockerHelpers.build('indy-crypto', 'libindy-crypto/ci/ubuntu.dockerfile libindy-crypto/ci')
                 echo 'Moving RC artifacts to Stable: python wrapper'
                 libindyCryptoCargoPublishing(testEnv, true)
-                pythonWrapperPublishing(testEnv, true)
+                pythonWrapperPypiPublishing(testEnv, true)
+                publishPythonWrapperRCtoStable(version)
             } finally {
                 echo 'Moving RC artifacts to Stable: Cleanup'
                 step([$class: 'WsCleanup'])
@@ -313,13 +356,44 @@ def publishingRCtoStable() {
 
 def publishLibindyCryptoRCtoStable(version) {
     rcFullVersion = "${version}-${env.BUILD_NUMBER}"
-    withCredentials([file(credentialsId: 'EvernymRepoSSHKey', variable: 'key')]) {
-        for (os in ['ubuntu', 'windows']) { //FIXME add rhel IS-307
-            src = "/var/repository/repos/libindy_crypto/$os/rc/$rcFullVersion/"
-            target = "/var/repository/repos/libindy_crypto/$os/stable/$version"
-            //should not exists
-            sh "ssh -v -oStrictHostKeyChecking=no -i '$key' repo@192.168.11.111 '! ls $target'"
-            sh "ssh -v -oStrictHostKeyChecking=no -i '$key' repo@192.168.11.111 cp -r $src $target"
-        }
+    withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+        //Copy windows files
+        src = "/var/repository/repos/windows/libindy_crypto/rc/$rcFullVersion/"
+        target = "/var/repository/repos/windows/libindy_crypto/stable/$version"
+
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 '! ls $target'"
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 cp -r $src $target"
+
+        //Upload ubuntu files
+        unstash name: 'libindyCryptoDebs'
+        uploadDebianFilesToStable(version, rcFullVersion)
     }
+}
+
+def publishPythonWrapperRCtoStable(version) {
+    rcFullVersion = "${version}-${env.BUILD_NUMBER}"
+    withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+        unstash name: 'PythonWrapperDebs'
+        uploadDebianFilesToStable(version, rcFullVersion)
+    }
+}
+
+def uploadDebianFilesToStable(version, rcFullVersion) {
+    try {
+        sh 'ln -sf $sovrin_repo_key ~/.ssh'
+
+        downloadPackagingUtils()
+
+        sh "rename -v 's/$rcFullVersion/$version/' debs/*.deb"
+        path = sh(returnStdout: true, script: 'pwd debs').trim() + '/debs'
+
+        sh "./upload-debs $path stable"
+    }
+    finally {
+        sh 'rm -f ~/.ssh/$sovrin_repo_key'
+    }
+}
+
+def downloadPackagingUtils() {
+    git branch: 'master', credentialsId: 'evernym-github-machine-user', url: 'https://github.com/evernym/sovrin-packaging'
 }
