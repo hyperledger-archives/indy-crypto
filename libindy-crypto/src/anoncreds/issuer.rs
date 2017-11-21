@@ -494,6 +494,7 @@ mod tests {
         assert!(res.is_err())
     }
 
+
     #[test]
     fn issuer_new_revocation_registry_works() {
         let (pub_key, priv_key) = Issuer::new_keys(&mocks::claim_attributes(), true).unwrap();
