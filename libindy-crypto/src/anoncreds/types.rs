@@ -10,6 +10,8 @@ use pair::{
 
 use std::collections::{HashMap, HashSet};
 
+
+#[derive(Debug)]
 pub struct ClaimAttributes {
     pub attrs: HashSet<String>
 }
@@ -25,12 +27,12 @@ impl ClaimAttributesBuilder {
         })
     }
 
-    pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_attr(mut self, attr: &str) -> Result<ClaimAttributesBuilder, IndyCryptoError> {
         self.attrs.insert(attr.to_owned());
-        Ok(())
+        Ok(self)
     }
 
-    pub fn finalize(self, attribute: String) -> Result<ClaimAttributes, IndyCryptoError> {
+    pub fn finalize(self) -> Result<ClaimAttributes, IndyCryptoError> {
         Ok(ClaimAttributes {
             attrs: self.attrs
         })
@@ -52,9 +54,9 @@ impl ClaimAttributesValuesBuilder {
         })
     }
 
-    pub fn add_attr_value(&mut self, attr: &str, dec_value: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_attr_value(mut self, attr: &str, dec_value: &str) -> Result<ClaimAttributesValuesBuilder, IndyCryptoError> {
         self.attrs_values.insert(attr.to_owned(), BigNumber::from_dec(dec_value)?);
-        Ok(())
+        Ok(self)
     }
 
     pub fn finalize(self) -> Result<ClaimAttributesValues, IndyCryptoError> {
