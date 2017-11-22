@@ -17,6 +17,7 @@ pub struct ClaimAttributes {
     pub attrs: HashSet<String>
 }
 
+#[derive(Debug)]
 pub struct ClaimAttributesBuilder {
     attrs: HashSet<String>
 }
@@ -40,10 +41,12 @@ impl ClaimAttributesBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct ClaimAttributesValues {
     pub attrs_values: HashMap<String, BigNumber>
 }
 
+#[derive(Debug)]
 pub struct ClaimAttributesValuesBuilder {
     attrs_values: HashMap<String, BigNumber>
 }
