@@ -142,7 +142,7 @@ pub struct ProofBuilder {
     pub init_proofs: HashMap<String, InitProof>,
     pub c_list: Vec<Vec<u8>>,
     pub tau_list: Vec<Vec<u8>>,
-    pub proof_claims: HashMap<String, ProofClaims>,
+    pub proof_claims: HashMap<String /* issuer pub key id */, ProofClaims>,
 }
 
 impl ProofBuilder {
@@ -792,7 +792,7 @@ impl ProofBuilder {
     }
 
     pub fn create_tau_list_values(pk_r: &IssuerRevocationPublicKey, accumulator: &RevocationAccumulator,
-                                   params: &NonRevocProofXList, proof_c: &NonRevocProofCList) -> Result<NonRevocProofTauList, IndyCryptoError> {
+                                  params: &NonRevocProofXList, proof_c: &NonRevocProofCList) -> Result<NonRevocProofTauList, IndyCryptoError> {
         let t1 = pk_r.h.mul(&params.rho)?.add(&pk_r.htilde.mul(&params.o)?)?;
         let mut t2 = proof_c.e.mul(&params.c)?
             .add(&pk_r.h.mul(&params.m.mod_neg()?)?)?
@@ -835,7 +835,7 @@ impl ProofBuilder {
     }
 
     pub fn create_tau_list_expected_values(pk_r: &IssuerRevocationPublicKey, accumulator: &RevocationAccumulator,
-                                            accum_pk: &RevocationAccumulatorPublicKey, proof_c: &NonRevocProofCList) -> Result<NonRevocProofTauList, IndyCryptoError> {
+                                           accum_pk: &RevocationAccumulatorPublicKey, proof_c: &NonRevocProofCList) -> Result<NonRevocProofTauList, IndyCryptoError> {
         let t1 = proof_c.e;
         let t2 = PointG1::new_inf()?;
         let t3 = Pair::pair(&pk_r.h0.add(&proof_c.g)?, &pk_r.h_cap)?
@@ -1041,12 +1041,12 @@ mod tests {
         let proof_c_list = ProofBuilder::_create_c_list_values(&r_claim, &c_list_params, &r_key).unwrap();
 
         let proof_tau_list = ProofBuilder::create_tau_list_values(&r_key, &pub_rev_reg.acc,
-                                                                   &c_list_params, &proof_c_list).unwrap();
+                                                                  &c_list_params, &proof_c_list).unwrap();
 
         let proof_tau_list_calc = ProofBuilder::create_tau_list_expected_values(&r_key,
-                                                                                 &pub_rev_reg.acc,
-                                                                                 &pub_rev_reg.key,
-                                                                                 &proof_c_list).unwrap();
+                                                                                &pub_rev_reg.acc,
+                                                                                &pub_rev_reg.key,
+                                                                                &proof_c_list).unwrap();
 
         assert_eq!(proof_tau_list.as_slice().unwrap(), proof_tau_list_calc.as_slice().unwrap());
     }
