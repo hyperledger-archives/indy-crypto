@@ -33,7 +33,7 @@ impl Verifier {
             let proof_claim: &ProofClaims = self.claims.get(proof_uuid)
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Schema is not found")))?;
 
-            if let (Some(non_revocation_proof), Some(pkr), Some(revoc_reg)) = (proof_item.proof.non_revoc_proof.as_ref(),
+            if let (Some(non_revocation_proof), Some(pkr), Some(revoc_reg)) = (proof_item.non_revoc_proof.as_ref(),
                                                                                proof_claim.r_pub_key.as_ref(),
                                                                                proof_claim.r_reg.as_ref()) {
                 tau_list.extend_from_slice(
@@ -49,7 +49,7 @@ impl Verifier {
             tau_list.append_vec(
                 &Verifier::_verify_primary_proof(&proof_claim.p_pub_key.p_key,
                                                  &proof.aggregated_proof.c_hash,
-                                                 &proof_item.proof.primary_proof,
+                                                 &proof_item.primary_proof,
                                                  &proof_claim.attrs_with_predicates)?
             )?;
         }
@@ -102,7 +102,7 @@ impl Verifier {
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", attr)))?;
 
             rar = cur_r
-                .mod_exp(&BigNumber::from_dec(&encoded_value)?, &pk.n, Some(&mut ctx))?
+                .mod_exp(encoded_value, &pk.n, Some(&mut ctx))?
                 .mul(&rar, Some(&mut ctx))?;
         }
 
@@ -273,8 +273,8 @@ impl Verifier {
 
         let ch_num_z = bignum_to_group_element(&c_hash)?;
 
-        let t_hat_expected_values = ProofBuilder::_create_tau_list_expected_values(pkr, accum, accum_pk, &proof.c_list)?;
-        let t_hat_calc_values = ProofBuilder::_create_tau_list_values(&pkr, &accum, &proof.x_list, &proof.c_list)?;
+        let t_hat_expected_values = ProofBuilder::create_tau_list_expected_values(pkr, accum, accum_pk, &proof.c_list)?;
+        let t_hat_calc_values = ProofBuilder::create_tau_list_values(&pkr, &accum, &proof.x_list, &proof.c_list)?;
 
 
         let res = Ok(NonRevocProofTauList {
