@@ -65,7 +65,7 @@ pub fn generate_v_prime_prime() -> Result<BigNumber, IndyCryptoError> {
 
 #[cfg(not(test))]
 pub fn generate_safe_prime(size: usize) -> Result<BigNumber, IndyCryptoError> {
-    BigNumber::generate_safe_prime(usize)
+    BigNumber::generate_safe_prime(size)
 }
 
 #[cfg(test)]
@@ -256,10 +256,6 @@ pub fn group_element_to_bignum(el: &GroupOrderElement) -> Result<BigNumber, Indy
 
 pub fn bignum_to_group_element(num: &BigNumber) -> Result<GroupOrderElement, IndyCryptoError> {
     Ok(GroupOrderElement::from_bytes(&num.to_bytes()?)?)
-}
-
-pub fn get_composite_id(issuer_did: &str, schema_seq_no: i32) -> String {
-    issuer_did.to_string() + ":" + &schema_seq_no.to_string()
 }
 
 #[cfg(not(test))]
