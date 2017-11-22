@@ -10,13 +10,14 @@ use pair::{
 };
 
 use std::collections::{HashMap, HashSet};
-
+use super::helpers::clone_bignum_map;
 
 #[derive(Debug)]
 pub struct ClaimAttributes {
     pub attrs: HashSet<String>
 }
 
+#[derive(Debug)]
 pub struct ClaimAttributesBuilder {
     attrs: HashSet<String>
 }
@@ -40,10 +41,20 @@ impl ClaimAttributesBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct ClaimAttributesValues {
     pub attrs_values: HashMap<String, BigNumber>
 }
 
+impl ClaimAttributesValues {
+    pub fn clone(&self) -> Result<ClaimAttributesValues, IndyCryptoError> {
+        Ok(ClaimAttributesValues {
+            attrs_values: clone_bignum_map(&self.attrs_values)?
+        })
+    }
+}
+
+#[derive(Debug)]
 pub struct ClaimAttributesValuesBuilder {
     attrs_values: HashMap<String, BigNumber>
 }
@@ -83,12 +94,13 @@ pub struct IssuerPrimaryPublicKey {
     pub z: BigNumber
 }
 
+#[derive(Debug)]
 pub struct IssuerRevocationPrivateKey {
     pub x: GroupOrderElement,
     pub sk: GroupOrderElement
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IssuerRevocationPublicKey {
     pub g: PointG1,
     pub g_dash: PointG2,
@@ -103,16 +115,19 @@ pub struct IssuerRevocationPublicKey {
     pub y: PointG2,
 }
 
+#[derive(Debug)]
 pub struct IssuerPublicKey {
     pub p_key: IssuerPrimaryPublicKey,
     pub r_key: Option<IssuerRevocationPublicKey>,
 }
 
+#[derive(Debug)]
 pub struct IssuerPrivateKey {
     pub p_key: IssuerPrimaryPrivateKey,
     pub r_key: Option<IssuerRevocationPrivateKey>,
 }
 
+#[derive(Debug)]
 pub struct RevocationAccumulator {
     pub acc: PointG2,
     pub v: HashSet<u32>,
@@ -128,25 +143,30 @@ impl RevocationAccumulator {
     }
 }
 
+#[derive(Debug)]
 pub struct RevocationAccumulatorPrivateKey {
     pub gamma: GroupOrderElement
 }
 
+#[derive(Debug)]
 pub struct RevocationAccumulatorPublicKey {
     pub z: Pair
 }
 
+#[derive(Debug)]
 pub struct RevocationAccumulatorTails {
     pub tails: HashMap<u32, PointG1>,
     pub tails_dash: HashMap<u32, PointG2>,
 }
 
+#[derive(Debug)]
 pub struct RevocationRegistryPublic {
     pub key: RevocationAccumulatorPublicKey,
     pub acc: RevocationAccumulator,
     pub tails: RevocationAccumulatorTails,
 }
 
+#[derive(Debug)]
 pub struct RevocationRegistryPrivate {
     pub key: RevocationAccumulatorPrivateKey,
 }
@@ -179,20 +199,24 @@ pub struct NonRevocationClaim {
     pub m2: GroupOrderElement
 }
 
+#[derive(Debug)]
 pub struct Claim {
     pub p_claim: PrimaryClaim,
     pub r_claim: Option<NonRevocationClaim>,
 }
 
+#[derive(Debug)]
 pub struct MasterSecret {
     pub ms: BigNumber,
 }
 
+#[derive(Debug)]
 pub struct BlindedMasterSecret {
     pub u: BigNumber,
     pub ur: Option<PointG1>
 }
 
+#[derive(Debug)]
 pub struct BlindedMasterSecretData {
     pub v_prime: BigNumber,
     pub vr_prime: Option<GroupOrderElement>
@@ -331,7 +355,7 @@ impl NonRevocProofXList {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct NonRevocProofCList {
     pub e: PointG1,
     pub d: PointG1,
@@ -349,7 +373,7 @@ impl NonRevocProofCList {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
 pub struct NonRevocProofTauList {
     pub t1: PointG1,
     pub t2: PointG1,
@@ -368,6 +392,7 @@ impl NonRevocProofTauList {
     }
 }
 
+#[derive(Debug)]
 pub struct NonRevocInitProof {
     pub c_list_params: NonRevocProofXList,
     pub tau_list_params: NonRevocProofXList,
@@ -387,9 +412,12 @@ impl NonRevocInitProof {
     }
 }
 
+#[derive(Debug)]
 pub struct InitProof {
     pub primary_init_proof: PrimaryInitProof,
-    pub non_revoc_init_proof: Option<NonRevocInitProof>
+    pub non_revoc_init_proof: Option<NonRevocInitProof>,
+    pub attributes_values: ClaimAttributesValues,
+    pub attrs_with_predicates: AttrsWithPredicates
 }
 
 pub struct ProofRequest {
@@ -400,16 +428,16 @@ pub struct ProofRequest {
     pub requested_predicates: HashMap<String, Predicate>
 }
 
-
+#[derive(Debug)]
 pub struct ProofClaims {
     pub claim: Claim,
     pub claim_attributes_values: ClaimAttributesValues,
-    pub p_pub_key: IssuerPublicKey,
-    pub r_pub_key: Option<IssuerRevocationPublicKey>,
+    pub pub_key: IssuerPublicKey,
     pub r_reg: Option<RevocationRegistryPublic>,
     pub attrs_with_predicates: AttrsWithPredicates
 }
 
+#[derive(Debug)]
 pub struct PrimaryEqualProof {
     pub revealed_attrs: HashMap<String, BigNumber>,
     pub a_prime: BigNumber,
@@ -420,6 +448,7 @@ pub struct PrimaryEqualProof {
     pub m2: BigNumber
 }
 
+#[derive(Debug)]
 pub struct PrimaryPredicateGEProof {
     pub u: HashMap<String, BigNumber>,
     pub r: HashMap<String, BigNumber>,
@@ -429,26 +458,31 @@ pub struct PrimaryPredicateGEProof {
     pub predicate: Predicate
 }
 
+#[derive(Debug)]
 pub struct PrimaryProof {
     pub eq_proof: PrimaryEqualProof,
     pub ge_proofs: Vec<PrimaryPredicateGEProof>
 }
 
+#[derive(Debug)]
 pub struct NonRevocProof {
     pub x_list: NonRevocProofXList,
     pub c_list: NonRevocProofCList
 }
 
+#[derive(Debug)]
 pub struct Proof {
     pub primary_proof: PrimaryProof,
     pub non_revoc_proof: Option<NonRevocProof>
 }
 
+#[derive(Debug)]
 pub struct AggregatedProof {
     pub c_hash: BigNumber,
     pub c_list: Vec<Vec<u8>>
 }
 
+#[derive(Debug)]
 pub struct FullProof {
     pub proofs: HashMap<String, Proof>,
     pub aggregated_proof: AggregatedProof,
@@ -461,6 +495,7 @@ pub struct AttrsWithPredicates {
     pub predicates: Vec<Predicate>,
 }
 
+#[derive(Debug)]
 pub struct AttrsWithPredicatesBuilder {
     value: AttrsWithPredicates
 }
@@ -486,8 +521,8 @@ impl AttrsWithPredicatesBuilder {
         Ok(self)
     }
 
-    pub fn add_predicate(mut self, predicate: Predicate) -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
-        self.value.predicates.push(predicate);
+    pub fn add_predicate(mut self, predicate: &Predicate) -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
+        self.value.predicates.push(predicate.clone());
         Ok(self)
     }
 
