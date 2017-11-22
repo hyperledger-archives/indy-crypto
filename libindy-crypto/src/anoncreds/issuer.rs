@@ -213,7 +213,7 @@ impl Issuer {
     }
 
     fn _new_revocation_keys() -> Result<(IssuerRevocationPublicKey,
-                                             IssuerRevocationPrivateKey), IndyCryptoError> {
+                                         IssuerRevocationPrivateKey), IndyCryptoError> {
         let h = PointG1::new()?;
         let h0 = PointG1::new()?;
         let h1 = PointG1::new()?;
