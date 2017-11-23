@@ -191,11 +191,11 @@ impl ProofBuilder {
         Ok(())
     }
 
-    pub fn finalize(&mut self, proof_req: &ProofRequest, ms: &MasterSecret) -> Result<FullProof, IndyCryptoError> {
+    pub fn finalize(&mut self, nonce: &BigNumber, ms: &MasterSecret) -> Result<FullProof, IndyCryptoError> {
         let mut values: Vec<Vec<u8>> = Vec::new();
         values.extend_from_slice(&self.tau_list);
         values.extend_from_slice(&self.c_list);
-        values.push(proof_req.nonce.to_bytes()?);
+        values.push(nonce.to_bytes()?);
 
         let c_h = get_hash_as_int(&mut values)?;
 

@@ -3,6 +3,7 @@ use anoncreds::issuer::*;
 use anoncreds::prover::*;
 use anoncreds::types::*;
 
+use bn::BigNumber;
 use ffi::ErrorCode;
 use ffi::indy_crypto_init_logger;
 use errors::ToErrorCode;
@@ -969,7 +970,7 @@ pub extern fn indy_crypto_anoncreds_proof_builder_finilize(proof_builder_p: *con
            proof_builder_p, proof_req_p, master_secret_p, proof_p);
 
     check_useful_c_ptr!(proof_builder_p, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(proof_req_p, ProofRequest, ErrorCode::CommonInvalidParam2);
+    check_useful_c_reference!(proof_req_p, BigNumber, ErrorCode::CommonInvalidParam2);
     check_useful_c_reference!(master_secret_p, MasterSecret, ErrorCode::CommonInvalidParam2);
 
     let mut proof_builder = unsafe { Box::from_raw(proof_builder_p as *mut ProofBuilder) };
