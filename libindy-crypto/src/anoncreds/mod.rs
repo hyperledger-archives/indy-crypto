@@ -34,7 +34,7 @@ mod test {
                                           &claim_attributes_values,
                                           &issuer_pub, &issuer_priv,
                                           None, None, None).unwrap();
-        Prover::process_claim(&mut claim, &blinded_master_secret_data, None, None).unwrap();
+        Prover::process_claim(&mut claim, &blinded_master_secret_data, &issuer_pub, None).unwrap();
 
         let proof_attrs = types::ProofAttrsBuilder::new().unwrap()
             .add_revealed_attr("sex").unwrap()

@@ -233,7 +233,7 @@ pub extern fn indy_crypto_anoncreds_prover_proof_builder_add_claim(proof_builder
     check_useful_c_reference!(claim_attributes_values_p, ClaimAttributesValues, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(pub_key_p, IssuerPublicKey, ErrorCode::CommonInvalidParam3);
     check_useful_opt_c_reference!(r_reg_p, RevocationRegistryPublic, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(attrs_with_predicates_p, AttrsWithPredicates, ErrorCode::CommonInvalidParam3);
+    check_useful_c_reference!(attrs_with_predicates_p, ProofAttrs, ErrorCode::CommonInvalidParam3);
 
     let mut proof_builder = unsafe { Box::from_raw(proof_builder_p as *mut ProofBuilder) };
 
