@@ -155,7 +155,7 @@ impl ProofBuilder {
     }
 
     pub fn add_claim(&mut self, uuid: &str, claim: &Claim, claim_attributes_values: &ClaimAttributesValues, pub_key: &IssuerPublicKey,
-                     r_reg: Option<&RevocationRegistryPublic>, attrs_with_predicates: &AttrsWithPredicates) -> Result<(), IndyCryptoError> {
+                     r_reg: Option<&RevocationRegistryPublic>, attrs_with_predicates: &ProofAttrs) -> Result<(), IndyCryptoError> {
         let mut non_revoc_init_proof = None;
         let mut m2_tilde: Option<BigNumber> = None;
 
@@ -223,7 +223,7 @@ impl ProofBuilder {
     }
 
     fn _init_primary_proof(pk: &IssuerPrimaryPublicKey, c1: &PrimaryClaim, attributes: &HashMap<String, BigNumber>,
-                           attr_with_predicates: &AttrsWithPredicates, m1_t: &BigNumber,
+                           attr_with_predicates: &ProofAttrs, m1_t: &BigNumber,
                            m2_t: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
         let eq_proof = ProofBuilder::_init_eq_proof(&pk, c1, &attr_with_predicates,
                                                     m1_t, m2_t)?;
@@ -289,7 +289,7 @@ impl ProofBuilder {
         Ok(())
     }
 
-    fn _init_eq_proof(pk: &IssuerPrimaryPublicKey, c1: &PrimaryClaim, attr_with_predicates: &AttrsWithPredicates,
+    fn _init_eq_proof(pk: &IssuerPrimaryPublicKey, c1: &PrimaryClaim, attr_with_predicates: &ProofAttrs,
                       m1_tilde: &BigNumber, m2_t: Option<BigNumber>) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
 
@@ -316,8 +316,8 @@ impl ProofBuilder {
             &BigNumber::from_dec("2")?.exp(&large_e_start, Some(&mut ctx))?
         )?;
 
-        let t = ProofBuilder::calc_teq(&pk, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m1_tilde,
-                                       &m2_tilde, &attr_with_predicates.unrevealed_attrs)?;
+        let t = calc_teq(&pk, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m1_tilde,
+                         &m2_tilde, &attr_with_predicates.unrevealed_attrs)?;
 
         Ok(PrimaryEqualInitProof {
             a_prime,
@@ -404,7 +404,7 @@ impl ProofBuilder {
         let mj = mtilde.get(&k[..])
             .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in eq_proof.mtilde", k)))?;
 
-        let tau_list = ProofBuilder::calc_tge(&pk, &u_tilde, &r_tilde, &mj, &alpha_tilde, &t)?;
+        let tau_list = calc_tge(&pk, &u_tilde, &r_tilde, &mj, &alpha_tilde, &t)?;
 
         Ok(PrimaryPredicateGEInitProof {
             c_list,
@@ -420,7 +420,7 @@ impl ProofBuilder {
     }
 
     fn _finalize_eq_proof(ms: &BigNumber, init_proof: &PrimaryEqualInitProof, c_h: &BigNumber,
-                          attributes_values: &HashMap<String, BigNumber>, attrs_with_predicates: &AttrsWithPredicates)
+                          attributes_values: &HashMap<String, BigNumber>, attrs_with_predicates: &ProofAttrs)
                           -> Result<PrimaryEqualProof, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
 
@@ -545,7 +545,7 @@ impl ProofBuilder {
     }
 
     fn _finalize_proof(ms: &BigNumber, init_proof: &PrimaryInitProof, c_h: &BigNumber,
-                       attributes: &HashMap<String, BigNumber>, attrs_with_predicates: &AttrsWithPredicates)
+                       attributes: &HashMap<String, BigNumber>, attrs_with_predicates: &ProofAttrs)
                        -> Result<PrimaryProof, IndyCryptoError> {
         info!(target: "anoncreds_service", "Prover finalize proof -> start");
 
@@ -560,103 +560,6 @@ impl ProofBuilder {
         info!(target: "anoncreds_service", "Prover finalize proof -> done");
 
         Ok(PrimaryProof { eq_proof, ge_proofs })
-    }
-
-    pub fn calc_tge(pk: &IssuerPrimaryPublicKey, u: &HashMap<String, BigNumber>, r: &HashMap<String, BigNumber>,
-                    mj: &BigNumber, alpha: &BigNumber, t: &HashMap<String, BigNumber>)
-                    -> Result<Vec<BigNumber>, IndyCryptoError> {
-        let mut tau_list: Vec<BigNumber> = Vec::new();
-        let mut ctx = BigNumber::new_context()?;
-
-        for i in 0..ITERATION {
-            let cur_u = u.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in u", i)))?;
-            let cur_r = r.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in r", i)))?;
-
-            let t_tau = pk.z
-                .mod_exp(&cur_u, &pk.n, Some(&mut ctx))?
-                .mul(
-                    &pk.s.mod_exp(&cur_r, &pk.n, Some(&mut ctx))?,
-                    Some(&mut ctx)
-                )?
-                .modulus(&pk.n, Some(&mut ctx))?;
-
-            tau_list.push(t_tau);
-        }
-
-        let delta = r.get("DELTA")
-            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in r", "DELTA")))?;
-
-
-        let t_tau = pk.z
-            .mod_exp(&mj, &pk.n, Some(&mut ctx))?
-            .mul(
-                &pk.s.mod_exp(&delta, &pk.n, Some(&mut ctx))?,
-                Some(&mut ctx)
-            )?
-            .modulus(&pk.n, Some(&mut ctx))?;
-
-        tau_list.push(t_tau);
-
-        let mut q: BigNumber = BigNumber::from_dec("1")?;
-
-        for i in 0..ITERATION {
-            let cur_t = t.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in t", i)))?;
-            let cur_u = u.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in u", i)))?;
-
-            q = cur_t
-                .mod_exp(&cur_u, &pk.n, Some(&mut ctx))?
-                .mul(&q, Some(&mut ctx))?;
-        }
-
-        q = pk.s
-            .mod_exp(&alpha, &pk.n, Some(&mut ctx))?
-            .mul(&q, Some(&mut ctx))?
-            .modulus(&pk.n, Some(&mut ctx))?;
-
-        tau_list.push(q);
-
-        Ok(tau_list)
-    }
-
-    pub fn calc_teq(pk: &IssuerPrimaryPublicKey, a_prime: &BigNumber, e: &BigNumber, v: &BigNumber,
-                    mtilde: &HashMap<String, BigNumber>, m1tilde: &BigNumber, m2tilde: &BigNumber,
-                    unrevealed_attrs: &Vec<String>) -> Result<BigNumber, IndyCryptoError> {
-        let mut ctx = BigNumber::new_context()?;
-        let mut result: BigNumber = BigNumber::from_dec("1")?;
-
-        for k in unrevealed_attrs.iter() {
-            let cur_r = pk.r.get(k)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", k)))?;
-            let cur_m = mtilde.get(k)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in mtilde", k)))?;
-
-            result = cur_r
-                .mod_exp(&cur_m, &pk.n, Some(&mut ctx))?
-                .mul(&result, Some(&mut ctx))?;
-        }
-
-        result = pk.rms
-            .mod_exp(&m1tilde, &pk.n, Some(&mut ctx))?
-            .mul(&result, Some(&mut ctx))?;
-
-        result = pk.rctxt
-            .mod_exp(&m2tilde, &pk.n, Some(&mut ctx))?
-            .mul(&result, Some(&mut ctx))?;
-
-        result = a_prime
-            .mod_exp(&e, &pk.n, Some(&mut ctx))?
-            .mul(&result, Some(&mut ctx))?;
-
-        result = pk.s
-            .mod_exp(&v, &pk.n, Some(&mut ctx))?
-            .mul(&result, Some(&mut ctx))?
-            .modulus(&pk.n, Some(&mut ctx))?;
-
-        Ok(result)
     }
 
     fn _gen_c_list_params(claim: &NonRevocationClaim) -> Result<NonRevocProofXList, IndyCryptoError> {
@@ -1062,12 +965,13 @@ mod tests {
 }
 
 pub mod mocks {
+    use std::iter::FromIterator;
     use super::*;
 
     pub const PROVER_DID: &'static str = "CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW";
 
-    pub fn attrs_with_predicates() -> AttrsWithPredicates {
-        AttrsWithPredicatesBuilder::new().unwrap()
+    pub fn attrs_with_predicates() -> ProofAttrs {
+        ProofAttrsBuilder::new().unwrap()
             .add_revealed_attr("name").unwrap()
             .add_unrevealed_attr("height").unwrap()
             .add_unrevealed_attr("age").unwrap()
@@ -1076,12 +980,12 @@ pub mod mocks {
             .finalize().unwrap()
     }
 
-    pub fn revealed_attrs() -> Vec<String> {
-        vec!["name".to_owned()]
+    pub fn revealed_attrs() -> HashSet<String> {
+        HashSet::from_iter(vec!["name".to_owned()].into_iter())
     }
 
-    pub fn unrevealed_attrs() -> Vec<String> {
-        vec!["height".to_owned(), "age".to_owned(), "sex".to_owned()]
+    pub fn unrevealed_attrs() -> HashSet<String> {
+        HashSet::from_iter(vec!["height".to_owned(), "age".to_owned(), "sex".to_owned()])
     }
 
     pub fn claim_revealed_attributes_values() -> ClaimAttributesValues {

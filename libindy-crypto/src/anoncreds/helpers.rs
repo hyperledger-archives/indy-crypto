@@ -3,11 +3,13 @@ use errors::IndyCryptoError;
 use pair::{GroupOrderElement, PointG1, Pair};
 
 use super::constants::*;
+use super::types::*;
 
 use std::hash::Hash;
 use std::cmp::max;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+#[allow(dead_code)] //FIXME
 pub enum ByteOrder {
     Big,
     Little
@@ -138,7 +140,7 @@ pub fn get_hash_as_int(nums: &mut Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoE
     BigNumber::from_bytes(&hashed_array[..])
 }
 
-pub fn get_mtilde(unrevealed_attrs: &Vec<String>)
+pub fn get_mtilde(unrevealed_attrs: &HashSet<String>)
                   -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
     let mut mtilde: HashMap<String, BigNumber> = HashMap::new();
 
@@ -146,6 +148,103 @@ pub fn get_mtilde(unrevealed_attrs: &Vec<String>)
         mtilde.insert(attr.clone(), BigNumber::rand(LARGE_MVECT)?);
     }
     Ok(mtilde)
+}
+
+pub fn calc_teq(pk: &IssuerPrimaryPublicKey, a_prime: &BigNumber, e: &BigNumber, v: &BigNumber,
+                mtilde: &HashMap<String, BigNumber>, m1tilde: &BigNumber, m2tilde: &BigNumber,
+                unrevealed_attrs: &HashSet<String>) -> Result<BigNumber, IndyCryptoError> {
+    let mut ctx = BigNumber::new_context()?;
+    let mut result: BigNumber = BigNumber::from_dec("1")?;
+
+    for k in unrevealed_attrs.iter() {
+        let cur_r = pk.r.get(k)
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", k)))?;
+        let cur_m = mtilde.get(k)
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in mtilde", k)))?;
+
+        result = cur_r
+            .mod_exp(&cur_m, &pk.n, Some(&mut ctx))?
+            .mul(&result, Some(&mut ctx))?;
+    }
+
+    result = pk.rms
+        .mod_exp(&m1tilde, &pk.n, Some(&mut ctx))?
+        .mul(&result, Some(&mut ctx))?;
+
+    result = pk.rctxt
+        .mod_exp(&m2tilde, &pk.n, Some(&mut ctx))?
+        .mul(&result, Some(&mut ctx))?;
+
+    result = a_prime
+        .mod_exp(&e, &pk.n, Some(&mut ctx))?
+        .mul(&result, Some(&mut ctx))?;
+
+    result = pk.s
+        .mod_exp(&v, &pk.n, Some(&mut ctx))?
+        .mul(&result, Some(&mut ctx))?
+        .modulus(&pk.n, Some(&mut ctx))?;
+
+    Ok(result)
+}
+
+pub fn calc_tge(pk: &IssuerPrimaryPublicKey, u: &HashMap<String, BigNumber>, r: &HashMap<String, BigNumber>,
+                mj: &BigNumber, alpha: &BigNumber, t: &HashMap<String, BigNumber>)
+                -> Result<Vec<BigNumber>, IndyCryptoError> {
+    let mut tau_list: Vec<BigNumber> = Vec::new();
+    let mut ctx = BigNumber::new_context()?;
+
+    for i in 0..ITERATION {
+        let cur_u = u.get(&i.to_string())
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in u", i)))?;
+        let cur_r = r.get(&i.to_string())
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in r", i)))?;
+
+        let t_tau = pk.z
+            .mod_exp(&cur_u, &pk.n, Some(&mut ctx))?
+            .mul(
+                &pk.s.mod_exp(&cur_r, &pk.n, Some(&mut ctx))?,
+                Some(&mut ctx)
+            )?
+            .modulus(&pk.n, Some(&mut ctx))?;
+
+        tau_list.push(t_tau);
+    }
+
+    let delta = r.get("DELTA")
+        .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in r", "DELTA")))?;
+
+
+    let t_tau = pk.z
+        .mod_exp(&mj, &pk.n, Some(&mut ctx))?
+        .mul(
+            &pk.s.mod_exp(&delta, &pk.n, Some(&mut ctx))?,
+            Some(&mut ctx)
+        )?
+        .modulus(&pk.n, Some(&mut ctx))?;
+
+    tau_list.push(t_tau);
+
+    let mut q: BigNumber = BigNumber::from_dec("1")?;
+
+    for i in 0..ITERATION {
+        let cur_t = t.get(&i.to_string())
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in t", i)))?;
+        let cur_u = u.get(&i.to_string())
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in u", i)))?;
+
+        q = cur_t
+            .mod_exp(&cur_u, &pk.n, Some(&mut ctx))?
+            .mul(&q, Some(&mut ctx))?;
+    }
+
+    q = pk.s
+        .mod_exp(&alpha, &pk.n, Some(&mut ctx))?
+        .mul(&q, Some(&mut ctx))?
+        .modulus(&pk.n, Some(&mut ctx))?;
+
+    tau_list.push(q);
+
+    Ok(tau_list)
 }
 
 fn largest_square_less_than(delta: usize) -> usize {
@@ -286,6 +385,7 @@ pub fn rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::super::{issuer, prover, verifier};
 
     #[test]
     fn encode_attribute_works() {
@@ -386,5 +486,50 @@ mod tests {
             }
         }
         */
+    }
+
+    #[test]
+    fn calc_tge_works() {
+        let proof = verifier::mocks::get_ge_proof();
+        let pk = issuer::mocks::issuer_primary_public_key();
+
+        let res = calc_tge(&pk, &proof.u, &proof.r, &proof.mj,
+                           &proof.alpha, &proof.t);
+
+        assert!(res.is_ok());
+
+        let res_data = res.unwrap();
+
+        assert_eq!("66763809913905005196685504127801735117197865238790458248607529048879049233469065301125917408730585682472169276319924014654607203248656655401523177550968\
+        79005126037514992260570317766093693503820466315473651774235097627461187468560528498637265821197064092074734183979312736841571077239362785443096285343022325743749493\
+        115671111253247628251990871764988964166665374208195759750683082601207244879323795625125414213912754126587933035233507317880982815199471233315480695428246221116099530\
+        2762582265012461801281742135973017791914100890332877707316728113640973774147232476482160263443368393229756851203511677358619849710094360", res_data[1].to_dec().unwrap());
+
+        assert_eq!("1696893728060613826189455641919714506779750280465195946299906248745222420050846334948115499804146149236210969719663609022008928047696210368681129164314195\
+        73961162181255619271925974300906611593381407468871521942852472844008029827907111131222578449896833731023679346466149116169563017889291210126870245249099669006944487937\
+        701186090023854916946824876428968293209784770081426960793331644949561007921128739917551308870397017309196194046088818137669808278548338892856171583731467477794490146449\
+        84371272994658213772000759824325978473230458194532365204418256638583185120380190225687161021928828234401021859449125311307071", res_data[4].to_dec().unwrap());
+
+        assert_eq!("7393309861349259392630193573257336708857960195548821598928169647822585190694497646718777350819780512754931147438702100908573008083971392605400292392558068639\
+        6426790932973170010764749286999115602174793097294839591793292822808780386838139840847178284597133066509806751359097256406292722692372335587138313303601933346125677119170\
+        3745548456402537166527941377105628418709499120225110517191272248627626095292045349794519230242306378755919873322083068080833514101587864250782718259987761547941791394977\
+        87217811540121982252785628801722587508068009691576296044178037535833166612637915579540102026829676380055826672922204922443", res_data[5].to_dec().unwrap());
+    }
+
+    #[test]
+    fn calc_teq_works() {
+        let proof = verifier::mocks::get_eq_proof();
+        let pk = issuer::mocks::issuer_primary_public_key();
+        let unrevealed_attrs = prover::mocks::unrevealed_attrs();
+
+        let res = calc_teq(&pk, &proof.a_prime, &proof.e, &proof.v,
+                           &proof.m, &proof.m1, &proof.m2, &unrevealed_attrs
+        );
+
+        assert!(res.is_ok());
+        assert_eq!("44674566012490574873221338726897300898913972309497258940219569980165585727901128041268469063382008728753943624549705899352321456091543114868302412585283526922\
+        48482588030725250950307379112600430281021015407801054038315353187338898917957982724509886210242668120433945426431434030155726888483222722925281121829536918755833970204795\
+        18277688063064207469055405971871717892031608853055468434231459862469415223592109268515989593021324862858241499053669862628606497232449247691824831224716135821088977103328\
+        37686070090582706144278719293684893116662729424191599602937927245245078018737281020133694291784582308345229012480867237", res.unwrap().to_dec().unwrap());
     }
 }
