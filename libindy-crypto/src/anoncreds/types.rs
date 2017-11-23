@@ -14,12 +14,12 @@ use super::helpers::clone_bignum_map;
 
 #[derive(Debug)]
 pub struct ClaimAttributes {
-    pub attrs: HashSet<String>
+    pub attrs: HashSet<String> /* attr names */
 }
 
 #[derive(Debug)]
 pub struct ClaimAttributesBuilder {
-    attrs: HashSet<String>
+    attrs: HashSet<String> /* attr names */
 }
 
 impl ClaimAttributesBuilder {
@@ -56,7 +56,7 @@ impl ClaimAttributesValues {
 
 #[derive(Debug)]
 pub struct ClaimAttributesValuesBuilder {
-    attrs_values: HashMap<String, BigNumber>
+    attrs_values: HashMap<String, BigNumber> /* attr_name -> int representation of value */
 }
 
 impl ClaimAttributesValuesBuilder {
@@ -89,7 +89,7 @@ pub struct IssuerPrimaryPublicKey {
     pub n: BigNumber,
     pub s: BigNumber,
     pub rms: BigNumber,
-    pub r: HashMap<String, BigNumber>,
+    pub r: HashMap<String /* attr_name */, BigNumber>,
     pub rctxt: BigNumber,
     pub z: BigNumber
 }
@@ -130,7 +130,7 @@ pub struct IssuerPrivateKey {
 #[derive(Debug)]
 pub struct RevocationAccumulator {
     pub acc: PointG2,
-    pub v: HashSet<u32>,
+    pub v: HashSet<u32> /* used indexes */,
     pub max_claim_num: u32,
 }
 
@@ -155,8 +155,8 @@ pub struct RevocationAccumulatorPublicKey {
 
 #[derive(Debug)]
 pub struct RevocationAccumulatorTails {
-    pub tails: HashMap<u32, PointG1>,
-    pub tails_dash: HashMap<u32, PointG2>,
+    pub tails: HashMap<u32 /* index in acc */, PointG1>,
+    pub tails_dash: HashMap<u32 /* index in acc */, PointG2>,
 }
 
 #[derive(Debug)]
@@ -202,7 +202,7 @@ pub struct NonRevocationClaim {
 #[derive(Debug)]
 pub struct Claim {
     pub p_claim: PrimaryClaim,
-    pub r_claim: Option<NonRevocationClaim>,
+    pub r_claim: Option<NonRevocationClaim> /* will be used to proof is claim revoked preparation */,
 }
 
 #[derive(Debug)]
@@ -417,7 +417,7 @@ pub struct InitProof {
     pub primary_init_proof: PrimaryInitProof,
     pub non_revoc_init_proof: Option<NonRevocInitProof>,
     pub attributes_values: ClaimAttributesValues,
-    pub attrs_with_predicates: AttrsWithPredicates
+    pub attrs_with_predicates: ProofAttrs
 }
 
 pub struct ProofRequest {
@@ -434,16 +434,23 @@ pub struct ProofClaims {
     pub claim_attributes_values: ClaimAttributesValues,
     pub pub_key: IssuerPublicKey,
     pub r_reg: Option<RevocationRegistryPublic>,
-    pub attrs_with_predicates: AttrsWithPredicates
+    pub attrs_with_predicates: ProofAttrs
+}
+
+pub struct VerifyClaim {
+    pub p_pub_key: IssuerPublicKey,
+    pub r_pub_key: Option<IssuerRevocationPublicKey>,
+    pub r_reg: Option<RevocationRegistryPublic>,
+    pub proof_attrs: ProofAttrs
 }
 
 #[derive(Debug)]
 pub struct PrimaryEqualProof {
-    pub revealed_attrs: HashMap<String, BigNumber>,
+    pub revealed_attrs: HashMap<String /* attr_name of revealed */, BigNumber>,
     pub a_prime: BigNumber,
     pub e: BigNumber,
     pub v: BigNumber,
-    pub m: HashMap<String, BigNumber>,
+    pub m: HashMap<String /* attr_name of all except revealed */, BigNumber>,
     pub m1: BigNumber,
     pub m2: BigNumber
 }
@@ -484,49 +491,49 @@ pub struct AggregatedProof {
 
 #[derive(Debug)]
 pub struct FullProof {
-    pub proofs: HashMap<String, Proof>,
+    pub proofs: HashMap<String /* issuer pub key id */, Proof>,
     pub aggregated_proof: AggregatedProof,
 }
 
 #[derive(Debug, Clone)]
-pub struct AttrsWithPredicates {
-    pub revealed_attrs: Vec<String>,
-    pub unrevealed_attrs: Vec<String>,
-    pub predicates: Vec<Predicate>,
+pub struct ProofAttrs {
+    pub revealed_attrs: HashSet<String>,
+    pub unrevealed_attrs: HashSet<String>,
+    pub predicates: HashSet<Predicate>,
 }
 
 #[derive(Debug)]
-pub struct AttrsWithPredicatesBuilder {
-    value: AttrsWithPredicates
+pub struct ProofAttrsBuilder {
+    value: ProofAttrs
 }
 
-impl AttrsWithPredicatesBuilder {
-    pub fn new() -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
-        Ok(AttrsWithPredicatesBuilder {
-            value: AttrsWithPredicates {
-                revealed_attrs: Vec::new(),
-                unrevealed_attrs: Vec::new(),
-                predicates: Vec::new()
+impl ProofAttrsBuilder {
+    pub fn new() -> Result<ProofAttrsBuilder, IndyCryptoError> {
+        Ok(ProofAttrsBuilder {
+            value: ProofAttrs {
+                revealed_attrs: HashSet::new(),
+                unrevealed_attrs: HashSet::new(),
+                predicates: HashSet::new()
             }
         })
     }
 
-    pub fn add_revealed_attr(mut self, attr: &str) -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
-        self.value.revealed_attrs.push(attr.to_owned());
+    pub fn add_revealed_attr(mut self, attr: &str) -> Result<ProofAttrsBuilder, IndyCryptoError> {
+        self.value.revealed_attrs.insert(attr.to_owned());
         Ok(self)
     }
 
-    pub fn add_unrevealed_attr(mut self, attr: &str) -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
-        self.value.unrevealed_attrs.push(attr.to_owned());
+    pub fn add_unrevealed_attr(mut self, attr: &str) -> Result<ProofAttrsBuilder, IndyCryptoError> {
+        self.value.unrevealed_attrs.insert(attr.to_owned());
         Ok(self)
     }
 
-    pub fn add_predicate(mut self, predicate: &Predicate) -> Result<AttrsWithPredicatesBuilder, IndyCryptoError> {
-        self.value.predicates.push(predicate.clone());
+    pub fn add_predicate(mut self, predicate: &Predicate) -> Result<ProofAttrsBuilder, IndyCryptoError> {
+        self.value.predicates.insert(predicate.clone());
         Ok(self)
     }
 
-    pub fn finalize(self) -> Result<AttrsWithPredicates, IndyCryptoError> {
+    pub fn finalize(self) -> Result<ProofAttrs, IndyCryptoError> {
         Ok(self.value)
     }
 }
@@ -542,7 +549,7 @@ pub enum PredicateType {
     GE
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Predicate {
     pub attr_name: String,
     pub p_type: PredicateType,

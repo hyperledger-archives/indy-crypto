@@ -3,6 +3,7 @@ use anoncreds::issuer::*;
 use anoncreds::prover::*;
 use anoncreds::types::*;
 
+use bn::BigNumber;
 use ffi::ErrorCode;
 use ffi::indy_crypto_init_logger;
 use errors::ToErrorCode;
@@ -686,7 +687,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_builder_new(attrs_with
 
     check_useful_c_ptr!(attrs_with_predicates_builder_p, ErrorCode::CommonInvalidParam1);
 
-    let res = match AttrsWithPredicatesBuilder::new() {
+    let res = match ProofAttrsBuilder::new() {
         Ok(attrs_with_predicates_builder) => {
             trace!("indy_crypto_anoncreds_attrs_with_predicates_builder_new: attrs_with_predicates_builder: {:?}", attrs_with_predicates_builder);
             unsafe {
@@ -722,7 +723,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_builder_add_revealed_a
     check_useful_c_str!(attr, ErrorCode::CommonInvalidParam2);
     check_useful_c_ptr!(attrs_with_predicates_builder_p, ErrorCode::CommonInvalidParam3);
 
-    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut AttrsWithPredicatesBuilder) };
+    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut ProofAttrsBuilder) };
 
     let res = match attrs_with_predicates_builder.add_revealed_attr(&attr) {
         Ok(add_revealed_attr) => {
@@ -760,7 +761,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_builder_add_unrevealed
     check_useful_c_str!(attr, ErrorCode::CommonInvalidParam2);
     check_useful_c_ptr!(attrs_with_predicates_builder_p, ErrorCode::CommonInvalidParam3);
 
-    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut AttrsWithPredicatesBuilder) };
+    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut ProofAttrsBuilder) };
 
     let res = match attrs_with_predicates_builder.add_unrevealed_attr(&attr) {
         Ok(add_revealed_attr) => {
@@ -798,7 +799,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_builder_add_predicate(
     check_useful_c_reference!(predicate, Predicate, ErrorCode::CommonInvalidParam2);
     check_useful_c_ptr!(attrs_with_predicates_builder_p, ErrorCode::CommonInvalidParam3);
 
-    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut AttrsWithPredicatesBuilder) };
+    let mut attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut ProofAttrsBuilder) };
 
     let res = match attrs_with_predicates_builder.add_predicate(predicate) {
         Ok(add_revealed_attr) => {
@@ -833,7 +834,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_builder_finalize(attrs
     check_useful_c_ptr!(attrs_with_predicates_builder, ErrorCode::CommonInvalidParam1);
     check_useful_c_ptr!(attrs_with_predicates_p, ErrorCode::CommonInvalidParam2);
 
-    let attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut AttrsWithPredicatesBuilder) };
+    let attrs_with_predicates_builder = unsafe { Box::from_raw(attrs_with_predicates_builder as *mut ProofAttrsBuilder) };
 
     let res = match attrs_with_predicates_builder.finalize() {
         Ok(attrs_with_predicates) => {
@@ -861,7 +862,7 @@ pub extern fn indy_crypto_anoncreds_attrs_with_predicates_free(attrs_with_predic
 
     check_useful_c_ptr!(attrs_with_predicates, ErrorCode::CommonInvalidParam1);
 
-    unsafe { Box::from_raw(attrs_with_predicates as *mut AttrsWithPredicates); }
+    unsafe { Box::from_raw(attrs_with_predicates as *mut ProofAttrs); }
     let res = ErrorCode::Success;
 
     trace!("indy_crypto_anoncreds_attrs_with_predicates_free: <<< res: {:?}", res);
@@ -927,7 +928,7 @@ pub extern fn indy_crypto_anoncreds_proof_builder_add_claim(proof_builder_p: *co
     check_useful_c_reference!(claim_attributes_values_p, ClaimAttributesValues, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(pub_key_p, IssuerPublicKey, ErrorCode::CommonInvalidParam3);
     check_useful_opt_c_reference!(r_reg_p, RevocationRegistryPublic, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(attrs_with_predicates_p, AttrsWithPredicates, ErrorCode::CommonInvalidParam3);
+    check_useful_c_reference!(attrs_with_predicates_p, ProofAttrs, ErrorCode::CommonInvalidParam3);
 
     let mut proof_builder = unsafe { Box::from_raw(proof_builder_p as *mut ProofBuilder) };
 
@@ -969,7 +970,7 @@ pub extern fn indy_crypto_anoncreds_proof_builder_finilize(proof_builder_p: *con
            proof_builder_p, proof_req_p, master_secret_p, proof_p);
 
     check_useful_c_ptr!(proof_builder_p, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(proof_req_p, ProofRequest, ErrorCode::CommonInvalidParam2);
+    check_useful_c_reference!(proof_req_p, BigNumber, ErrorCode::CommonInvalidParam2);
     check_useful_c_reference!(master_secret_p, MasterSecret, ErrorCode::CommonInvalidParam2);
 
     let mut proof_builder = unsafe { Box::from_raw(proof_builder_p as *mut ProofBuilder) };
