@@ -1,3 +1,8 @@
+
+## Before you Continue
+
+If you haven't done so already, please visit the main resource for all things "Indy" to get acquainted with the code base, helpful resources, and up-to-date information: [Hyperledger Wiki-Indy](https://wiki.hyperledger.org/projects/indy).
+
 # Indy Crypto
 
 This is the shared crypto libirary for [Hyperledger Indy](https://www.hyperledger.org/projects) components.
@@ -17,7 +22,7 @@ us on [Jira's Rocket.Chat](chat.hyperledger.org) at #indy-sdk to discuss.
 
 1. Install Rust and rustup (https://www.rust-lang.org/install.html).
 1. Checkout and build the library:
-   
+
    ```
    git clone https://github.com/hyperledger/indy-crypto.git
    cd ./indy-crypto/libindy-crypto
@@ -44,8 +49,16 @@ API documentation is now available as rust doc in code. See:
 
 Note: Binaries creation is in progress now!!!
 
-Builded binaries can be downloaded from https://repo.sovrin.org/lib/apt/xenial/:
-* ubuntu/{master,stable,rc} - Ubuntu deb packages
-* windows/{master,stable,rc} - Windows zip-archive with all required DLLs (include libindy itself) and headers
-* ios/stable/ - Pods for iOS
-* rhel/{master,stable,rc} - RHEL rpms
+Builded binaries can be downloaded from https://repo.sovrin.org:
+* sdk/lib/apt/xenial/{master,stable,rc} - Ubuntu deb packages
+* windows/libindy_crypto/{master,stable,rc} - Windows zip-archive with all required DLLs (include libindy itself) and headers
+* ios/libindy_crypto/stable/ - Pods for iOS
+* rhel/libindy_crypto/{master,stable,rc} - RHEL rpms
+
+Also Ubundu deb packages can be installed from APT repository:
+```
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 68DB5E88
+sudo add-apt-repository "deb https://repo.sovrin.org/sdk/deb xenial stable"
+sudo apt-get install -y libindy
+```
+
