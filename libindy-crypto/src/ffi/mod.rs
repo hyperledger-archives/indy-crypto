@@ -1,3 +1,4 @@
+pub mod cl;
 pub mod bls;
 
 use env_logger;
@@ -54,6 +55,18 @@ pub enum ErrorCode
 
     // IO Error
     CommonIOError = 114,
+
+    // Trying to issue non-revocation claim with full anoncreds revocation accumulator
+    AnoncredsRevocationAccumulatorIsFull = 115,
+
+    // Invalid revocation accumulator index
+    AnoncredsInvalidRevocationAccumulatorIndex = 116,
+
+    // Claim revoked
+    AnoncredsClaimRevoked = 117,
+
+    // Proof rejected
+    AnoncredsProofRejected = 118,
 }
 
 #[no_mangle]
