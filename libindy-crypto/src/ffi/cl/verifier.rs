@@ -3,14 +3,15 @@ use cl::*;
 use errors::ToErrorCode;
 use ffi::ErrorCode;
 use utils::ctypes::CTypesUtils;
+use utils::json::{JsonEncodable, JsonDecodable};
 
 use libc::c_char;
 
 use std::os::raw::c_void;
 
-/// Creates random nonce
+/// Creates random nonce.
 ///
-/// Note that nonce deallocation must be performed by calling indy_crypto_cl_nonce_free
+/// Note that nonce deallocation must be performed by calling indy_crypto_cl_nonce_free.
 ///
 /// # Arguments
 /// * `nonce_p` - Reference that will contain nonce instance pointer.
@@ -36,11 +37,75 @@ pub extern fn indy_crypto_cl_verifier_new_nonce(nonce_p: *mut *const c_void) -> 
     res
 }
 
+/// Returns json representation of nonce.
+///
+/// # Arguments
+/// * `nonce` - Reference that contains nonce instance pointer.
+/// * `nonce_json_p` - Reference that will contain nonce json.
+#[no_mangle]
+pub extern fn indy_crypto_cl_nonce_to_json(nonce: *const c_void,
+                                           nonce_json_p: *mut *const c_char) -> ErrorCode {
+    trace!("indy_crypto_cl_nonce_to_json: >>> nonce: {:?}, nonce_json_p: {:?}", nonce, nonce_json_p);
+
+    check_useful_c_reference!(nonce, Nonce, ErrorCode::CommonInvalidParam1);
+    check_useful_c_ptr!(nonce_json_p, ErrorCode::CommonInvalidParam2);
+
+    trace!("indy_crypto_cl_nonce_to_json: entity >>> nonce: {:?}", nonce);
+
+    let res = match nonce.to_json() {
+        Ok(nonce_json) => {
+            trace!("indy_crypto_cl_nonce_to_json: nonce_json: {:?}", nonce_json);
+            unsafe {
+                let nonce_json = CTypesUtils::string_to_cstring(nonce_json);
+                *nonce_json_p = nonce_json.into_raw();
+                trace!("indy_crypto_cl_nonce_to_json: nonce_json_p: {:?}", *nonce_json_p);
+            }
+            ErrorCode::Success
+        }
+        Err(err) => err.to_error_code()
+    };
+
+    trace!("indy_crypto_cl_nonce_to_json: <<< res: {:?}", res);
+    res
+}
+
+/// Creates and returns nonce json.
+///
+/// Note: Nonce instance deallocation must be performed by calling indy_crypto_cl_nonce_free.
+///
+/// # Arguments
+/// * `nonce_json` - Reference that contains nonce json.
+/// * `nonce_p` - Reference that will contain nonce instance pointer.
+#[no_mangle]
+pub extern fn indy_crypto_cl_nonce_from_json(nonce_json: *const c_char,
+                                             nonce_p: *mut *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_nonce_from_json: >>> nonce_json: {:?}, nonce_p: {:?}", nonce_json, nonce_p);
+
+    check_useful_c_str!(nonce_json, ErrorCode::CommonInvalidParam1);
+    check_useful_c_ptr!(nonce_p, ErrorCode::CommonInvalidParam2);
+
+    trace!("indy_crypto_cl_nonce_from_json: entity: nonce_json: {:?}", nonce_json);
+
+    let res = match Nonce::from_json(&nonce_json) {
+        Ok(nonce) => {
+            trace!("indy_crypto_cl_nonce_from_json: nonce: {:?}", nonce);
+            unsafe {
+                *nonce_p = Box::into_raw(Box::new(nonce)) as *const c_void;
+                trace!("indy_crypto_cl_nonce_from_json: *nonce_p: {:?}", *nonce_p);
+            }
+            ErrorCode::Success
+        }
+        Err(err) => err.to_error_code()
+    };
+
+    trace!("indy_crypto_cl_nonce_from_json: <<< res: {:?}", res);
+    res
+}
 
 /// Deallocates nonce instance.
 ///
 /// # Arguments
-/// * `nonce_p` - Nonce instance pointer
+/// * `nonce` - Reference that contains nonce instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_nonce_free(nonce: *const c_void) -> ErrorCode {
     trace!("indy_crypto_cl_nonce_free: >>> nonce: {:?}", nonce);
@@ -59,7 +124,7 @@ pub extern fn indy_crypto_cl_nonce_free(nonce: *const c_void) -> ErrorCode {
 /// Creates and returns proof verifier.
 ///
 /// Note that proof verifier deallocation must be performed by
-/// calling indy_crypto_cl_proof_verifier_finalize
+/// calling indy_crypto_cl_proof_verifier_finalize.
 ///
 /// # Arguments
 /// * `proof_verifier_p` - Reference that will contain proof verifier instance pointer.
@@ -86,39 +151,40 @@ pub extern fn indy_crypto_cl_verifier_new_proof_verifier(proof_verifier_p: *mut 
 }
 
 /// Add sub proof request to proof verifier.
+/// Part of proof request related to a particular schema-key.
 ///
 /// # Arguments
 /// * `proof_verifier` - Reference that contain proof verifier instance pointer.
-/// * `key_id` - unique claim identifier.
+/// * `key_id` - Reference that contains unique claim identifier.
+/// * `sub_proof_request` - Reference that contain requested attributes and predicates instance pointer.
 /// * `claim_schema` - Reference that contain claim schema instance pointer.
 /// * `issuer_pub_key` - Reference that contain public key instance pointer.
-/// * `rev_reg_pub` - Reference that contain public revocation registry instance pointer.
-/// * `sub_proof_request` - Reference that contain requested attributes and predicates instance pointer.
+/// * `rev_reg_pub` - (Optional) Reference that contain public revocation registry instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier: *const c_void,
                                                                   key_id: *const c_char,
+                                                                  sub_proof_request: *const c_void,
                                                                   claim_schema: *const c_void,
                                                                   issuer_pub_key: *const c_void,
-                                                                  rev_reg_pub: *const c_void,
-                                                                  sub_proof_request: *const c_void) -> ErrorCode {
-    trace!("indy_crypto_cl_proof_verifier_add_sub_proof_request: >>> proof_verifier: {:?},key_id: {:?},issuer_pub_key: {:?},\
-            rev_reg_pub: {:?},sub_proof_request: {:?}", proof_verifier, key_id, issuer_pub_key, rev_reg_pub, sub_proof_request);
+                                                                  rev_reg_pub: *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_proof_verifier_add_sub_proof_request: >>> proof_verifier: {:?}, key_id: {:?}, sub_proof_request: {:?} ,\
+            issuer_pub_key: {:?}, rev_reg_pub: {:?}", proof_verifier, key_id, sub_proof_request, issuer_pub_key, rev_reg_pub);
 
     check_useful_mut_c_reference!(proof_verifier, ProofVerifier, ErrorCode::CommonInvalidParam1);
     check_useful_c_str!(key_id, ErrorCode::CommonInvalidParam2);
-    check_useful_c_reference!(claim_schema, ClaimSchema, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(issuer_pub_key, IssuerPublicKey, ErrorCode::CommonInvalidParam4);
-    check_useful_opt_c_reference!(rev_reg_pub, RevocationRegistryPublic, ErrorCode::CommonInvalidParam5);
-    check_useful_c_reference!(sub_proof_request, SubProofRequest, ErrorCode::CommonInvalidParam6);
+    check_useful_c_reference!(sub_proof_request, SubProofRequest, ErrorCode::CommonInvalidParam3);
+    check_useful_c_reference!(claim_schema, ClaimSchema, ErrorCode::CommonInvalidParam4);
+    check_useful_c_reference!(issuer_pub_key, IssuerPublicKey, ErrorCode::CommonInvalidParam5);
+    check_useful_opt_c_reference!(rev_reg_pub, RevocationRegistryPublic, ErrorCode::CommonInvalidParam6);
 
-    trace!("indy_crypto_cl_proof_verifier_add_sub_proof_request: entities: proof_verifier: {:?}, key_id: {:?}, issuer_pub_key: {:?},\
-            rev_reg_pub: {:?}, sub_proof_request: {:?}", proof_verifier, key_id, issuer_pub_key, rev_reg_pub, sub_proof_request);
+    trace!("indy_crypto_cl_proof_verifier_add_sub_proof_request: entities: proof_verifier: {:?}, key_id: {:?}, sub_proof_request: {:?},\
+            issuer_pub_key: {:?}, rev_reg_pub: {:?}", proof_verifier, key_id, sub_proof_request, issuer_pub_key, rev_reg_pub);
 
     let res = match proof_verifier.add_sub_proof_request(&key_id,
-                                                         issuer_pub_key,
-                                                         rev_reg_pub,
                                                          sub_proof_request,
-                                                         claim_schema) {
+                                                         claim_schema,
+                                                         issuer_pub_key,
+                                                         rev_reg_pub) {
         Ok(()) => ErrorCode::Success,
         Err(err) => err.to_error_code()
     };
@@ -189,6 +255,32 @@ mod tests {
     }
 
     #[test]
+    fn indy_crypto_cl_nonce_to_json_works() {
+        let nonce = _nonce();
+
+        let mut nonce_json_p: *const c_char = ptr::null();
+        let err_code = indy_crypto_cl_nonce_to_json(nonce, &mut nonce_json_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        _free_nonce(nonce)
+    }
+
+    #[test]
+    fn indy_crypto_cl_nonce_from_json_works() {
+        let nonce = _nonce();
+
+        let mut nonce_json_p: *const c_char = ptr::null();
+        let err_code = indy_crypto_cl_nonce_to_json(nonce, &mut nonce_json_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        let mut nonce_p: *const c_void = ptr::null();
+        let err_code = indy_crypto_cl_nonce_from_json(nonce_json_p, &mut nonce_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        _free_nonce(nonce)
+    }
+
+    #[test]
     fn indy_crypto_cl_nonce_free_works() {
         let nonce = _nonce();
 
@@ -217,7 +309,6 @@ mod tests {
 
         _add_sub_proof_request(proof_verifier_p, key_id, claim_schema, issuer_pub_key, rev_reg_pub, sub_proof_request);
         _free_proof_verifier(proof_verifier_p, proof, nonce);
-
         _free_issuer_keys(issuer_pub_key, issuer_priv_key);
         _free_revocation_registry(rev_reg_pub, rev_reg_priv);
         _free_master_secret(master_secret);
@@ -245,14 +336,13 @@ mod tests {
 
         let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
                                                                            key_id.as_ptr(),
+                                                                           sub_proof_request,
                                                                            claim_schema,
                                                                            issuer_pub_key,
-                                                                           rev_reg_pub,
-                                                                           sub_proof_request);
+                                                                           rev_reg_pub);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_proof_verifier(proof_verifier, proof, nonce);
-
         _free_issuer_keys(issuer_pub_key, issuer_priv_key);
         _free_revocation_registry(rev_reg_pub, rev_reg_priv);
         _free_master_secret(master_secret);
@@ -280,10 +370,10 @@ mod tests {
 
         let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
                                                                            key_id.as_ptr(),
+                                                                           sub_proof_request,
                                                                            claim_schema,
                                                                            issuer_pub_key,
-                                                                           rev_reg_pub,
-                                                                           sub_proof_request);
+                                                                           rev_reg_pub);
         assert_eq!(err_code, ErrorCode::Success);
 
         let mut valid = false;
@@ -334,10 +424,10 @@ pub mod mocks {
                                   issuer_pub_key: *const c_void, rev_reg_pub: *const c_void, sub_proof_request: *const c_void) {
         let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
                                                                            key_id.as_ptr(),
+                                                                           sub_proof_request,
                                                                            claim_schema,
                                                                            issuer_pub_key,
-                                                                           rev_reg_pub,
-                                                                           sub_proof_request);
+                                                                           rev_reg_pub);
         assert_eq!(err_code, ErrorCode::Success);
     }
 

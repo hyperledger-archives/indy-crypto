@@ -48,7 +48,7 @@ pub extern fn indy_crypto_cl_claim_schema_builder_new(claim_schema_builder_p: *m
 /// Adds new attribute to claim schema.
 ///
 /// # Arguments
-/// * `claim_schema_builder` - Claim schema builder instance pointer
+/// * `claim_schema_builder` - Reference that contains claim schema builder instance pointer.
 /// * `attr` - Attribute to add as null terminated string.
 #[no_mangle]
 pub extern fn indy_crypto_cl_claim_schema_builder_add_attr(claim_schema_builder: *const c_void,
@@ -75,7 +75,7 @@ pub extern fn indy_crypto_cl_claim_schema_builder_add_attr(claim_schema_builder:
 /// calling indy_crypto_cl_claim_schema_free.
 ///
 /// # Arguments
-/// * `claim_schema_builder` - Claim schema builder instance pointer
+/// * `claim_schema_builder` - Reference that contains claim schema builder instance pointer
 /// * `claim_schema_p` - Reference that will contain claims schema instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_claim_schema_builder_finalize(claim_schema_builder: *const c_void,
@@ -108,7 +108,7 @@ pub extern fn indy_crypto_cl_claim_schema_builder_finalize(claim_schema_builder:
 /// Deallocates claim schema instance.
 ///
 /// # Arguments
-/// * `claim_schema` - Claim schema instance pointer
+/// * `claim_schema` - Reference that contains claim schema instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_claim_schema_free(claim_schema: *const c_void) -> ErrorCode {
     trace!("indy_crypto_cl_claim_schema_free: >>> claim_schema: {:?}", claim_schema);
@@ -159,7 +159,7 @@ pub extern fn indy_crypto_cl_claim_values_builder_new(claim_values_builder_p: *m
 /// Adds new attribute dec_value to claim values map.
 ///
 /// # Arguments
-/// * `claim_values_builder` - Claim values builder instance pointer
+/// * `claim_values_builder` - Reference that contains claim values builder instance pointer.
 /// * `attr` - Claim attr to add as null terminated string.
 /// * `dec_value` - Claim attr dec_value. Decimal BigNum representation as null terminated string.
 #[no_mangle]
@@ -190,7 +190,7 @@ pub extern fn indy_crypto_cl_claim_values_builder_add_value(claim_values_builder
 /// calling indy_crypto_cl_claim_values_free.
 ///
 /// # Arguments
-/// * `claim_values_builder` - Claim attribute builder instance pointer
+/// * `claim_values_builder` - Reference that contains claim attribute builder instance pointer.
 /// * `claim_values_p` - Reference that will contain claims values instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_claim_values_builder_finalize(claim_values_builder: *const c_void,
@@ -274,7 +274,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_new(sub_proof_request_bui
 /// Adds new revealed attribute to sub proof request.
 ///
 /// # Arguments
-/// * `sub_proof_request_builder` - Sub proof request builder instance pointer
+/// * `sub_proof_request_builder` - Reference that contains sub proof request builder instance pointer.
 /// * `attr` - Claim attr to add as null terminated string.
 #[no_mangle]
 pub extern fn indy_crypto_cl_sub_proof_request_builder_add_revealed_attr(sub_proof_request_builder: *const c_void,
@@ -300,8 +300,8 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_add_revealed_attr(sub_pro
 /// Adds predicate to sub proof request.
 ///
 /// # Arguments
-/// * `sub_proof_request_builder` - Sub proof request builder instance pointer
-/// * `predicate` - predicate to add as instance pointer.
+/// * `sub_proof_request_builder` - Reference that contains sub proof request builder instance pointer.
+/// * `predicate` - Reference that contains predicate to add as instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_sub_proof_request_builder_add_predicate(sub_proof_request_builder: *const c_void,
                                                                      predicate: *const c_void) -> ErrorCode {
@@ -329,7 +329,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_add_predicate(sub_proof_r
 /// calling indy_crypto_cl_sub_proof_request_free.
 ///
 /// # Arguments
-/// * `sub_proof_request_builder` - Sub proof request builder instance pointer
+/// * `sub_proof_request_builder` - Reference that contains sub proof request builder instance pointer.
 /// * `sub_proof_request_p` - Reference that will contain sub proof request instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_sub_proof_request_builder_finalize(sub_proof_request_builder: *const c_void,
@@ -363,7 +363,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_finalize(sub_proof_reques
 /// Deallocates sub proof request instance.
 ///
 /// # Arguments
-/// * `sub_proof_request` - Sub proof request instance pointer
+/// * `sub_proof_request` - Reference that contains sub proof request instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_sub_proof_request_free(sub_proof_request: *const c_void) -> ErrorCode {
     trace!("indy_crypto_cl_sub_proof_request_free: >>> sub_proof_request: {:?}", sub_proof_request);
@@ -421,7 +421,7 @@ pub extern fn indy_crypto_cl_predicate_new(attr_name: *const c_char,
 /// Deallocates predicate instance.
 ///
 /// # Arguments
-/// * `predicate` - Predicate instance pointer
+/// * `predicate` - Reference that contains predicate instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_predicate_free(predicate: *const c_void) -> ErrorCode {
     trace!("indy_crypto_cl_predicate_free: >>> predicate: {:?}", predicate);
@@ -449,7 +449,6 @@ mod tests {
     fn indy_crypto_cl_claim_schema_builder_new_works() {
         let mut claim_schema_builder: *const c_void = ptr::null();
         let err_code = indy_crypto_cl_claim_schema_builder_new(&mut claim_schema_builder);
-
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!claim_schema_builder.is_null());
 
@@ -519,17 +518,13 @@ mod tests {
 
         let attr = CString::new("sex").unwrap();
         let dec_value = CString::new("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap();
-        let err_code = indy_crypto_cl_claim_values_builder_add_value(claim_values_builder,
-                                                                     attr.as_ptr(),
-                                                                     dec_value.as_ptr());
+        let err_code = indy_crypto_cl_claim_values_builder_add_value(claim_values_builder, attr.as_ptr(), dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!claim_values_builder.is_null());
 
         let attr = CString::new("name").unwrap();
         let dec_value = CString::new("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
-        let err_code = indy_crypto_cl_claim_values_builder_add_value(claim_values_builder,
-                                                                     attr.as_ptr(),
-                                                                     dec_value.as_ptr());
+        let err_code = indy_crypto_cl_claim_values_builder_add_value(claim_values_builder, attr.as_ptr(), dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!claim_values_builder.is_null());
 
@@ -548,7 +543,6 @@ mod tests {
     fn indy_crypto_cl_sub_proof_request_builder_new_works() {
         let mut sub_proof_request_builder: *const c_void = ptr::null();
         let err_code = indy_crypto_cl_sub_proof_request_builder_new(&mut sub_proof_request_builder);
-
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!sub_proof_request_builder.is_null());
 
