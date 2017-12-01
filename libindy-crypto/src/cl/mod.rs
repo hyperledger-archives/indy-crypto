@@ -88,7 +88,7 @@ impl ClaimValuesBuilder {
 /// One for signing primary claims and second for signing non-revocation claims.
 /// These keys are used to proof that claim was issued and doesn’t revoked by this issuer.
 /// Issuer keys have global identifier that must be known to all parties.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct IssuerPublicKey {
     p_key: IssuerPrimaryPublicKey,
     r_key: Option<IssuerRevocationPublicKey>,
@@ -99,6 +99,21 @@ impl IssuerPublicKey {
         Ok(IssuerPublicKey {
             p_key: self.p_key.clone()?,
             r_key: self.r_key.clone()
+        })
+    }
+
+    pub fn get_primary_key(&self) -> Result<IssuerPrimaryPublicKey, IndyCryptoError> {
+        Ok(self.p_key.clone()?)
+    }
+
+    pub fn get_revocation_key(&self) -> Result<Option<IssuerRevocationPublicKey>, IndyCryptoError> {
+        Ok(self.r_key.clone())
+    }
+
+    pub fn build_from_parts(p_key: &IssuerPrimaryPublicKey, r_key: Option<&IssuerRevocationPublicKey>) -> Result<IssuerPublicKey, IndyCryptoError> {
+        Ok(IssuerPublicKey {
+            p_key: p_key.clone()?,
+            r_key: r_key.map(|key| key.clone())
         })
     }
 }
@@ -151,7 +166,7 @@ pub struct IssuerPrimaryPrivateKey {
 }
 
 /// `Revocation Public Key` is used to prove that claim wasn’t revoked by Issuer.
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct IssuerRevocationPublicKey {
     g: PointG1,
     g_dash: PointG2,
@@ -181,6 +196,28 @@ pub struct RevocationRegistryPublic {
     key: RevocationAccumulatorPublicKey,
     acc: RevocationAccumulator,
     tails: RevocationAccumulatorTails,
+}
+
+impl RevocationRegistryPublic {
+    pub fn get_accumulator_key(&self) -> Result<RevocationAccumulatorPublicKey, IndyCryptoError> {
+        Ok(self.key.clone())
+    }
+
+    pub fn get_accumulator(&self) -> Result<RevocationAccumulator, IndyCryptoError> {
+        Ok(self.acc.clone())
+    }
+
+    pub fn get_tails(&self) -> Result<RevocationAccumulatorTails, IndyCryptoError> {
+        Ok(self.tails.clone())
+    }
+
+    pub fn build_from_parts(key: &RevocationAccumulatorPublicKey, acc: &RevocationAccumulator, tails: &RevocationAccumulatorTails) -> Result<RevocationRegistryPublic, IndyCryptoError> {
+        Ok(RevocationRegistryPublic {
+            key: key.clone(),
+            acc: acc.clone(),
+            tails: tails.clone()
+        })
+    }
 }
 
 impl JsonEncodable for RevocationRegistryPublic {}
@@ -345,8 +382,19 @@ impl SubProofRequestBuilder {
         Ok(())
     }
 
-    pub fn add_predicate(&mut self, predicate: &Predicate) -> Result<(), IndyCryptoError> {
-        self.value.predicates.insert(predicate.clone());
+    pub fn add_predicate(&mut self, attr_name: &str, p_type: &str, value: i32) -> Result<(), IndyCryptoError> {
+        let p_type = match p_type {
+            "GE" => PredicateType::GE,
+            p_type => return Err(IndyCryptoError::InvalidStructure(format!("Invalid predicate type: {:?}", p_type)))
+        };
+
+        let predicate = Predicate {
+            attr_name: attr_name.to_owned(),
+            p_type,
+            value
+        };
+
+        self.value.predicates.insert(predicate);
         Ok(())
     }
 
@@ -362,25 +410,6 @@ pub struct Predicate {
     p_type: PredicateType,
     value: i32,
 }
-
-impl Predicate {
-    pub fn new(attr_name: &str, p_type: &str, value: i32) -> Result<Predicate, IndyCryptoError> {
-        let p_type = match p_type {
-            "GE" => PredicateType::GE,
-            p_type => return Err(IndyCryptoError::InvalidStructure(format!("Invalid predicate type: {:?}", p_type)))
-        };
-
-        Ok(Predicate {
-            attr_name: attr_name.to_owned(),
-            p_type,
-            value
-        })
-    }
-}
-
-impl JsonEncodable for Predicate {}
-
-impl<'a> JsonDecodable<'a> for Predicate {}
 
 /// Condition type (Currently GE only).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
@@ -729,13 +758,9 @@ mod test {
                                                      Some(1), None, None).unwrap();
         Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
 
-        let mut sub_proof_request_builder = Verifier::new_sub_proof_request().unwrap();
+        let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
-        sub_proof_request_builder.add_predicate(&Predicate {
-            attr_name: "age".to_string(),
-            value: 18,
-            p_type: PredicateType::GE,
-        }).unwrap();
+        sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         proof_builder.add_sub_proof_request("issuer_key_id_1",
