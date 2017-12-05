@@ -1,3 +1,8 @@
+
+## Before you Continue
+
+If you haven't done so already, please visit the main resource for all things "Indy" to get acquainted with the code base, helpful resources, and up-to-date information: [Hyperledger Wiki-Indy](https://wiki.hyperledger.org/projects/indy).
+
 # Indy Crypto
 
 This is the shared crypto libirary for [Hyperledger Indy](https://www.hyperledger.org/projects) components.
@@ -17,7 +22,7 @@ us on [Jira's Rocket.Chat](chat.hyperledger.org) at #indy-sdk to discuss.
 
 1. Install Rust and rustup (https://www.rust-lang.org/install.html).
 1. Checkout and build the library:
-   
+
    ```
    git clone https://github.com/hyperledger/indy-crypto.git
    cd ./indy-crypto/libindy-crypto
@@ -30,11 +35,25 @@ us on [Jira's Rocket.Chat](chat.hyperledger.org) at #indy-sdk to discuss.
    cargo test
    ```
 
+### Windows build dependency
+System OpenSSL library is required.
+- Download the prebuilt dependencies [here](https://repo.sovrin.org/windows/libindy_crypto/deps/)
+- Extract them into the folder _C:\BIN\x64_
+> It really doesn't matter where you put these as long as you remember where so you can set
+> the environment variables to this path
+- Point path to this directory using environment variables:
+  - set INDY_CRYPTO_PREBUILT_DEPS_DIR=C:\BIN\x64
+  - set OPENSSL_DIR=C:\BIN\x64
+
 ## API Documentation
 
 API documentation is now available as rust doc in code. See:
-* [C API](libindy-crypto/src/ffi/bls.rs)
-* [Rust API](libindy-crypto/src/bls/mod.rs)
+* C API
+    - [BLS](libindy-crypto/src/ffi/bls.rs)
+    - [CL](libindy-crypto/src/ffi/cl)
+* Rust API
+    - [BLS](libindy-crypto/src/bls/mod.rs)
+    - [CL](libindy-crypto/src/cl)
 
 ## Wrappers documentation
 
@@ -44,8 +63,17 @@ API documentation is now available as rust doc in code. See:
 
 Note: Binaries creation is in progress now!!!
 
-Builded binaries can be downloaded from https://repo.sovrin.org/lib/apt/xenial/:
-* ubuntu/{master,stable,rc} - Ubuntu deb packages
-* windows/{master,stable,rc} - Windows zip-archive with all required DLLs (include libindy itself) and headers
-* ios/stable/ - Pods for iOS
-* rhel/{master,stable,rc} - RHEL rpms
+Builded binaries can be downloaded from https://repo.sovrin.org:
+* sdk/lib/apt/xenial/{master,stable,rc} - Ubuntu deb packages
+* windows/libindy_crypto/{master,stable,rc} - Windows zip-archive with all required DLLs (include libindy itself) and headers
+* ios/libindy_crypto/stable/ - Pods for iOS
+* rhel/libindy_crypto/{master,stable,rc} - RHEL rpms
+
+Also Ubundu deb packages can be installed from APT repository:
+```
+apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 68DB5E88
+sudo add-apt-repository "deb https://repo.sovrin.org/sdk/deb xenial stable"
+sudo apt-get update
+sudo apt-get install -y libindy-crypto
+```
+
