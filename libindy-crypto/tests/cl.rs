@@ -1,10 +1,12 @@
 extern crate indy_crypto;
 
+use indy_crypto::cl::new_nonce;
 use indy_crypto::cl::issuer::Issuer;
 use indy_crypto::cl::prover::Prover;
 use indy_crypto::cl::verifier::Verifier;
 
 pub const PROVER_ID: &'static str = "CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW";
+
 
 mod test {
     use super::*;
@@ -26,17 +28,24 @@ mod test {
         let gvt_claim_schema = claim_schema_builder.finalize().unwrap();
 
         // 3. Issuer creates keys
-        let (gvt_issuer_pub_key, gvt_issuer_priv_key) = Issuer::new_keys(&gvt_claim_schema, true).unwrap();
+        let (gvt_issuer_pub_key, gvt_issuer_priv_key, gvt_issuer_key_correctness_proof) =
+            Issuer::new_keys(&gvt_claim_schema, true).unwrap();
 
         // 4. Issuer creates GVT revocation registry
         let (mut gvt_rev_reg_pub, gvt_rev_reg_priv) =
             Issuer::new_revocation_registry(&gvt_issuer_pub_key, 5).unwrap();
 
-        // 5. Prover blinds master secret
-        let (gvt_blinded_ms, gvt_master_secret_blinding_data) =
-            Prover::blind_master_secret(&gvt_issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let gvt_master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates GVT claim values
+        // 6. Prover blinds master secret
+        let (gvt_blinded_ms, gvt_master_secret_blinding_data, gvt_blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&gvt_issuer_pub_key, &gvt_issuer_key_correctness_proof, &master_secret, &gvt_master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let gvt_claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates GVT claim values
         let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
         claim_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
         claim_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
@@ -44,78 +53,99 @@ mod test {
         claim_values_builder.add_value("height", "175").unwrap();
         let gvt_claim_values = claim_values_builder.finalize().unwrap();
 
-        // 7. Issuer signs GVT claim values
-        let mut gvt_claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                         &gvt_blinded_ms,
-                                                         &gvt_claim_values,
-                                                         &gvt_issuer_pub_key,
-                                                         &gvt_issuer_priv_key,
-                                                         Some(1),
-                                                         Some(&mut gvt_rev_reg_pub),
-                                                         Some(&gvt_rev_reg_priv)).unwrap();
+        // 9. Issuer signs GVT claim values
+        let (mut gvt_claim_signature, gvt_signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                            &gvt_blinded_ms,
+                                                                                            &gvt_blinded_master_secret_correctness_proof,
+                                                                                            &gvt_master_secret_blinding_nonce,
+                                                                                            &gvt_claim_issuance_nonce,
+                                                                                            &gvt_claim_values,
+                                                                                            &gvt_issuer_pub_key,
+                                                                                            &gvt_issuer_priv_key,
+                                                                                            Some(1),
+                                                                                            Some(&mut gvt_rev_reg_pub),
+                                                                                            Some(&gvt_rev_reg_priv)).unwrap();
 
-        // 8. Prover processes GVT claim signature
+        // 10. Prover processes GVT claim signature
         Prover::process_claim_signature(&mut gvt_claim_signature,
+                                        &gvt_claim_values,
+                                        &gvt_signature_correctness_proof,
                                         &gvt_master_secret_blinding_data,
+                                        &master_secret,
                                         &gvt_issuer_pub_key,
+                                        &gvt_claim_issuance_nonce,
                                         Some(&gvt_rev_reg_pub)).unwrap();
 
         // Issuer creates XYZ claim
-        // 9. Issuer creates XYZ claim schema
+        // 11. Issuer creates XYZ claim schema
         let mut claim_schema_builder = Issuer::new_claim_schema_builder().unwrap();
         claim_schema_builder.add_attr("period").unwrap();
         claim_schema_builder.add_attr("status").unwrap();
         let xyz_claim_schema = claim_schema_builder.finalize().unwrap();
 
-        // 10. Issuer creates keys
-        let (xyz_issuer_pub_key, xyz_issuer_priv_key) = Issuer::new_keys(&xyz_claim_schema, true).unwrap();
+        // 12. Issuer creates keys
+        let (xyz_issuer_pub_key, xyz_issuer_priv_key, xyz_issuer_key_correctness_proof) =
+            Issuer::new_keys(&xyz_claim_schema, true).unwrap();
 
-        // 11. Issuer creates XYZ revocation registry
+        // 13. Issuer creates XYZ revocation registry
         let (mut xyz_rev_reg_pub, xyz_rev_reg_priv) =
             Issuer::new_revocation_registry(&xyz_issuer_pub_key, 5).unwrap();
 
-        // 12. Prover blinds master secret
-        let (xyz_blinded_ms, xyz_master_secret_blinding_data) =
-            Prover::blind_master_secret(&xyz_issuer_pub_key, &master_secret).unwrap();
+        // 14. Issuer creates nonce used Prover to blind master secret
+        let xyz_master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 13. Issuer creates XYZ claim values
+        // 15. Prover blinds master secret
+        let (xyz_blinded_ms, xyz_master_secret_blinding_data, xyz_blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&xyz_issuer_pub_key, &xyz_issuer_key_correctness_proof, &master_secret, &xyz_master_secret_blinding_nonce).unwrap();
+
+        // 16. Prover creates nonce used Issuer to claim issue
+        let xyz_claim_issuance_nonce = new_nonce().unwrap();
+
+        // 17. Issuer creates XYZ claim values
         let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
         claim_values_builder.add_value("status", "51792877103171595686471452153480627530895").unwrap();
         claim_values_builder.add_value("period", "8").unwrap();
         let xyz_claim_values = claim_values_builder.finalize().unwrap();
 
-        // 14. Issuer signs XYZ claim values
-        let mut xyz_claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                         &xyz_blinded_ms,
-                                                         &xyz_claim_values,
-                                                         &xyz_issuer_pub_key,
-                                                         &xyz_issuer_priv_key,
-                                                         Some(1),
-                                                         Some(&mut xyz_rev_reg_pub),
-                                                         Some(&xyz_rev_reg_priv)).unwrap();
+        // 18. Issuer signs XYZ claim values
+        let (mut xyz_claim_signature, xyz_signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                            &xyz_blinded_ms,
+                                                                                            &xyz_blinded_master_secret_correctness_proof,
+                                                                                            &xyz_master_secret_blinding_nonce,
+                                                                                            &xyz_claim_issuance_nonce,
+                                                                                            &xyz_claim_values,
+                                                                                            &xyz_issuer_pub_key,
+                                                                                            &xyz_issuer_priv_key,
+                                                                                            Some(1),
+                                                                                            Some(&mut xyz_rev_reg_pub),
+                                                                                            Some(&xyz_rev_reg_priv)).unwrap();
 
-        // 15. Prover processes XYZ claim signature
+        // 19. Prover processes XYZ claim signature
         Prover::process_claim_signature(&mut xyz_claim_signature,
+                                        &xyz_claim_values,
+                                        &xyz_signature_correctness_proof,
                                         &xyz_master_secret_blinding_data,
+                                        &master_secret,
                                         &xyz_issuer_pub_key,
+                                        &xyz_claim_issuance_nonce,
                                         Some(&xyz_rev_reg_pub)).unwrap();
 
-        // 16. Verifier creates sub proof request related to GVT claim
+        // 20. Verifier creates sub proof request related to GVT claim
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let gvt_sub_proof_request = sub_proof_request_builder.finalize().unwrap();
 
-        // 17. Verifier creates sub proof request related to XYZ claim
+        // 21. Verifier creates sub proof request related to XYZ claim
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("status").unwrap();
         sub_proof_request_builder.add_predicate("period", "GE", 4).unwrap();
         let xyz_sub_proof_request = sub_proof_request_builder.finalize().unwrap();
 
-        // 18. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        // 22. Verifier creates nonce
+        let nonce = new_nonce().unwrap();
 
-        // 19. Prover creates proof for two sub proof requests
+        // 23. Prover creates proof for two sub proof requests
         let gvt_key_id = "gvt_key_id";
         let xyz_key_id = "xyz_key_id";
         let mut proof_builder = Prover::new_proof_builder().unwrap();
@@ -139,7 +169,7 @@ mod test {
 
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 20. Verifier verifies proof
+        // 25. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(gvt_key_id,
                                              &gvt_sub_proof_request,
@@ -162,42 +192,60 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates claim values
+        // 5. Prover blinds master secret
+        let (blinded_ms, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
         let claim_values = helpers::gvt_claim_values();
 
-        // 6. Issuer signs claim values
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key, &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        // 8. Issuer signs claim values
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_ms,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 7. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 9. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 8. Verifier create sub proof request
+        // 10. Verifier create sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
         let key_id = "issuer_key_id_1";
 
-        // 9. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        // 11. Verifier creates nonce
+        let nonce = new_nonce().unwrap();
 
-        // 10. Prover creates proof
+        // 12. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         proof_builder.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &claim_signature, &claim_values, &issuer_pub_key, None).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 11. Verifier verifies proof
+        // 13. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
         assert!(proof_verifier.verify(&proof, &nonce).unwrap());
@@ -210,40 +258,82 @@ mod test {
 
         // 2. Issuer creates and signs GVT claim for Prover
         let gvt_claim_schema = helpers::gvt_claim_schema();
-        let (gvt_issuer_pub_key, gvt_issuer_priv_key) = Issuer::new_keys(&gvt_claim_schema, false).unwrap();
-        let (gvt_blinded_ms, gvt_master_secret_blinding_data) = Prover::blind_master_secret(&gvt_issuer_pub_key, &master_secret).unwrap();
+        let (gvt_issuer_pub_key, gvt_issuer_priv_key, gvt_issuer_key_correctness_proof) =
+            Issuer::new_keys(&gvt_claim_schema, false).unwrap();
+
+        let gvt_master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let (gvt_blinded_master_secret, gvt_master_secret_blinding_data, gvt_blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&gvt_issuer_pub_key,
+                                        &gvt_issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &gvt_master_secret_blinding_nonce).unwrap();
+
+        let gvt_claim_issuance_nonce = new_nonce().unwrap();
+
         let gvt_claim_values = helpers::gvt_claim_values();
-        let mut gvt_claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                         &gvt_blinded_ms,
-                                                         &gvt_claim_values,
-                                                         &gvt_issuer_pub_key,
-                                                         &gvt_issuer_priv_key,
-                                                         None,
-                                                         None,
-                                                         None).unwrap();
+
+        let (mut gvt_claim_signature, gvt_signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                            &gvt_blinded_master_secret,
+                                                                                            &gvt_blinded_master_secret_correctness_proof,
+                                                                                            &gvt_master_secret_blinding_nonce,
+                                                                                            &gvt_claim_issuance_nonce,
+                                                                                            &gvt_claim_values,
+                                                                                            &gvt_issuer_pub_key,
+                                                                                            &gvt_issuer_priv_key,
+                                                                                            None,
+                                                                                            None,
+                                                                                            None).unwrap();
 
         // 3. Prover processes GVT claim
-        Prover::process_claim_signature(&mut gvt_claim_signature, &gvt_master_secret_blinding_data, &gvt_issuer_pub_key, None).unwrap();
+        Prover::process_claim_signature(&mut gvt_claim_signature,
+                                        &gvt_claim_values,
+                                        &gvt_signature_correctness_proof,
+                                        &gvt_master_secret_blinding_data,
+                                        &master_secret,
+                                        &gvt_issuer_pub_key,
+                                        &gvt_claim_issuance_nonce,
+                                        None).unwrap();
 
         // 4. Issuer creates and signs XYZ claim for Prover
         let xyz_claim_schema = helpers::xyz_claim_schema();
-        let (xyz_issuer_pub_key, xyz_issuer_priv_key) = Issuer::new_keys(&xyz_claim_schema, false).unwrap();
-        let (xyz_blinded_ms, xyz_master_secret_blinding_data) = Prover::blind_master_secret(&xyz_issuer_pub_key, &master_secret).unwrap();
+        let (xyz_issuer_pub_key, xyz_issuer_priv_key, xyz_issuer_key_correctness_proof) =
+            Issuer::new_keys(&xyz_claim_schema, false).unwrap();
+
+        let xyz_master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let (xyz_blinded_master_secret, xyz_master_secret_blinding_data, xyz_blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&xyz_issuer_pub_key,
+                                        &xyz_issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &xyz_master_secret_blinding_nonce).unwrap();
+
+        let xyz_claim_issuance_nonce = new_nonce().unwrap();
+
         let xyz_claim_values = helpers::xyz_claim_values();
-        let mut xyz_claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                         &xyz_blinded_ms,
-                                                         &xyz_claim_values,
-                                                         &xyz_issuer_pub_key,
-                                                         &xyz_issuer_priv_key,
-                                                         None,
-                                                         None,
-                                                         None).unwrap();
+        let (mut xyz_claim_signature, xyz_signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                            &xyz_blinded_master_secret,
+                                                                                            &xyz_blinded_master_secret_correctness_proof,
+                                                                                            &xyz_master_secret_blinding_nonce,
+                                                                                            &xyz_claim_issuance_nonce,
+                                                                                            &xyz_claim_values,
+                                                                                            &xyz_issuer_pub_key,
+                                                                                            &xyz_issuer_priv_key,
+                                                                                            None,
+                                                                                            None,
+                                                                                            None).unwrap();
 
         // 5. Prover processes XYZ claim
-        Prover::process_claim_signature(&mut xyz_claim_signature, &xyz_master_secret_blinding_data, &xyz_issuer_pub_key, None).unwrap();
-
+        Prover::process_claim_signature(&mut xyz_claim_signature,
+                                        &xyz_claim_values,
+                                        &xyz_signature_correctness_proof,
+                                        &xyz_master_secret_blinding_data,
+                                        &master_secret,
+                                        &xyz_issuer_pub_key,
+                                        &xyz_claim_issuance_nonce,
+                                        None).unwrap();
         // 6. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        let nonce = new_nonce().unwrap();
 
         // 7. Verifier creates proof request which contains two sub proof requests: GVT and XYZ
         let gvt_sub_proof_request = helpers::gvt_sub_proof_request();
@@ -289,7 +379,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry
         let (mut rev_reg_pub, rev_reg_priv) = Issuer::new_revocation_registry(&issuer_pub_key, 5).unwrap();
@@ -297,36 +387,56 @@ mod test {
         // 4. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 5. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates and sign claim values
+        // 6. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates and sign claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     Some(1),
-                                                     Some(&mut rev_reg_pub),
-                                                     Some(&rev_reg_priv)).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    Some(1),
+                                                                                    Some(&mut rev_reg_pub),
+                                                                                    Some(&rev_reg_priv)).unwrap();
 
-        // 7. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
+        // 9. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
 
-        // 8. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        // 10. Verifier creates nonce
+        let nonce = new_nonce().unwrap();
 
-        // 9. Verifier create sub proof request
+        // 11. Verifier create sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 10. Prover creates proof
+        // 12. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         let key_id = "key_id";
         proof_builder.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &claim_signature, &claim_values, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 11. Verifier verifies proof
+        // 13. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert!(proof_verifier.verify(&proof, &nonce).unwrap());
@@ -338,7 +448,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry
         let (mut rev_reg_pub, rev_reg_priv) = Issuer::new_revocation_registry(&issuer_pub_key, 5).unwrap();
@@ -347,39 +457,59 @@ mod test {
         // 4. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 5. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates and signs claim values
+        // 6. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     Some(rev_idx),
-                                                     Some(&mut rev_reg_pub),
-                                                     Some(&rev_reg_priv)).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    Some(1),
+                                                                                    Some(&mut rev_reg_pub),
+                                                                                    Some(&rev_reg_priv)).unwrap();
 
-        // 7. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
+        // 9. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
 
-        // 8. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        // 10. Verifier creates nonce
+        let nonce = new_nonce().unwrap();
 
-        // 9. Verifier creates sub proof request
+        // 11. Verifier creates sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 10. Prover creates proof
+        // 12. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         let key_id = "key_id";
         proof_builder.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &claim_signature, &claim_values, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 11. Issuer revokes claim used for proof building
+        // 13. Issuer revokes claim used for proof building
         Issuer::revoke_claim(&mut rev_reg_pub, rev_idx).unwrap();
 
-        // 12. Verifier verifies proof
+        // 15. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert_eq!(false, proof_verifier.verify(&proof, &nonce).unwrap());
@@ -391,7 +521,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry
         let (mut rev_reg_pub, rev_reg_priv) = Issuer::new_revocation_registry(&issuer_pub_key, 5).unwrap();
@@ -400,30 +530,50 @@ mod test {
         // 4. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 5. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates and signs claim values
+        // 6. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     Some(rev_idx),
-                                                     Some(&mut rev_reg_pub),
-                                                     Some(&rev_reg_priv)).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    Some(1),
+                                                                                    Some(&mut rev_reg_pub),
+                                                                                    Some(&rev_reg_priv)).unwrap();
 
-        // 7. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
+        // 9. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
 
-        // 8. Issuer revokes claim used for proof building
+        // 10. Issuer revokes claim used for proof building
         Issuer::revoke_claim(&mut rev_reg_pub, rev_idx).unwrap();
 
-        // 9. Verifier creates sub proof request
+        // 11. Verifier creates sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 10. Prover creates proof
+        // 12. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
 
         let key_id = "key_id";
@@ -443,7 +593,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry for only 1 claim
         let (mut rev_reg_pub, rev_reg_priv) = Issuer::new_revocation_registry(&issuer_pub_key, 1).unwrap();
@@ -451,13 +601,27 @@ mod test {
         // 4. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 5. Prover blinds master secret
-        let (blinded_ms, _) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates and sign first claim values
+        // 6. Prover blinds master secret
+        let (blinded_master_secret, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates and sign first claim values
         let claim_values = helpers::gvt_claim_values();
+
         Issuer::sign_claim(PROVER_ID,
-                           &blinded_ms,
+                           &blinded_master_secret,
+                           &blinded_master_secret_correctness_proof,
+                           &master_secret_blinding_nonce,
+                           &claim_issuance_nonce,
                            &claim_values,
                            &issuer_pub_key,
                            &issuer_priv_key,
@@ -465,9 +629,12 @@ mod test {
                            Some(&mut rev_reg_pub),
                            Some(&rev_reg_priv)).unwrap();
 
-        // 7. Issuer creates and sign second claim values
-        let res = Issuer::sign_claim(PROVER_ID,
-                                     &blinded_ms,
+        // 9. Issuer creates and sign second claim values
+        let res = Issuer::sign_claim(&format!("{}2", PROVER_ID),
+                                     &blinded_master_secret,
+                                     &blinded_master_secret_correctness_proof,
+                                     &master_secret_blinding_nonce,
+                                     &claim_issuance_nonce,
                                      &claim_values,
                                      &issuer_pub_key,
                                      &issuer_priv_key,
@@ -484,7 +651,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry
         let (mut rev_reg_pub, rev_reg_priv) = Issuer::new_revocation_registry(&issuer_pub_key, 5).unwrap();
@@ -494,54 +661,85 @@ mod test {
         // 4. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 5. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 5. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 6. Issuer creates and signs claim values
+        // 6. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     Some(rev_idx),
-                                                     Some(&mut rev_reg_pub),
-                                                     Some(&rev_reg_priv)).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    Some(rev_idx),
+                                                                                    Some(&mut rev_reg_pub),
+                                                                                    Some(&rev_reg_priv)).unwrap();
 
-        // 7. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
+        // 9. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
 
         // Create proof by issued claim
-        // 8. Verifier creates nonce
-        let nonce = Verifier::new_nonce().unwrap();
+        // 10. Verifier creates nonce
+        let nonce = new_nonce().unwrap();
 
-        // 9. Verifier creates sub proof request
+        // 11. Verifier creates sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 10. Prover creates proof
+        // 12. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         let key_id = "key_id";
         proof_builder.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &claim_signature, &claim_values, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 11. Verifier verifies proof
+        // 13. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert_eq!(false, proof_verifier.verify(&proof, &nonce).unwrap());
 
-        // 12. Issuer revokes claim used for proof building
+        // 14. Issuer revokes claim used for proof building
         Issuer::revoke_claim(&mut rev_reg_pub, rev_idx).unwrap();
 
-        // 13. Verifier verifies proof after revocation
+        // 15. Verifier verifies proof after revocation
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert_eq!(false, proof_verifier.verify(&proof, &nonce).unwrap());
 
         // Reissue claim with different values but same rev_index
-        // 14. Prover blinds master secret
-        let (new_blinded_ms, new_master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
 
-        // 15. Issuer creates and signs new claim values
+        // 16. Issuer creates nonce used Prover to blind master secret
+        let new_master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 17. Prover blinds master secret
+        let (new_blinded_master_secret, new_master_secret_blinding_data, new_blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &new_master_secret_blinding_nonce).unwrap();
+
+        // 18. Prover creates nonce used Issuer to new claim issue
+        let new_claim_issuance_nonce = new_nonce().unwrap();
+
+        // 19. Issuer creates and signs new claim values
         let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
         claim_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
         claim_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
@@ -549,19 +747,28 @@ mod test {
         claim_values_builder.add_value("height", "165").unwrap();
         let claim_values = claim_values_builder.finalize().unwrap();
 
-        let mut new_claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                         &new_blinded_ms,
-                                                         &claim_values,
-                                                         &issuer_pub_key,
-                                                         &issuer_priv_key,
-                                                         Some(rev_idx),
-                                                         Some(&mut rev_reg_pub),
-                                                         Some(&rev_reg_priv)).unwrap();
+        let (mut new_claim_signature, new_signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                            &new_blinded_master_secret,
+                                                                                            &new_blinded_master_secret_correctness_proof,
+                                                                                            &new_master_secret_blinding_nonce,
+                                                                                            &new_claim_issuance_nonce,
+                                                                                            &claim_values,
+                                                                                            &issuer_pub_key,
+                                                                                            &issuer_priv_key,
+                                                                                            Some(rev_idx),
+                                                                                            Some(&mut rev_reg_pub),
+                                                                                            Some(&rev_reg_priv)).unwrap();
 
-        // 16. Prover processes new claim signature
-        Prover::process_claim_signature(&mut new_claim_signature, &new_master_secret_blinding_data, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
-
-        // 17. Prover creates proof using new claim
+        // 20. Prover processes new claim signature
+        Prover::process_claim_signature(&mut new_claim_signature,
+                                        &claim_values,
+                                        &new_signature_correctness_proof,
+                                        &new_master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &new_claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
+        // 21. Prover creates proof using new claim
         let mut new_proof_builder = Prover::new_proof_builder().unwrap();
 
         new_proof_builder.add_sub_proof_request(key_id,
@@ -574,12 +781,12 @@ mod test {
 
         let new_proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 18. Verifier verifies proof created by new claim
+        // 22. Verifier verifies proof created by new claim
         let mut new_proof_verifier = Verifier::new_proof_verifier().unwrap();
         new_proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert!(new_proof_verifier.verify(&new_proof, &nonce).unwrap());
 
-        // 19. Verifier verifies proof created before the first claim had been revoked
+        // 23. Verifier verifies proof created before the first claim had been revoked
         let mut old_proof_verifier = Verifier::new_proof_verifier().unwrap();
         old_proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, Some(&rev_reg_pub)).unwrap();
         assert_eq!(false, old_proof_verifier.verify(&proof, &nonce).unwrap());
@@ -591,30 +798,43 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, _) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                 &blinded_ms,
-                                                 &claim_values,
-                                                 &issuer_pub_key,
-                                                 &issuer_priv_key,
-                                                 None,
-                                                 None,
-                                                 None).unwrap();
+        let (claim_signature, _) = Issuer::sign_claim(PROVER_ID,
+                                                      &blinded_master_secret,
+                                                      &blinded_master_secret_correctness_proof,
+                                                      &master_secret_blinding_nonce,
+                                                      &claim_issuance_nonce,
+                                                      &claim_values,
+                                                      &issuer_pub_key,
+                                                      &issuer_priv_key,
+                                                      None,
+                                                      None,
+                                                      None).unwrap();
 
-        // 6. Verifier creates nonce and sub proof request
-        let nonce = Verifier::new_nonce().unwrap();
+        // 8. Verifier creates nonce and sub proof request
+        let nonce = new_nonce().unwrap();
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 7. Prover creates proof by sub proof request not corresponded to verifier proof request
+        // 9. Prover creates proof by sub proof request not corresponded to verifier proof request
         let key_id = "key_id";
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
@@ -627,7 +847,7 @@ mod test {
                                             None).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 8. Verifier verifies proof
+        // 10. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
         assert_eq!(false, proof_verifier.verify(&proof, &nonce).unwrap());
@@ -639,34 +859,53 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values wrong keys
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values wrong keys
         let claim_values = helpers::gvt_claim_values();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
-
-        // 7. Verifier creates nonce and sub proof request
-        let nonce = Verifier::new_nonce().unwrap();
+        // 9. Verifier creates nonce and sub proof request
+        let nonce = new_nonce().unwrap();
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 8. Prover creates proof by sub proof request not corresponded to verifier proof request
+        // 10. Prover creates proof by sub proof request not corresponded to verifier proof request
         let key_id = "key_id";
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
@@ -681,7 +920,7 @@ mod test {
         let another_master_secret = Prover::new_master_secret().unwrap();
         let proof = proof_builder.finalize(&nonce, &another_master_secret).unwrap();
 
-        // 9. Verifier verifies proof
+        // 11. Verifier verifies proof
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
         assert_eq!(false, proof_verifier.verify(&proof, &nonce).unwrap());
@@ -693,35 +932,54 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values wrong keys
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values wrong keys
         let claim_values = helpers::gvt_claim_values();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
-
-        // 7. Verifier creates sub proof request
+        // 9. Verifier creates sub proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
-        // 8. Prover creates proof by sub proof request not corresponded to verifier proof request
+        // 10. Prover creates proof by sub proof request not corresponded to verifier proof request
         let key_id = "key_id";
-        let nonce_for_proof_creation = Verifier::new_nonce().unwrap();
+        let nonce_for_proof_creation = new_nonce().unwrap();
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         proof_builder.add_sub_proof_request(key_id,
@@ -734,8 +992,8 @@ mod test {
 
         let proof = proof_builder.finalize(&nonce_for_proof_creation, &master_secret).unwrap();
 
-        // 9. Verifier verifies proof
-        let nonce_for_proof_verification = Verifier::new_nonce().unwrap();
+        // 11. Verifier verifies proof
+        let nonce_for_proof_verification = new_nonce().unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
@@ -748,33 +1006,53 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 7. Prover creates proof by sub proof request not corresponded to verifier proof request
+        // 9. Prover creates proof by sub proof request not corresponded to verifier proof request
         let sub_proof_request = helpers::gvt_sub_proof_request();
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
-        let nonce = Verifier::new_nonce().unwrap();
+        let nonce = new_nonce().unwrap();
 
         let key_id = "key_id";
         proof_builder.add_sub_proof_request(key_id,
@@ -786,9 +1064,9 @@ mod test {
                                             None).unwrap();
         let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
 
-        // 8. Verifier verifies proof
+        // 10. Verifier verifies proof
         let xyz_claim_schema = helpers::xyz_claim_schema();
-        let (xyz_issuer_pub_key, _) = Issuer::new_keys(&xyz_claim_schema, false).unwrap();
+        let (xyz_issuer_pub_key, _, _) = Issuer::new_keys(&xyz_claim_schema, false).unwrap();
         let xyz_sub_proof_request = helpers::xyz_sub_proof_request();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
@@ -814,7 +1092,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(without revocation part)
-        let (issuer_pub_key, _) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, _, _) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Issuer creates revocation registry
         let res = Issuer::new_revocation_registry(&issuer_pub_key, 5);
@@ -827,7 +1105,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys(with revocation keys)
-        let (issuer_pub_key, _) = Issuer::new_keys(&claim_schema, true).unwrap();
+        let (issuer_pub_key, _, _) = Issuer::new_keys(&claim_schema, true).unwrap();
 
         // 3. Issuer creates revocation registry
         let (mut rev_reg_pub, _) = Issuer::new_revocation_registry(&issuer_pub_key, 5).unwrap();
@@ -844,27 +1122,39 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, _) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates claim values not correspondent to issuer keys
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values not correspondent to issuer keys
         let claim_values = helpers::xyz_claim_values();
 
-        // 6. Issuer signs wrong claim values
+        // 8. Issuer signs wrong claim values
         let res = Issuer::sign_claim(PROVER_ID,
-                                     &blinded_ms,
+                                     &blinded_master_secret,
+                                     &blinded_master_secret_correctness_proof,
+                                     &master_secret_blinding_nonce,
+                                     &claim_issuance_nonce,
                                      &claim_values,
                                      &issuer_pub_key,
                                      &issuer_priv_key,
                                      None,
                                      None,
                                      None);
-
 
         assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
     }
@@ -875,29 +1165,49 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 7. Prover creates proof
+        // 9. Prover creates proof
         let mut proof_builder = Prover::new_proof_builder().unwrap();
 
         // Wrong claim values
@@ -923,32 +1233,52 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 7. Verifier creates sub proof request
+        // 9. Verifier creates sub proof request
         let sub_proof_request = helpers::xyz_sub_proof_request();
 
-        // 8. Prover creates proof by claim not correspondent to proof request
+        // 10. Prover creates proof by claim not correspondent to proof request
         let mut proof_builder = Prover::new_proof_builder().unwrap();
 
         let key_id = "key_id";
@@ -968,34 +1298,54 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 7. Verifier creates sub proof request
+        // 9. Verifier creates sub proof request
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("status").unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
 
-        // 8. Prover creates proof by claim not contained requested attribute
+        // 10. Prover creates proof by claim not contained requested attribute
         let mut proof_builder = Prover::new_proof_builder().unwrap();
 
         let key_id = "key_id";
@@ -1015,35 +1365,55 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Prover creates master secret
         let master_secret = Prover::new_master_secret().unwrap();
 
-        // 4. Prover blinds master secret
-        let (blinded_ms, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
 
-        // 5. Issuer creates and signs claim values
+        // 5. Prover blinds master secret
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates and signs claim values
         let claim_values = helpers::gvt_claim_values();
-        let mut claim_signature = Issuer::sign_claim(PROVER_ID,
-                                                     &blinded_ms,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     None,
-                                                     None,
-                                                     None).unwrap();
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
 
-        // 6. Prover processes claim signature
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+        // 8. Prover processes claim signature
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
-        // 7. Verifier creates sub proof request
+        // 9. Verifier creates sub proof request
         let mut gvt_sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         gvt_sub_proof_request_builder.add_revealed_attr("name").unwrap();
         gvt_sub_proof_request_builder.add_predicate("age", "GE", 50).unwrap();
         let sub_proof_request = gvt_sub_proof_request_builder.finalize().unwrap();
 
-        // 8. Prover creates proof by claim value not satisfied predicate
+        // 10. Prover creates proof by claim value not satisfied predicate
         let mut proof_builder = Prover::new_proof_builder().unwrap();
 
         let key_id = "key_id";
@@ -1063,7 +1433,7 @@ mod test {
         let claim_schema = helpers::gvt_claim_schema();
 
         // 2. Issuer creates keys
-        let (issuer_pub_key, _) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (issuer_pub_key, _, _) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         // 3. Verifier build proof verifier
         let key_id = "key_id";
@@ -1073,6 +1443,375 @@ mod test {
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
 
         let res = proof_verifier.add_sub_proof_request(key_id, &sub_proof_request, &xyz_claim_schema, &issuer_pub_key, None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn prover_blind_master_secret_works_for_key_correctness_proof_not_correspond_to_public_key() {
+        // 1. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 2. Issuer creates GVT claim definition
+        let gvt_claim_schema = helpers::gvt_claim_schema();
+        let (gvt_issuer_pub_key, _, _) =
+            Issuer::new_keys(&gvt_claim_schema, false).unwrap();
+
+        // 3. Issuer creates XYZ claim definition
+        let xyz_claim_schema = helpers::xyz_claim_schema();
+        let (_, _, xyz_issuer_key_correctness_proof) =
+            Issuer::new_keys(&xyz_claim_schema, false).unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let gvt_master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blind master secret by gvt_public_key and xyz_key_correctness_proof
+        let res =
+            Prover::blind_master_secret(&gvt_issuer_pub_key,
+                                        &xyz_issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &gvt_master_secret_blinding_nonce);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn issuer_sign_claim_works_for_prover_used_different_nonce_to_blind_master_secret() {
+        // 1. Issuer creates claim schema
+        let claim_schema = helpers::gvt_claim_schema();
+
+        // 2. Issuer creates keys
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let other_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret
+        let (blinded_ms, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &other_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 8. Issuer signs claim values
+        let res = Issuer::sign_claim(PROVER_ID,
+                                     &blinded_ms,
+                                     &blinded_master_secret_correctness_proof,
+                                     &master_secret_blinding_nonce,
+                                     &claim_issuance_nonce,
+                                     &claim_values,
+                                     &issuer_pub_key,
+                                     &issuer_priv_key,
+                                     None,
+                                     None,
+                                     None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn issuer_sign_claim_works_for_keys_not_correspond_to_blinded_master_secret_correctness_proof() {
+        // 1. Issuer creates GVT claim definition
+        let claim_schema = helpers::gvt_claim_schema();
+        let (gvt_issuer_pub_key, _, gvt_issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 2. Issuer creates XYZ claim definition
+        let claim_schema = helpers::gvt_claim_schema();
+        let (xyz_issuer_pub_key, xyz_issuer_priv_key, _) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret by GVT key
+        let (blinded_ms, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&gvt_issuer_pub_key, &gvt_issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let xyz_claim_values = helpers::xyz_claim_values();
+
+        // 8. Issuer signs XYZ claim values for Prover
+        let res = Issuer::sign_claim(PROVER_ID,
+                                     &blinded_ms,
+                                     &blinded_master_secret_correctness_proof,
+                                     &master_secret_blinding_nonce,
+                                     &claim_issuance_nonce,
+                                     &xyz_claim_values,
+                                     &xyz_issuer_pub_key,
+                                     &xyz_issuer_priv_key,
+                                     None,
+                                     None,
+                                     None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn issuer_sign_claim_works_for_blinded_master_secret_not_correspond_to_blinded_master_secret_correctness_proof() {
+        // 1. Issuer creates GVT claim definition
+        let claim_schema = helpers::gvt_claim_schema();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 2. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 3. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 4. Prover blinds master secret
+        let (_, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 5. Prover blinds master secret second time
+        let (blinded_ms, _, _) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 8. Issuer signs claim values for Prover
+        let res = Issuer::sign_claim(PROVER_ID,
+                                     &blinded_ms,
+                                     &blinded_master_secret_correctness_proof,
+                                     &master_secret_blinding_nonce,
+                                     &claim_issuance_nonce,
+                                     &claim_values,
+                                     &issuer_pub_key,
+                                     &issuer_priv_key,
+                                     None,
+                                     None,
+                                     None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn prover_process_claim_signature_works_for_issuer_used_different_nonce() {
+        // 1. Issuer creates claim schema
+        let claim_schema = helpers::gvt_claim_schema();
+
+        // 2. Issuer creates keys
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret
+        let (blinded_ms, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        let different_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 8. Issuer signs claim values
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_ms,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &different_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
+
+        // 9. Prover processes claim signature
+        let res = Prover::process_claim_signature(&mut claim_signature,
+                                                  &claim_values,
+                                                  &signature_correctness_proof,
+                                                  &master_secret_blinding_data,
+                                                  &master_secret,
+                                                  &issuer_pub_key,
+                                                  &claim_issuance_nonce,
+                                                  None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn prover_process_claim_signature_works_for_claim_signature_not_correspond_to_signature_correctness_proof() {
+        // 1. Issuer creates claim schema
+        let claim_schema = helpers::gvt_claim_schema();
+
+        // 2. Issuer creates keys
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret
+        let (blinded_ms, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        let different_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 8. Issuer signs claim values
+        let (mut claim_signature, _) = Issuer::sign_claim(PROVER_ID,
+                                                          &blinded_ms,
+                                                          &blinded_master_secret_correctness_proof,
+                                                          &master_secret_blinding_nonce,
+                                                          &different_nonce,
+                                                          &claim_values,
+                                                          &issuer_pub_key,
+                                                          &issuer_priv_key,
+                                                          None,
+                                                          None,
+                                                          None).unwrap();
+
+        // 9. Issuer signs claim values second time
+        let (_, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                  &blinded_ms,
+                                                                  &blinded_master_secret_correctness_proof,
+                                                                  &master_secret_blinding_nonce,
+                                                                  &different_nonce,
+                                                                  &claim_values,
+                                                                  &issuer_pub_key,
+                                                                  &issuer_priv_key,
+                                                                  None,
+                                                                  None,
+                                                                  None).unwrap();
+
+        // 10. Prover processes claim signature
+        let res = Prover::process_claim_signature(&mut claim_signature,
+                                                  &claim_values,
+                                                  &signature_correctness_proof,
+                                                  &master_secret_blinding_data,
+                                                  &master_secret,
+                                                  &issuer_pub_key,
+                                                  &claim_issuance_nonce,
+                                                  None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn prover_process_claim_signature_works_for_master_secret_blinding_data_not_correspond_to_signature() {
+        // 1. Issuer creates claim schema
+        let claim_schema = helpers::gvt_claim_schema();
+
+        // 2. Issuer creates keys
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret
+        let (blinded_ms, _, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover blinds master secret second time
+        let (_, master_secret_blinding_data, _) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 7. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 8. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 9. Issuer signs claim values
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_ms,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
+
+        // 10. Prover processes claim signature
+        let res = Prover::process_claim_signature(&mut claim_signature,
+                                                  &claim_values,
+                                                  &signature_correctness_proof,
+                                                  &master_secret_blinding_data,
+                                                  &master_secret,
+                                                  &issuer_pub_key,
+                                                  &claim_issuance_nonce,
+                                                  None);
+        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+    }
+
+    #[test]
+    fn prover_process_claim_signature_works_for_use_different_nonce() {
+        // 1. Issuer creates claim schema
+        let claim_schema = helpers::gvt_claim_schema();
+
+        // 2. Issuer creates keys
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        // 3. Prover creates master secret
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        // 4. Issuer creates nonce used Prover to blind master secret
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        // 5. Prover blinds master secret
+        let (blinded_ms, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key, &issuer_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+
+        // 6. Prover creates nonce used Issuer to claim issue
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        // 7. Issuer creates claim values
+        let claim_values = helpers::gvt_claim_values();
+
+        // 8. Issuer signs claim values
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim(PROVER_ID,
+                                                                                    &blinded_ms,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    None,
+                                                                                    None,
+                                                                                    None).unwrap();
+
+        let other_nonce = new_nonce().unwrap();
+
+        // 9. Prover processes claim signature
+        let res = Prover::process_claim_signature(&mut claim_signature,
+                                                  &claim_values,
+                                                  &signature_correctness_proof,
+                                                  &master_secret_blinding_data,
+                                                  &master_secret,
+                                                  &issuer_pub_key,
+                                                  &other_nonce,
+                                                  None);
         assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
     }
 }

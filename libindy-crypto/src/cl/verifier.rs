@@ -1,6 +1,6 @@
 use bn::BigNumber;
 use cl::*;
-use cl::constants::{LARGE_E_START, ITERATION, LARGE_NONCE};
+use cl::constants::{LARGE_E_START, ITERATION};
 use cl::helpers::*;
 use errors::IndyCryptoError;
 
@@ -28,17 +28,6 @@ impl Verifier {
     pub fn new_sub_proof_request_builder() -> Result<SubProofRequestBuilder, IndyCryptoError> {
         let res = SubProofRequestBuilder::new()?;
         Ok(res)
-    }
-
-    /// Creates random nonce
-    ///
-    /// # Example
-    /// ```
-    /// use indy_crypto::cl::verifier::Verifier;
-    /// let _nonce = Verifier::new_nonce().unwrap();
-    /// ```
-    pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
-        Ok(bn_rand(LARGE_NONCE)?)
     }
 
     /// Creates and returns proof verifier.
@@ -224,11 +213,18 @@ impl ProofVerifier {
                 .map(|attr| attr.clone())
                 .collect::<HashSet<String>>();
 
-        let t1: BigNumber = calc_teq(&issuer_pub_key, &proof.a_prime, &proof.e, &proof.v, &proof.m,
-                                     &proof.m1, &proof.m2, &unrevealed_attrs)?;
+        let t1: BigNumber = calc_teq(&issuer_pub_key, &proof.a_prime, &proof.e, &proof.v, &proof.m, &proof.m1, &proof.m2, &unrevealed_attrs)?;
 
         let mut ctx = BigNumber::new_context()?;
-        let mut rar = BigNumber::from_dec("1")?;
+
+        let degree: BigNumber =
+            BigNumber::from_dec("2")?
+                .exp(
+                    &BigNumber::from_dec(&LARGE_E_START.to_string())?,
+                    Some(&mut ctx)
+                )?;
+
+        let mut rar = proof.a_prime.mod_exp(&degree, &issuer_pub_key.n, Some(&mut ctx))?;
 
         for (attr, encoded_value) in &proof.revealed_attrs {
             let cur_r = issuer_pub_key.r.get(attr)
@@ -236,28 +232,15 @@ impl ProofVerifier {
 
             rar = cur_r
                 .mod_exp(encoded_value, &issuer_pub_key.n, Some(&mut ctx))?
-                .mul(&rar, Some(&mut ctx))?;
+                .mod_mul(&rar, &issuer_pub_key.n, Some(&mut ctx))?;
         }
-
-        let tmp: BigNumber =
-            BigNumber::from_dec("2")?
-                .exp(
-                    &BigNumber::from_dec(&LARGE_E_START.to_string())?,
-                    Some(&mut ctx)
-                )?;
-
-        rar = proof.a_prime
-            .mod_exp(&tmp, &issuer_pub_key.n, Some(&mut ctx))?
-            .mul(&rar, Some(&mut ctx))?;
 
         let t2: BigNumber = issuer_pub_key.z
             .mod_div(&rar, &issuer_pub_key.n)?
-            .mod_exp(&c_hash, &issuer_pub_key.n, Some(&mut ctx))?
-            .inverse(&issuer_pub_key.n, Some(&mut ctx))?;
+            .inverse(&issuer_pub_key.n, Some(&mut ctx))?
+            .mod_exp(&c_hash, &issuer_pub_key.n, Some(&mut ctx))?;
 
-        let t: BigNumber = t1
-            .mul(&t2, Some(&mut ctx))?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+        let t: BigNumber = t1.mod_mul(&t2, &issuer_pub_key.n, Some(&mut ctx))?;
 
         trace!("ProofVerifier::_verify_equality: <<< t: {:?}", t);
 
@@ -278,8 +261,7 @@ impl ProofVerifier {
             tau_list[i] = cur_t
                 .mod_exp(&c_hash, &issuer_pub_key.n, Some(&mut ctx))?
                 .inverse(&issuer_pub_key.n, Some(&mut ctx))?
-                .mul(&tau_list[i], Some(&mut ctx))?
-                .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+                .mod_mul(&tau_list[i], &issuer_pub_key.n, Some(&mut ctx))?;
         }
 
         let delta = proof.t.get("DELTA")
@@ -292,14 +274,12 @@ impl ProofVerifier {
             .mul(&delta, Some(&mut ctx))?
             .mod_exp(&c_hash, &issuer_pub_key.n, Some(&mut ctx))?
             .inverse(&issuer_pub_key.n, Some(&mut ctx))?
-            .mul(&tau_list[ITERATION], Some(&mut ctx))?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+            .mod_mul(&tau_list[ITERATION], &issuer_pub_key.n, Some(&mut ctx))?;
 
         tau_list[ITERATION + 1] = delta
             .mod_exp(&c_hash, &issuer_pub_key.n, Some(&mut ctx))?
             .inverse(&issuer_pub_key.n, Some(&mut ctx))?
-            .mul(&tau_list[ITERATION + 1], Some(&mut ctx))?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+            .mod_mul(&tau_list[ITERATION + 1], &issuer_pub_key.n, Some(&mut ctx))?;
 
         trace!("ProofVerifier::_verify_ge_predicate: <<< tau_list: {:?},", tau_list);
 
@@ -375,10 +355,11 @@ mod tests {
                                                                   &claim_schema,
                                                                   &sub_proof_request).unwrap();
 
-        assert_eq!("7482119769466399985453964851245160858083213139582181384392546015391266465526851030277921408409258064077698298124641650660813004229404233357607661770\
-        7349015173216066298469796629848379475742662270634373967221781036145898302079498084911189254205359080720863996359684543833466536415829603044441714644215231961048\
-        8185863374642452252262537639796626459270165235687616182451932827771166420110852842258328296215336523679907850550512281026511049364855879504226754090322982687515\
-        11838487572303641236062952085251651696655442524160504107798338763119112728565616246769765635577446028951291604888490982944375208275466186869182747994", res[0].to_dec().unwrap());
+        assert_eq!("7482119769466399985453964851245160858083213139582181384392546015391266465526851030277921408409258064077698298124641650660813004229404233357\
+        6076617707349015173216066298469796629848379475742662270634373967221781036145898302079498084911189254205359080720863996359684543833466536415829603044441\
+        7146442152319610488185863374642452252262537639796626459270165235687616182451932827771166420110852842258328296215336523679907850550512281026511049364855\
+        8795042267540903229826875151183848757230364123606295208525165169665544252416050410779833876311911272856561624676976563557744602895129160488849098294437\
+        5208275466186869182747994", res[0].to_dec().unwrap());
     }
 
     #[test]
