@@ -184,7 +184,7 @@ pub struct IssuerPrimaryPublicKeyMetadata {
 }
 
 /// Proof of `Issuer Public Key` correctness
-#[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct KeyCorrectnessProof {
     c: BigNumber,
     xz_cap: BigNumber,
