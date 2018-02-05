@@ -184,7 +184,7 @@ pub struct IssuerPrimaryPublicKeyMetadata {
 }
 
 /// Proof of `Issuer Public Key` correctness
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
 pub struct KeyCorrectnessProof {
     c: BigNumber,
     xz_cap: BigNumber,
@@ -353,6 +353,12 @@ pub struct Witness {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecret {
     ms: BigNumber,
+}
+
+impl MasterSecret {
+    pub fn clone(&self) -> Result<MasterSecret, IndyCryptoError> {
+        Ok(MasterSecret { ms: self.ms.clone()? })
+    }
 }
 
 impl JsonEncodable for MasterSecret {}
