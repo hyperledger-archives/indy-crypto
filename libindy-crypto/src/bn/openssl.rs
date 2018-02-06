@@ -401,6 +401,15 @@ mod tests {
         assert!(end > random_prime);
     }
 
+    #[test]
+    fn is_prime_works() {
+        let primes:Vec<u64> = vec![2, 23, 31, 42885908609, 24473809133, 47055833459];
+        for num in primes {
+            let num_str = BigNumber::from_dec(&num.to_string()).unwrap();
+            assert_eq!(num_str.is_prime(None).unwrap(), true);
+        }
+    }
+
     #[cfg(feature = "serialization")]
     #[derive(Serialize, Deserialize)]
     struct Test {
