@@ -39,7 +39,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn indy_crypto_primality_check_works() {
+    fn c() {
         let number1 = vec![29].as_ptr() as *const u8;
         let mut valid = false;
         let err_code = indy_crypto_primality_check(number1,1, &mut valid);
@@ -49,7 +49,7 @@ mod tests {
         let number2 = vec![1, 153, 25].as_ptr() as *const u8; // number 104729
         let err_code = indy_crypto_primality_check(number2, 3,&mut valid);
         assert_eq!(err_code, ErrorCode::Success);
-        assert!(!valid);
+        assert!(valid);
 
         let number3 = vec![9, 252, 51, 8, 129].as_ptr() as *const u8;   // number 42885908609
         let err_code = indy_crypto_primality_check(number3,5, &mut valid);
