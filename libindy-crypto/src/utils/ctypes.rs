@@ -121,11 +121,3 @@ macro_rules! check_useful_c_str {
         }
     }
 }
-
-macro_rules! check_useful_c_positive_number {
-    ($num:ident, $err:expr) => {
-        if $num <= 0 {
-            return $err
-        }
-    }
-}

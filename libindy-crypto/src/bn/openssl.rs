@@ -404,10 +404,26 @@ mod tests {
     #[test]
     fn is_prime_works() {
         let primes:Vec<u64> = vec![2, 23, 31, 42885908609, 24473809133, 47055833459];
-        for num in primes {
-            let num_str = BigNumber::from_dec(&num.to_string()).unwrap();
-            assert_eq!(num_str.is_prime(None).unwrap(), true);
+        for pr in primes {
+            let num = BigNumber::from_dec(&pr.to_string()).unwrap();
+            assert!(num.is_prime(None).unwrap());
         }
+        let num = BigNumber::from_dec("36").unwrap();
+        assert!(!num.is_prime(None).unwrap());
+
+        let mut n128 = BigNumber::new().unwrap();
+        BigNumRef::generate_prime(&mut n128.openssl_bn, 128, false, None, None).unwrap();
+        assert!(n128.is_prime(None).unwrap());
+        let mut n256 = BigNumber::new().unwrap();
+        BigNumRef::generate_prime(&mut n256.openssl_bn, 256, false, None, None).unwrap();
+        assert!(n256.is_prime(None).unwrap());
+
+        let vec1 = vec![9, 252, 51, 8, 129]; // big endian representation of 42885908609
+        let v1 = BigNumber::from_bytes(&vec1).unwrap();
+        assert!(v1.is_prime(None).unwrap());
+        let vec2 = vec![129, 8, 51, 252, 9]; // little endian representation of 42885908609
+        let v2 = BigNumber::from_bytes(&vec2).unwrap();
+        assert!(!v2.is_prime(None).unwrap());
     }
 
     #[cfg(feature = "serialization")]
