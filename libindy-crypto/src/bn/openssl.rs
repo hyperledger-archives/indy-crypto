@@ -424,6 +424,9 @@ mod tests {
         let vec2 = vec![129, 8, 51, 252, 9]; // little endian representation of 42885908609
         let v2 = BigNumber::from_bytes(&vec2).unwrap();
         assert!(!v2.is_prime(None).unwrap());
+        let vec3 = vec![1, 153, 25]; // big endian representation of 104729
+        let v3 = BigNumber::from_bytes(&vec3).unwrap();
+        assert!(v3.is_prime(None).unwrap());
     }
 
     #[cfg(feature = "serialization")]
