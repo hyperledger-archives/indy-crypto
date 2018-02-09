@@ -54,6 +54,8 @@ pub fn bn_rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
             LARGE_VPRIME_PRIME => Ok(BigNumber::from_dec("6620937836014079781509458870800001917950459774302786434315639456568768602266735503527631640833663968617512880802104566048179854406925811731340920442625764155409951969854303612644121780700879432308016935250101960876405664503219252820761501606507817390189252221968804450207070282033815280889897882643560437257171838117793768660731379360330750300543760457608638753190279419951706206819943151918535286779337023708838891906829360439545064730288538139152367417882097349210427894031568623898916625312124319876670702064561291393993815290033742478045530118808274555627855247830659187691067893683525651333064738899779446324124393932782261375663033826174482213348732912255948009062641783238846143256448824091556005023241191311617076266099622843011796402959351074671886795391490945230966123230485475995208322766090290573654498779155")?),
             LARGE_VTILDE => Ok(BigNumber::from_dec("241132863422049783305938184561371219250127488499746090592218003869595412171810997360214885239402274273939963489505434726467041932541499422544431299362364797699330176612923593931231233163363211565697860685967381420219969754969010598350387336530924879073366177641099382257720898488467175132844984811431059686249020737675861448309521855120928434488546976081485578773933300425198911646071284164884533755653094354378714645351464093907890440922615599556866061098147921890790915215227463991346847803620736586839786386846961213073783437136210912924729098636427160258710930323242639624389905049896225019051952864864612421360643655700799102439682797806477476049234033513929028472955119936073490401848509891547105031112859155855833089675654686301183778056755431562224990888545742379494795601542482680006851305864539769704029428620446639445284011289708313620219638324467338840766574612783533920114892847440641473989502440960354573501")?),
             LARGE_ALPHATILDE => Ok(BigNumber::from_dec("15019832071918025992746443764672619814038193111378331515587108416842661492145380306078894142589602719572721868876278167686578705125701790763532708415180504799241968357487349133908918935916667492626745934151420791943681376124817051308074507483664691464171654649868050938558535412658082031636255658721308264295197092495486870266555635348911182100181878388728256154149188718706253259396012667950509304959158288841789791483411208523521415447630365867367726300467842829858413745535144815825801952910447948288047749122728907853947789264574578039991615261320141035427325207080621563365816477359968627596441227854436137047681372373555472236147836722255880181214889123172703767379416198854131024048095499109158532300492176958443747616386425935907770015072924926418668194296922541290395990933578000312885508514814484100785527174742772860178035596639")?),
+            LARGE_MTILDE => Ok(BigNumber::from_dec("10838856720335086997514319917662253919386665513436731291879876033663916796845905483096428365331456535021555195228705107240745433186472885370026158281452488750543836812854534798015")?),
+            LARGE_VPRIME_TILDE => Ok(BigNumber::from_dec("7386811869019179870100687855894246319172420541069294538217167605124422631127322322032212516322238783199219840369673368701908421210654568357708875550970225644198173904482926535008379829083688461996756745")?),
             _ => {
                 panic!("Uncovered case: {}", size);
             }
@@ -72,20 +74,34 @@ pub fn _bn_rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
 
     let res = BigNumber::rand(size)?;
 
-    trace!("Helpers::encode_attribute: <<< res: {:?}", res);
+    trace!("Helpers::bn_rand: <<< res: {:?}", res);
+
+    Ok(res)
+}
+
+#[cfg(test)]
+pub fn bn_rand_range(_bn: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    BigNumber::from_dec("6355086599653879826316700099928903465759924565682653297540990486160410136991969646604012568191576052570982028627086748382054319397088948628665022843282950799083156383516421449932691541760677147872377591267323656783938723945915297920233965100454678367417561768144216659060966399182536425206811620699453941460281449071103436526749575365638254352831881150836568830779323361579590121888491911166612382507532248659384681554612887580241255323056245170208421770819447066550669981130450421507202133758209950007973511221223647764045990479619451838104977691662868482078262695232806059726002249095643117917855811948311863670130")
+}
+
+#[cfg(not(test))]
+pub fn bn_rand_range(bn: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    _bn_rand_range(bn)
+}
+
+pub fn _bn_rand_range(bn: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    trace!("Helpers::bn_rand_range: >>> bn:: {:?}", bn);
+
+    let res = bn.rand_range()?;
+
+    trace!("Helpers::bn_rand_range: <<< res: {:?}", res);
 
     Ok(res)
 }
 
 pub fn encode_attribute(attribute: &str, byte_order: ByteOrder) -> Result<BigNumber, IndyCryptoError> {
     trace!("Helpers::encode_attribute: >>> attribute: {:?}, byte_order: {:?}", attribute, byte_order);
-
     let mut result = BigNumber::hash(attribute.as_bytes())?;
-    let index = result.iter().position(|&value| value == 0);
-
-    if let Some(position) = index {
-        result.truncate(position); //FIXME logical error 0x00 may be in any position inside Vec<u8>
-    }
 
     if let ByteOrder::Little = byte_order {
         result.reverse();
@@ -231,6 +247,8 @@ pub fn _random_qr(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
     Ok(qr)
 }
 
+
+//TODO: FIXME very inefficient code
 pub fn bitwise_or_big_int(a: &BigNumber, b: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
     trace!("Helpers::bitwise_or_big_int: >>> a: {:?}, b: {:?}", a, b);
 
@@ -293,11 +311,12 @@ pub fn get_mtilde(unrevealed_attrs: &HashSet<String>) -> Result<HashMap<String, 
 pub fn calc_teq(issuer_pub_key: &IssuerPrimaryPublicKey, a_prime: &BigNumber, e: &BigNumber, v: &BigNumber,
                 m_tilde: &HashMap<String, BigNumber>, m1_tilde: &BigNumber, m2tilde: &BigNumber,
                 unrevealed_attrs: &HashSet<String>) -> Result<BigNumber, IndyCryptoError> {
-    trace!("Helpers::calc_teq: >>> issuer_pub_key: {:?}, issuer_pub_key: {:?}, e: {:?}, v: {:?}, m_tilde: {:?}, m1_tilde: {:?}, unrevealed_attrs: {:?}",
-           issuer_pub_key, a_prime, e, v, m_tilde, m1_tilde, unrevealed_attrs);
+    trace!("Helpers::calc_teq: >>> issuer_pub_key: {:?}, issuer_pub_key: {:?}, e: {:?}, v: {:?}, m_tilde: {:?}, m1_tilde: {:?}, m2tilde: {:?}, \
+    unrevealed_attrs: {:?}", issuer_pub_key, a_prime, e, v, m_tilde, m1_tilde, m2tilde, unrevealed_attrs);
 
     let mut ctx = BigNumber::new_context()?;
-    let mut result: BigNumber = BigNumber::from_dec("1")?;
+    let mut result: BigNumber = a_prime
+        .mod_exp(&e, &issuer_pub_key.n, Some(&mut ctx))?;
 
     for k in unrevealed_attrs.iter() {
         let cur_r = issuer_pub_key.r.get(k)
@@ -307,25 +326,20 @@ pub fn calc_teq(issuer_pub_key: &IssuerPrimaryPublicKey, a_prime: &BigNumber, e:
 
         result = cur_r
             .mod_exp(&cur_m, &issuer_pub_key.n, Some(&mut ctx))?
-            .mul(&result, Some(&mut ctx))?;
+            .mod_mul(&result, &issuer_pub_key.n, Some(&mut ctx))?;
     }
-
-    result = issuer_pub_key.rms
-        .mod_exp(&m1_tilde, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(&result, Some(&mut ctx))?;
-
-    result = issuer_pub_key.rctxt
-        .mod_exp(&m2tilde, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(&result, Some(&mut ctx))?;
-
-    result = a_prime
-        .mod_exp(&e, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(&result, Some(&mut ctx))?;
 
     result = issuer_pub_key.s
         .mod_exp(&v, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(&result, Some(&mut ctx))?
-        .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+        .mod_mul(&result, &issuer_pub_key.n, Some(&mut ctx))?;
+
+    result = issuer_pub_key.rms
+        .mod_exp(&m1_tilde, &issuer_pub_key.n, Some(&mut ctx))?
+        .mod_mul(&result, &issuer_pub_key.n, Some(&mut ctx))?;
+
+    result = issuer_pub_key.rctxt
+        .mod_exp(&m2tilde, &issuer_pub_key.n, Some(&mut ctx))?
+        .mod_mul(&result, &issuer_pub_key.n, Some(&mut ctx))?;
 
     trace!("Helpers::calc_teq: <<< t: {:?}", result);
 
@@ -347,11 +361,10 @@ pub fn calc_tge(issuer_pub_key: &IssuerPrimaryPublicKey, u: &HashMap<String, Big
 
         let t_tau = issuer_pub_key.z
             .mod_exp(&cur_u, &issuer_pub_key.n, Some(&mut ctx))?
-            .mul(
+            .mod_mul(
                 &issuer_pub_key.s.mod_exp(&cur_r, &issuer_pub_key.n, Some(&mut ctx))?,
-                Some(&mut ctx)
-            )?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+                &issuer_pub_key.n, Some(&mut ctx)
+            )?;
 
         tau_list.push(t_tau);
     }
@@ -359,14 +372,12 @@ pub fn calc_tge(issuer_pub_key: &IssuerPrimaryPublicKey, u: &HashMap<String, Big
     let delta = r.get("DELTA")
         .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in r", "DELTA")))?;
 
-
     let t_tau = issuer_pub_key.z
         .mod_exp(&mj, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(
+        .mod_mul(
             &issuer_pub_key.s.mod_exp(&delta, &issuer_pub_key.n, Some(&mut ctx))?,
-            Some(&mut ctx)
-        )?
-        .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+            &issuer_pub_key.n, Some(&mut ctx)
+        )?;
 
     tau_list.push(t_tau);
 
@@ -385,8 +396,7 @@ pub fn calc_tge(issuer_pub_key: &IssuerPrimaryPublicKey, u: &HashMap<String, Big
 
     q = issuer_pub_key.s
         .mod_exp(&alpha, &issuer_pub_key.n, Some(&mut ctx))?
-        .mul(&q, Some(&mut ctx))?
-        .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+        .mod_mul(&q, &issuer_pub_key.n, Some(&mut ctx))?;
 
     tau_list.push(q);
 
@@ -399,11 +409,13 @@ fn largest_square_less_than(delta: usize) -> usize {
     (delta as f64).sqrt().floor() as usize
 }
 
+//Express the natural number `delta` as a sum of four integer squares,
+// i.e `delta = a^2 + b^2 + c^2 + d^2` using Lagrange's four-square theorem
 pub fn four_squares(delta: i32) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
     trace!("Helpers::four_squares: >>> delta: {:?}", delta);
 
     if delta < 0 {
-        return Err(IndyCryptoError::InvalidStructure(format!("Cannot get the four squares for delta {} ", delta)));
+        return Err(IndyCryptoError::InvalidStructure(format!("Cannot express a negative number as sum of four squares {} ", delta)));
     }
 
     let d = delta as usize;
@@ -627,12 +639,9 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_encode_attribute_fail_simple_collision_on_internal_truncate() {
         let ea3079 = encode_attribute("3079", ByteOrder::Big).unwrap();
         let ea6440 = encode_attribute("6440", ByteOrder::Big).unwrap();
-        println!("{:?}", ea3079);
-        println!("{:?}", ea6440);
         assert_ne!(ea3079, ea6440);
 
         /* Collision generator
@@ -657,8 +666,7 @@ mod tests {
         let proof = prover::mocks::ge_proof();
         let pk = issuer::mocks::issuer_primary_public_key();
 
-        let res = calc_tge(&pk, &proof.u, &proof.r, &proof.mj,
-                           &proof.alpha, &proof.t);
+        let res = calc_tge(&pk, &proof.u, &proof.r, &proof.mj, &proof.alpha, &proof.t);
 
         assert!(res.is_ok());
 
@@ -687,12 +695,12 @@ mod tests {
         let unrevealed_attrs = prover::mocks::unrevealed_attrs();
 
         let res = calc_teq(&pk, &proof.a_prime, &proof.e, &proof.v,
-                           &proof.m, &proof.m1, &proof.m2, &unrevealed_attrs
-        );
+                           &proof.m, &proof.m1, &proof.m2, &unrevealed_attrs);
 
         assert!(res.is_ok());
-        assert_eq!("381926765932188241543638166295836414884226639539118718065769943239416177756577713506562746090966084931668714212852500894527124357552891493284799254325180\
-        550618350619463078448090619550539984321896578172169128335147589428402324781718901869549112532798652601463746685045212133193174381490524514911738520011287083602890709\
-        48079960772659047566794177011062557693924377595447897825427041909910147539820909799749276641294365433984505662572279688664855362124712265751122800305172874190132079584439370708309080764145976583745638279272393589372240070072863129023320369502403543275214865690334236255622586065544807114732455123529", res.unwrap().to_dec().unwrap());
+        assert_eq!("232791935071797966551176855164973067578919953572587470495762481141254570100893062071605371616915963935985280066412256657289607060301196628087145782897\
+        080273529456804508856101034172198657914377342911634070133671458468196275011900674183725366096571089971320212390014348816950554318530776148312113051502780590992077\
+        257817286587487280671523330116919418726442827322191017629492979583225594278059842562698837924629559059814448006364519421854928411300346886130212925888233268204665\
+        26701518775278387982283324827510201172386163306838934227038194613946777442788325576385162364479902531371081681758079069094746742332856921799237", res.unwrap().to_dec().unwrap());
     }
 }

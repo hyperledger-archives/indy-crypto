@@ -11,8 +11,19 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::Hash;
+
+/// Creates random nonce
+///
+/// # Example
+/// ```
+/// use indy_crypto::cl::new_nonce;
+/// let _nonce = new_nonce().unwrap();
+/// ```
+pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
+    Ok(helpers::bn_rand(constants::LARGE_NONCE)?)
+}
 
 /// A list of attributes a Claim is based on.
 #[derive(Debug, Clone)]
@@ -134,13 +145,13 @@ impl JsonEncodable for IssuerPrivateKey {}
 
 impl<'a> JsonDecodable<'a> for IssuerPrivateKey {}
 
-/// `Primary Public Key` is used to prove that claim was issued and satisfy the proof request.
+/// Issuer's "Public Key" is used to verify the Issuer's signature over the Claim's attributes' values (primary claim).
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct IssuerPrimaryPublicKey {
     n: BigNumber,
     s: BigNumber,
     rms: BigNumber,
-    r: HashMap<String /* attr_name */, BigNumber>,
+    r: BTreeMap<String /* attr_name */, BigNumber>,
     rctxt: BigNumber,
     z: BigNumber
 }
@@ -151,21 +162,40 @@ impl IssuerPrimaryPublicKey {
             n: self.n.clone()?,
             s: self.s.clone()?,
             rms: self.rms.clone()?,
-            r: clone_bignum_map(&self.r)?,
+            r: clone_btree_bignum_map(&self.r)?,
             rctxt: self.rctxt.clone()?,
             z: self.z.clone()?
         })
     }
 }
 
-/// `Primary Private Key` is used for signing Claim
+/// Issuer's "Private Key" used for signing Claim's attributes' values (primary claim)
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct IssuerPrimaryPrivateKey {
     p: BigNumber,
     q: BigNumber
 }
 
-/// `Revocation Public Key` is used to prove that claim wasn’t revoked by Issuer.
+/// `Primary Public Key Metadata` required for building of Proof Correctness of `Issuer Public Key`
+#[derive(Debug)]
+pub struct IssuerPrimaryPublicKeyMetadata {
+    xz: BigNumber,
+    xr: BTreeMap<String, BigNumber>
+}
+
+/// Proof of `Issuer Public Key` correctness
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub struct KeyCorrectnessProof {
+    c: BigNumber,
+    xz_cap: BigNumber,
+    xr_cap: BTreeMap<String, BigNumber>
+}
+
+impl JsonEncodable for KeyCorrectnessProof {}
+
+impl<'a> JsonDecodable<'a> for KeyCorrectnessProof {}
+
+/// `Revocation Public Key` is used to verify that claim was'nt revoked by Issuer.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct IssuerRevocationPublicKey {
     g: PointG1,
@@ -188,9 +218,9 @@ pub struct IssuerRevocationPrivateKey {
     sk: GroupOrderElement
 }
 
-/// `Revocation Registry Public` contain revocation keys, accumulator and accumulator tails.
-/// Must be shared by Issuer in trusted place
-/// Can be used to proof that concrete claim wasn’t revoked.
+/// `Revocation Registry Public` contains revocation keys, accumulator and accumulator tails.
+/// Must be published by Issuer on a tamper-evident and highly available storage
+/// Used by prover to prove that a claim hasn't revoked by the issuer
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RevocationRegistryPublic {
     key: RevocationAccumulatorPublicKey,
@@ -262,11 +292,10 @@ pub struct RevocationAccumulatorPublicKey {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RevocationAccumulatorTails {
-    tails: HashMap<u32 /* index in acc */, PointG1>,
     tails_dash: HashMap<u32 /* index in acc */, PointG2>,
 }
 
-/// Signed by the Issuer part of the Claim.
+/// Issuer's signature over Claim attribute values.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ClaimSignature {
     p_claim: PrimaryClaimSignature,
@@ -296,6 +325,16 @@ pub struct NonRevocationClaimSignature {
     m2: GroupOrderElement
 }
 
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub struct SignatureCorrectnessProof {
+    se: BigNumber,
+    c: BigNumber
+}
+
+impl JsonEncodable for SignatureCorrectnessProof {}
+
+impl<'a> JsonDecodable<'a> for SignatureCorrectnessProof {}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Witness {
     sigma_i: PointG2,
@@ -305,21 +344,27 @@ pub struct Witness {
     v: HashSet<u32>
 }
 
-/// Secret prover data that is used to proof that prover owns the claim.
-/// Prover blinds master secret by generating “Blinded Master Secret” and “Master Secret Blinding Data”
-/// and sends “Blinded Master Secret” to Isseur that uses “Blinded Master Secret” in claim creation.
-/// “Master Secret Blinding Dat” uses by Prover for post processing of claims received from Issuer
-/// It allows to use this claim by prover only.
+/// Secret key encoded in a claim that is used to prove that prover owns the claim; can be used to
+/// prove linkage across claims.
+/// Prover blinds master secret, generating `BlindedMasterSecret` and `MasterSecretBlindingData` (blinding factors)
+/// and sends the `BlindedMasterSecret` to Issuer who then encodes it claim creation.
+/// The blinding factors are used by Prover for post processing of issued claims.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecret {
     ms: BigNumber,
+}
+
+impl MasterSecret {
+    pub fn clone(&self) -> Result<MasterSecret, IndyCryptoError> {
+        Ok(MasterSecret { ms: self.ms.clone()? })
+    }
 }
 
 impl JsonEncodable for MasterSecret {}
 
 impl<'a> JsonDecodable<'a> for MasterSecret {}
 
-/// `Blinded Master Secret` uses by Issuer in claim creation.
+/// Blinded Master Secret uses by Issuer in claim creation.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlindedMasterSecret {
     u: BigNumber,
@@ -330,7 +375,8 @@ impl JsonEncodable for BlindedMasterSecret {}
 
 impl<'a> JsonDecodable<'a> for BlindedMasterSecret {}
 
-/// `Master Secret Blinding Data` uses by Prover for post processing of claims received from Issuer.
+/// `Master Secret Blinding Data` used by Prover for post processing of claims received from Issuer.
+/// TODO: Should be renamed `MasterSecretBlindingFactors`
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecretBlindingData {
     v_prime: BigNumber,
@@ -352,6 +398,17 @@ pub struct RevocationBlindedMasterSecretData {
     ur: PointG1,
     vr_prime: GroupOrderElement,
 }
+
+#[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
+pub struct BlindedMasterSecretProofCorrectness {
+    c: BigNumber,
+    v_dash_cap: BigNumber,
+    ms_cap: BigNumber
+}
+
+impl JsonEncodable for BlindedMasterSecretProofCorrectness {}
+
+impl<'a> JsonDecodable<'a> for BlindedMasterSecretProofCorrectness {}
 
 /// “Sub Proof Request” - input to create a Proof for a claim;
 /// Contains attributes to be revealed and predicates.
@@ -403,7 +460,7 @@ impl SubProofRequestBuilder {
     }
 }
 
-/// Some condition that must be proven.
+/// Some condition that must be satisfied.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub struct Predicate {
     attr_name: String,
@@ -417,10 +474,10 @@ pub enum PredicateType {
     GE
 }
 
-/// Proof is complex crypto structure created by proved over multiple claims that allows to proof that prover:
-/// 1) Owns claims issued with specific issuer keys (identified by key id)
+/// Proof is complex crypto structure created by prover over multiple claims that allows to prove that prover:
+/// 1) Knows signature over claims issued with specific issuer keys (identified by key id)
 /// 2) Claim contains attributes with specific values that prover wants to disclose
-/// 3) Claim contains attributes with valid predicates that prover wants to disclose
+/// 3) Claim contains attributes with valid predicates that verifier wants the prover to satisfy.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
     proofs: HashMap<String /* issuer pub key id */, SubProof>,
@@ -723,6 +780,15 @@ fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>)
     Ok(res)
 }
 
+fn clone_btree_bignum_map<K: Clone + Eq + Hash + Ord>(other: &BTreeMap<K, BigNumber>)
+                                                      -> Result<BTreeMap<K, BigNumber>, IndyCryptoError> {
+    let mut res: BTreeMap<K, BigNumber> = BTreeMap::new();
+    for (k, v) in other {
+        res.insert(k.clone(), v.clone()?);
+    }
+    Ok(res)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -738,22 +804,47 @@ mod test {
         claim_schema_builder.add_attr("age").unwrap();
         claim_schema_builder.add_attr("height").unwrap();
         let claim_schema = claim_schema_builder.finalize().unwrap();
-        let (issuer_pub_key, issuer_priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
 
         let master_secret = Prover::new_master_secret().unwrap();
-        let (blinded_master_secret, master_secret_blinding_data) = Prover::blind_master_secret(&issuer_pub_key, &master_secret).unwrap();
+
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
         let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
         claim_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
         claim_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
         claim_values_builder.add_value("age", "28").unwrap();
         claim_values_builder.add_value("height", "175").unwrap();
         let claim_values = claim_values_builder.finalize().unwrap();
-        let mut claim_signature = Issuer::sign_claim("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW", &blinded_master_secret,
-                                                     &claim_values,
-                                                     &issuer_pub_key,
-                                                     &issuer_priv_key,
-                                                     Some(1), None, None).unwrap();
-        Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &issuer_pub_key, None).unwrap();
+
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
+                                                                                    &blinded_master_secret,
+                                                                                    &blinded_master_secret_correctness_proof,
+                                                                                    &master_secret_blinding_nonce,
+                                                                                    &claim_issuance_nonce,
+                                                                                    &claim_values,
+                                                                                    &issuer_pub_key,
+                                                                                    &issuer_priv_key,
+                                                                                    Some(1),
+                                                                                    None,
+                                                                                    None).unwrap();
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        None).unwrap();
 
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
@@ -767,11 +858,11 @@ mod test {
                                             &claim_values,
                                             &issuer_pub_key,
                                             None).unwrap();
-        let nonce = Verifier::new_nonce().unwrap();
-        let proof = proof_builder.finalize(&nonce, &master_secret).unwrap();
+        let proov_request_nonce = new_nonce().unwrap();
+        let proof = proof_builder.finalize(&proov_request_nonce, &master_secret).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request("issuer_key_id_1", &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
-        assert_eq!(true, proof_verifier.verify(&proof, &nonce).unwrap());
+        assert_eq!(true, proof_verifier.verify(&proof, &proov_request_nonce).unwrap());
     }
 }
