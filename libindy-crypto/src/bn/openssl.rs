@@ -17,6 +17,9 @@ use std::fmt;
 use std::cmp::Ord;
 use std::cmp::Ordering;
 
+use std::time::{SystemTime, UNIX_EPOCH};
+
+
 pub struct BigNumberContext {
     openssl_bn_context: BigNumContext
 }
@@ -427,6 +430,65 @@ mod tests {
         let vec3 = vec![1, 153, 25]; // big endian representation of 104729
         let v3 = BigNumber::from_bytes(&vec3).unwrap();
         assert!(v3.is_prime(None).unwrap());
+    }
+
+    #[test]
+    fn modular_inverse() {
+        let p_safe = BigNumber::generate_safe_prime(1024).unwrap();
+        let q_safe = BigNumber::generate_safe_prime(1024).unwrap();
+        let n = p_safe.mul(&q_safe, None).unwrap();
+        let number_1 = BigNumber::from_dec("1").unwrap();
+
+        let start_since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
+        for _i in 1..10001 {
+            let mut prime1 = BigNumber::generate_prime(256).unwrap();
+            let mut prime1_inv = prime1.inverse(&n, None).unwrap();
+            let mut product = prime1.mod_mul(&prime1_inv, &n, None).unwrap();
+//            println!("{:?} {:?}", prime1, prime1_inv);
+            assert_eq!(product, number_1)
+        }
+        println!("{:?}", start_since_the_epoch);
+        let end_since_the_epoch = SystemTime::now().duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        println!("{:?}", end_since_the_epoch);
+        println!("{:?}", end_since_the_epoch.as_secs()-start_since_the_epoch.as_secs());
+        println!("{:?}", end_since_the_epoch.subsec_nanos()-start_since_the_epoch.subsec_nanos());
+    }
+
+    #[test]
+    fn accumulation() {
+        let element_size: usize = 256;
+        let generator_size: usize = 1024;
+        let factor_size: usize = 1024;
+        let p_safe = BigNumber::generate_safe_prime(factor_size).unwrap();
+        let q_safe = BigNumber::generate_safe_prime(factor_size).unwrap();
+        let p_prime = p_safe.sub(&BigNumber::from_u32(1).unwrap()).unwrap();
+        let q_prime = q_safe.sub(&BigNumber::from_u32(1).unwrap()).unwrap();
+        let n = p_safe.mul(&q_safe, None).unwrap();
+        let m = p_prime.mul(&q_prime, None).unwrap();
+        let g = BigNumber::generate_safe_prime(generator_size).unwrap();;
+        let mut accumulator = g.clone().unwrap();
+        let mut product_modn = BigNumber::from_dec("1").unwrap();
+        let mut product_modm = BigNumber::from_dec("1").unwrap();
+        println!("Before: Accumulator {:?} g {:?}", accumulator, g);
+        for _i in 1..31 {
+            let mut prime = BigNumber::generate_prime(element_size).unwrap();
+            println!("Prime {:?}", prime);
+            product_modn = product_modn.mod_mul(&prime, &n, None).unwrap();
+            product_modm = product_modm.mod_mul(&prime, &m, None).unwrap();
+            accumulator = accumulator.mod_exp(&prime, &n, None).unwrap();
+        }
+        let g_pr_mod_m = g.mod_exp(&product_modm, &n, None).unwrap();
+        let g_pr_mod_n = g.mod_exp(&product_modn, &n, None).unwrap();
+        println!("After: Accumulator {:?} g {:?}", accumulator, g);
+        println!("Product mod n {:?}", product_modn);
+        println!("Product mod m {:?}", product_modm);
+        println!("g to the power mod m {:?}", product_modm);
+        println!("g to the power mod n {:?}", product_modn);
+        assert_eq!(accumulator, g_pr_mod_m);
+//        assert_eq!(accumulator, g_pr_mod_n);
     }
 
     #[cfg(feature = "serialization")]
