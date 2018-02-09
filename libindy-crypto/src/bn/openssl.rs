@@ -192,6 +192,30 @@ impl BigNumber {
         Ok(bn)
     }
 
+    pub fn mod_mul(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        match ctx {
+            Some(context) => BigNumRef::mod_mul(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut context.openssl_bn_context)?,
+            None => {
+                let mut ctx = BigNumber::new_context()?;
+                BigNumRef::mod_mul(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut ctx.openssl_bn_context)?;
+            }
+        }
+        Ok(bn)
+    }
+
+    pub fn mod_sub(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        match ctx {
+            Some(context) => BigNumRef::mod_sub(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut context.openssl_bn_context)?,
+            None => {
+                let mut ctx = BigNumber::new_context()?;
+                BigNumRef::mod_sub(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut ctx.openssl_bn_context)?;
+            }
+        }
+        Ok(bn)
+    }
+
     pub fn div(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
         let mut bn = BigNumber::new()?;
         match ctx {
@@ -294,12 +318,7 @@ impl BigNumber {
         let mut sha256 = Hasher::new(MessageDigest::sha256())?;
 
         for num in nums.iter() {
-            let index =
-                num.iter()
-                    .position(|&value| value != 0)
-                    .unwrap_or(num.len());
-
-            sha256.update(&num[index..])?;
+            sha256.update(&num)?;
         }
 
         Ok(sha256.finish2()?.to_vec())
@@ -373,7 +392,7 @@ mod tests {
     const RANGE_RIGHT: usize = 592;
 
     #[test]
-    #[ignore]//TODO check
+    #[ignore] //TODO check
     fn generate_prime_in_range_works() {
         let start = BigNumber::rand(RANGE_LEFT).unwrap();
         let end = BigNumber::rand(RANGE_RIGHT).unwrap();

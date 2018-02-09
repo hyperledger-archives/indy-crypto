@@ -4,8 +4,9 @@ use cl::constants::*;
 use errors::IndyCryptoError;
 use pair::*;
 use super::helpers::*;
+use utils::commitment::{get_pedersen_commitment, get_exponentiated_generators};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 
 /// Credentials owner that can proof and partially disclose the credentials to verifier.
@@ -29,87 +30,139 @@ impl Prover {
     ///
     /// # Arguments
     /// * `issuer_pub_key` - Public keys
+    /// * `issuer_key_correctness_proof` - Key correctness proof
     /// * `master_secret` - Master secret
+    /// * `master_secret_blinding_nonce` - Nonce which will be used for BlindedMasterSecret correctness proof creation
     ///
     /// # Example
     /// ```
+    /// use indy_crypto::cl::new_nonce;
     /// use indy_crypto::cl::issuer::Issuer;
     /// use indy_crypto::cl::prover::Prover;
     /// let mut claim_schema_builder = Issuer::new_claim_schema_builder().unwrap();
     /// claim_schema_builder.add_attr("sex").unwrap();
     /// claim_schema_builder.add_attr("name").unwrap();
     /// let claim_schema = claim_schema_builder.finalize().unwrap();
-    /// let (pub_key, _) = Issuer::new_keys(&claim_schema, false).unwrap();
+    ///
+    /// let (pub_key, _, key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+    ///
     /// let master_secret = Prover::new_master_secret().unwrap();
-    /// let (_blinded_master_secret, _master_secret_blinding_data) = Prover::blind_master_secret(&pub_key, &master_secret).unwrap();
+    /// let master_secret_blinding_nonce = new_nonce().unwrap();
+    /// let (_blinded_master_secret, _master_secret_blinding_data, _blinded_master_secret_correctness_proof) =
+    ///      Prover::blind_master_secret(&pub_key, &key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
     /// ```
     pub fn blind_master_secret(issuer_pub_key: &IssuerPublicKey,
-                               master_secret: &MasterSecret) -> Result<(BlindedMasterSecret,
-                                                                        MasterSecretBlindingData), IndyCryptoError> {
-        trace!("Prover::blind_master_secret: >>> issuer_pub_key: {:?}, master_secret: {:?}", issuer_pub_key, master_secret);
+                               issuer_key_correctness_proof: &KeyCorrectnessProof,
+                               master_secret: &MasterSecret,
+                               master_secret_blinding_nonce: &Nonce) -> Result<(BlindedMasterSecret,
+                                                                                MasterSecretBlindingData,
+                                                                                BlindedMasterSecretProofCorrectness), IndyCryptoError> {
+        trace!("Prover::blind_master_secret: >>> issuer_pub_key: {:?}, issuer_key_correctness_proof: {:?}, master_secret: {:?}, master_secret_blinding_nonce: {:?}",
+               issuer_pub_key, issuer_key_correctness_proof, master_secret, master_secret_blinding_nonce);
 
-        let blinded_primary_master_secret = Prover::_generate_blinded_primary_master_secret(&issuer_pub_key.p_key, &master_secret)?;
+        Prover::_check_key_correctness_proof(&issuer_pub_key.p_key, issuer_key_correctness_proof)?;
+
+        let blinded_primary_master_secret =
+            Prover::_generate_blinded_primary_master_secret(&issuer_pub_key.p_key, &master_secret)?;
 
         let blinded_revocation_master_secret = match issuer_pub_key.r_key {
             Some(ref r_pk) => Some(Prover::_generate_blinded_revocation_master_secret(r_pk)?),
             _ => None
         };
 
+        let blinded_master_secret_correctness_proof =
+            Prover::_new_blinded_master_secret_correctness_proof(&issuer_pub_key.p_key,
+                                                                 &blinded_primary_master_secret,
+                                                                 &master_secret_blinding_nonce,
+                                                                 &master_secret)?;
+
         let blinded_master_secret = BlindedMasterSecret {
             u: blinded_primary_master_secret.u,
             ur: blinded_revocation_master_secret.as_ref().map(|d| d.ur)
         };
 
-        let master_secret_blinding_data = MasterSecretBlindingData {
+        let master_secret_blinding_factor = MasterSecretBlindingData {
             v_prime: blinded_primary_master_secret.v_prime,
             vr_prime: blinded_revocation_master_secret.map(|d| d.vr_prime)
         };
 
-        trace!("Prover::blind_master_secret: <<< blinded_master_secret: {:?}, master_secret_blinding_data: {:?}", blinded_master_secret, master_secret_blinding_data);
+        trace!("Prover::blind_master_secret: <<< blinded_master_secret: {:?}, master_secret_blinding_factor: {:?}, blinded_master_secret_correctness_proof: {:?},",
+               blinded_master_secret, master_secret_blinding_factor, blinded_master_secret_correctness_proof);
 
-        Ok((blinded_master_secret, master_secret_blinding_data))
+        Ok((blinded_master_secret, master_secret_blinding_factor, blinded_master_secret_correctness_proof))
     }
 
     /// Updates the claim signature by a master secret blinding data.
     ///
     /// # Arguments
     /// * `claim_signature` - Claim signature generated by Issuer
+    /// * `signature_correctness_proof` - Signature correctness proof generated by Issuer
     /// * `master_secret_blinding_data` - Master secret blinding data
+    /// * `master_secret` - Master secret
     /// * `issuer_pub_key` - Issuer public key
+    /// * `nonce` - Nonce used Issuer for SignatureCorrectnessProof creating
     /// * `rev_reg_pub` - (Optional) Revocation registry public
     ///
     /// # Example
     /// ```
+    /// use indy_crypto::cl::new_nonce;
     /// use indy_crypto::cl::issuer::Issuer;
     /// use indy_crypto::cl::prover::Prover;
     /// let mut claim_schema_builder = Issuer::new_claim_schema_builder().unwrap();
     /// claim_schema_builder.add_attr("sex").unwrap();
     /// let claim_schema = claim_schema_builder.finalize().unwrap();
     ///
-    /// let (pub_key, priv_key) = Issuer::new_keys(&claim_schema, false).unwrap();
+    /// let (pub_key, priv_key, key_correctness_proof) = Issuer::new_keys(&claim_schema, true).unwrap();
+    ///
     /// let master_secret = Prover::new_master_secret().unwrap();
-    /// let (blinded_master_secret, master_secret_blinding_data) = Prover::blind_master_secret(&pub_key, &master_secret).unwrap();
+    /// let master_secret_blinding_nonce = new_nonce().unwrap();
+    /// let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+    ///      Prover::blind_master_secret(&pub_key, &key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
     ///
     /// let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
     /// claim_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
     /// let claim_values = claim_values_builder.finalize().unwrap();
     ///
-    /// let mut claim_signature = Issuer::sign_claim("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-    ///                                           &blinded_master_secret,
-    ///                                           &claim_values,
-    ///                                           &pub_key,
-    ///                                           &priv_key,
-    ///                                           None, None, None).unwrap();
-    /// Prover::process_claim_signature(&mut claim_signature, &master_secret_blinding_data, &pub_key, None).unwrap();
+    /// let claim_issuance_nonce = new_nonce().unwrap();
+    ///
+    /// let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
+    ///                                                                            &blinded_master_secret,
+    ///                                                                            &blinded_master_secret_correctness_proof,
+    ///                                                                            &master_secret_blinding_nonce,
+    ///                                                                            &claim_issuance_nonce,
+    ///                                                                            &claim_values,
+    ///                                                                            &pub_key,
+    ///                                                                            &priv_key,
+    ///                                                                            None, None, None).unwrap();
+    /// Prover::process_claim_signature(&mut claim_signature,
+    ///                                 &claim_values,
+    ///                                 &signature_correctness_proof,
+    ///                                 &master_secret_blinding_data,
+    ///                                 &master_secret,
+    ///                                 &pub_key,
+    ///                                 &claim_issuance_nonce,
+    ///                                 None).unwrap();
     /// ```
     pub fn process_claim_signature(claim_signature: &mut ClaimSignature,
+                                   claim_values: &ClaimValues,
+                                   signature_correctness_proof: &SignatureCorrectnessProof,
                                    master_secret_blinding_data: &MasterSecretBlindingData,
+                                   master_secret: &MasterSecret,
                                    issuer_pub_key: &IssuerPublicKey,
+                                   nonce: &Nonce,
                                    rev_reg_pub: Option<&RevocationRegistryPublic>) -> Result<(), IndyCryptoError> {
-        trace!("Prover::process_claim_signature: >>> claim_signature: {:?}, master_secret_blinding_data: {:?}, issuer_pub_key: {:?}, rev_reg_pub: {:?}",
-               claim_signature, master_secret_blinding_data, issuer_pub_key, rev_reg_pub);
+        trace!("Prover::process_claim_signature: >>> claim_signature: {:?},signature_correctness_proof: {:?}, master_secret_blinding_data: {:?}, \
+        master_secret: {:?}, issuer_pub_key: {:?}, nonce: {:?}, rev_reg_pub: {:?}",
+               claim_signature, signature_correctness_proof, master_secret_blinding_data, master_secret, issuer_pub_key, nonce, rev_reg_pub);
 
         Prover::_process_primary_claim(&mut claim_signature.p_claim, &master_secret_blinding_data.v_prime)?;
+
+        Prover::_check_signature_correctness_proof(&claim_signature.p_claim,
+                                                   claim_values,
+                                                   signature_correctness_proof,
+                                                   master_secret,
+                                                   &issuer_pub_key.p_key,
+                                                   nonce)?;
 
         if let (&mut Some(ref mut non_revocation_claim), Some(ref vr_prime), &Some(ref r_key), Some(ref r_reg)) = (&mut claim_signature.r_claim,
                                                                                                                    master_secret_blinding_data.vr_prime,
@@ -142,6 +195,51 @@ impl Prover {
         })
     }
 
+    pub fn _check_key_correctness_proof(pr_pub_key: &IssuerPrimaryPublicKey, key_correctness_proof: &KeyCorrectnessProof) -> Result<(), IndyCryptoError> {
+        trace!("Prover::_check_key_correctness_proof: >>> pr_pub_key: {:?}, key_correctness_proof: {:?}", pr_pub_key, key_correctness_proof);
+
+        let mut ctx = BigNumber::new_context()?;
+
+        let z_inverse = pr_pub_key.z.inverse(&pr_pub_key.n, Some(&mut ctx))?;
+        let z_cap = get_pedersen_commitment(&z_inverse, &key_correctness_proof.c,
+                                            &pr_pub_key.s, &key_correctness_proof.xz_cap, &pr_pub_key.n, &mut ctx)?;
+
+        let mut r_cap: BTreeMap<String, BigNumber> = BTreeMap::new();
+        for (key, r_value) in pr_pub_key.r.iter() {
+            let xr_cap_value = key_correctness_proof.xr_cap
+                .get(key)
+                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in key_correctness_proof.xr_cap", key)))?;
+
+            let r_inverse = r_value.inverse(&pr_pub_key.n, Some(&mut ctx))?;
+            let val = get_pedersen_commitment(&r_inverse, &key_correctness_proof.c,
+                                              &pr_pub_key.s, &xr_cap_value, &pr_pub_key.n, &mut ctx)?;
+
+            r_cap.insert(key.to_owned(), val);
+        }
+
+        let mut values: Vec<u8> = Vec::new();
+        values.extend_from_slice(&pr_pub_key.z.to_bytes()?);
+        for val in pr_pub_key.r.values() {
+            values.extend_from_slice(&val.to_bytes()?);
+        }
+        values.extend_from_slice(&z_cap.to_bytes()?);
+        for val in r_cap.values() {
+            values.extend_from_slice(&val.to_bytes()?);
+        }
+
+        let c = get_hash_as_int(&mut vec![values])?;
+
+        let valid = key_correctness_proof.c.eq(&c);
+
+        if !valid {
+            return Err(IndyCryptoError::InvalidStructure(format!("Invalid IssuerKeys correctness proof")));
+        }
+
+        trace!("Prover::_check_key_correctness_proof: <<<");
+
+        Ok(())
+    }
+
     fn _generate_blinded_primary_master_secret(p_pub_key: &IssuerPrimaryPublicKey,
                                                master_secret: &MasterSecret) -> Result<PrimaryBlindedMasterSecretData, IndyCryptoError> {
         trace!("Prover::_generate_blinded_primary_master_secret: >>> p_pub_key: {:?}, master_secret: {:?}", p_pub_key, master_secret);
@@ -149,13 +247,8 @@ impl Prover {
         let mut ctx = BigNumber::new_context()?;
         let v_prime = bn_rand(LARGE_VPRIME)?;
 
-        let u = p_pub_key.s
-            .mod_exp(&v_prime, &p_pub_key.n, Some(&mut ctx))?
-            .mul(
-                &p_pub_key.rms.mod_exp(&master_secret.ms, &p_pub_key.n, Some(&mut ctx))?,
-                None
-            )?
-            .modulus(&p_pub_key.n, Some(&mut ctx))?;
+        let u = get_pedersen_commitment(&p_pub_key.s, &v_prime, &p_pub_key.rms,
+                                        &master_secret.ms, &p_pub_key.n, &mut ctx)?;
 
         let primary_blinded_master_secret = PrimaryBlindedMasterSecretData { u, v_prime };
 
@@ -175,6 +268,43 @@ impl Prover {
         trace!("Prover::_generate_blinded_revocation_master_secret: <<< revocation_blinded_master_secret: {:?}", revocation_blinded_master_secret);
 
         Ok(revocation_blinded_master_secret)
+    }
+
+    pub fn _new_blinded_master_secret_correctness_proof(p_pub_key: &IssuerPrimaryPublicKey,
+                                                        blinded_master_secret: &PrimaryBlindedMasterSecretData,
+                                                        nonce: &BigNumber,
+                                                        master_secret: &MasterSecret) -> Result<BlindedMasterSecretProofCorrectness, IndyCryptoError> {
+        trace!("Prover::_new_blinded_master_secret_correctness_proof: >>> p_pub_key: {:?}, blinded_master_secret: {:?}, nonce: {:?}, master_secret: {:?}",
+               blinded_master_secret, nonce, p_pub_key, master_secret);
+
+        let mut ctx = BigNumber::new_context()?;
+
+        let ms_tilde = bn_rand(LARGE_MTILDE)?;
+        let v_dash_tilde = bn_rand(LARGE_VPRIME_TILDE)?;
+
+        let u_tilde = get_pedersen_commitment(&p_pub_key.rms, &ms_tilde, &p_pub_key.s,
+                                              &v_dash_tilde, &p_pub_key.n, &mut ctx)?;
+        let mut values: Vec<u8> = Vec::new();
+        values.extend_from_slice(&blinded_master_secret.u.to_bytes()?);
+        values.extend_from_slice(&u_tilde.to_bytes()?);
+        values.extend_from_slice(&nonce.to_bytes()?);
+
+        let c = get_hash_as_int(&mut vec![values])?;
+
+        let v_dash_cap =
+            c.mul(&blinded_master_secret.v_prime, Some(&mut ctx))?
+                .add(&v_dash_tilde)?;
+
+        let ms_cap =
+            c.mul(&master_secret.ms, Some(&mut ctx))?
+                .add(&ms_tilde)?;
+
+        let blinded_primary_master_secret_correctness_proof = BlindedMasterSecretProofCorrectness { c, v_dash_cap, ms_cap };
+
+        trace!("Prover::_new_blinded_master_secret_correctness_proof: <<< blinded_primary_master_secret_correctness_proof: {:?}",
+               blinded_primary_master_secret_correctness_proof);
+
+        Ok(blinded_primary_master_secret_correctness_proof)
     }
 
     fn _process_primary_claim(p_claim: &mut PrimaryClaimSignature,
@@ -199,6 +329,69 @@ impl Prover {
         Prover::_test_witness_credential(&r_claim, r_pub_key, rev_reg, &r_cnxt_m2)?;
 
         trace!("Prover::_process_non_revocation_claim: <<<");
+
+        Ok(())
+    }
+
+    pub fn _check_signature_correctness_proof(p_claim_sig: &PrimaryClaimSignature,
+                                              claim_values: &ClaimValues,
+                                              signature_correctness_proof: &SignatureCorrectnessProof,
+                                              master_secret: &MasterSecret,
+                                              p_pub_key: &IssuerPrimaryPublicKey,
+                                              nonce: &Nonce) -> Result<(), IndyCryptoError> {
+        trace!("Prover::_check_signature_correctness_proof: >>> p_claim_sig: {:?}, master_secret: {:?}, p_pub_key: {:?}, signature_correctness_proof: {:?}, \
+        nonce: {:?}", p_claim_sig, master_secret, p_pub_key, signature_correctness_proof, nonce);
+
+        let mut ctx = BigNumber::new_context()?;
+
+        if !p_claim_sig.e.is_prime(Some(&mut ctx))? {
+            return Err(IndyCryptoError::InvalidStructure(format!("Invalid Signature correctness proof")));
+        }
+
+        let mut generators_and_exponents = Vec::new();
+        generators_and_exponents.push((&p_pub_key.s, &p_claim_sig.v));
+        generators_and_exponents.push((&p_pub_key.rms, &master_secret.ms));
+        generators_and_exponents.push((&p_pub_key.rctxt, &p_claim_sig.m_2));
+
+        for (key, value) in claim_values.attrs_values.iter() {
+            let pk_r = p_pub_key.r
+                .get(key)
+                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
+
+            generators_and_exponents.push((&pk_r, &value));
+        }
+
+        let rx = get_exponentiated_generators(generators_and_exponents, &p_pub_key.n, &mut ctx)?;
+
+        let q = p_pub_key.z.mod_div(&rx, &p_pub_key.n)?;
+
+        let expected_q = p_claim_sig.a.mod_exp(&p_claim_sig.e, &p_pub_key.n, Some(&mut ctx))?;
+
+        if !q.eq(&expected_q) {
+            return Err(IndyCryptoError::InvalidStructure(format!("Invalid Signature correctness proof")));
+        }
+
+        let degree = signature_correctness_proof.c.add(
+            &signature_correctness_proof.se.mul(&p_claim_sig.e, Some(&mut ctx))?
+        )?;
+
+        let a_cap = p_claim_sig.a.mod_exp(&degree, &p_pub_key.n, Some(&mut ctx))?;
+
+        let mut values: Vec<u8> = Vec::new();
+        values.extend_from_slice(&q.to_bytes()?);
+        values.extend_from_slice(&p_claim_sig.a.to_bytes()?);
+        values.extend_from_slice(&a_cap.to_bytes()?);
+        values.extend_from_slice(&nonce.to_bytes()?);
+
+        let c = get_hash_as_int(&mut vec![values])?;
+
+        let valid = signature_correctness_proof.c.eq(&c);
+
+        if !valid {
+            return Err(IndyCryptoError::InvalidStructure(format!("Invalid Signature correctness proof")));
+        }
+
+        trace!("Prover::_check_signature_correctness_proof: <<<");
 
         Ok(())
     }
@@ -322,19 +515,20 @@ impl ProofBuilder {
         values.extend_from_slice(&self.c_list);
         values.push(nonce.to_bytes()?);
 
-        let c_h = get_hash_as_int(&mut values)?;
+        // In the anoncreds whitepaper, `challenge` is denoted by `c_h`
+        let challenge = get_hash_as_int(&mut values)?;
 
         let mut proofs: HashMap<String, SubProof> = HashMap::new();
 
         for (proof_claim_uuid, init_proof) in self.init_proofs.iter() {
             let mut non_revoc_proof: Option<NonRevocProof> = None;
             if let Some(ref non_revoc_init_proof) = init_proof.non_revoc_init_proof {
-                non_revoc_proof = Some(ProofBuilder::_finalize_non_revocation_proof(&non_revoc_init_proof, &c_h)?);
+                non_revoc_proof = Some(ProofBuilder::_finalize_non_revocation_proof(&non_revoc_init_proof, &challenge)?);
             }
 
             let primary_proof = ProofBuilder::_finalize_primary_proof(&master_secret.ms,
                                                                       &init_proof.primary_init_proof,
-                                                                      &c_h,
+                                                                      &challenge,
                                                                       &init_proof.claim_schema,
                                                                       &init_proof.claim_values,
                                                                       &init_proof.sub_proof_request)?;
@@ -343,7 +537,7 @@ impl ProofBuilder {
             proofs.insert(proof_claim_uuid.to_owned(), proof);
         }
 
-        let aggregated_proof = AggregatedProof { c_hash: c_h, c_list: self.c_list.clone() };
+        let aggregated_proof = AggregatedProof { c_hash: challenge, c_list: self.c_list.clone() };
 
         let proof = Proof { proofs, aggregated_proof };
 
@@ -381,8 +575,7 @@ impl ProofBuilder {
     }
 
     fn _init_primary_proof(issuer_pub_key: &IssuerPrimaryPublicKey, c1: &PrimaryClaimSignature, claim_values: &ClaimValues, claim_schema: &ClaimSchema,
-                           sub_proof_request: &SubProofRequest, m1_t: &BigNumber,
-                           m2_t: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
+                           sub_proof_request: &SubProofRequest, m1_t: &BigNumber, m2_t: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
         trace!("ProofBuilder::_init_primary_proof: >>> issuer_pub_key: {:?}, c1: {:?}, claim_values: {:?}, claim_schema: {:?}, sub_proof_request: {:?}, m1_t: {:?}, m2_t: {:?}",
                issuer_pub_key, c1, claim_values, claim_schema, sub_proof_request, m1_t, m2_t);
 
@@ -408,16 +601,16 @@ impl ProofBuilder {
         ProofBuilder::_update_non_revocation_claim(r_claim, &rev_reg_pub.acc, &rev_reg_pub.tails.tails_dash)?;
 
         let c_list_params = ProofBuilder::_gen_c_list_params(&r_claim)?;
-        let proof_c_list = ProofBuilder::_create_c_list_values(&r_claim, &c_list_params, &issuer_rev_pub_key)?;
+        let c_list = ProofBuilder::_create_c_list_values(&r_claim, &c_list_params, &issuer_rev_pub_key)?;
 
         let tau_list_params = ProofBuilder::_gen_tau_list_params()?;
-        let proof_tau_list = create_tau_list_values(&issuer_rev_pub_key, &rev_reg_pub.acc, &tau_list_params, &proof_c_list)?;
+        let tau_list = create_tau_list_values(&issuer_rev_pub_key, &rev_reg_pub.acc, &tau_list_params, &c_list)?;
 
         let r_init_proof = NonRevocInitProof {
             c_list_params,
             tau_list_params,
-            c_list: proof_c_list,
-            tau_list: proof_tau_list
+            c_list,
+            tau_list
         };
 
         trace!("ProofBuilder::_init_non_revocation_proof: <<< r_init_proof: {:?}", r_init_proof);
@@ -436,6 +629,10 @@ impl ProofBuilder {
         if r_claim.witness.v != accum.v {
             let v_old_minus_new: HashSet<u32> =
                 r_claim.witness.v.difference(&accum.v).cloned().collect();
+            let v_new_minus_old: HashSet<u32> =
+                accum.v.difference(&r_claim.witness.v).cloned().collect();
+
+
             let mut omega_denom = PointG2::new_inf()?;
             for j in v_old_minus_new.iter() {
                 omega_denom = omega_denom.add(
@@ -443,15 +640,15 @@ impl ProofBuilder {
                         .ok_or(IndyCryptoError::InvalidStructure(format!("Key not found {} in tails_dash", accum.max_claim_num + 1 - j + r_claim.i)))?)?;
             }
             let mut omega_num = PointG2::new_inf()?;
-            let mut new_omega: PointG2 = r_claim.witness.omega.clone();
-            for j in v_old_minus_new.iter() {
+            for j in v_new_minus_old.iter() {
                 omega_num = omega_num.add(
                     tails_dash.get(&(accum.max_claim_num + 1 - j + r_claim.i))
                         .ok_or(IndyCryptoError::InvalidStructure(format!("Key not found {} in tails_dash", accum.max_claim_num + 1 - j + r_claim.i)))?)?;
-                new_omega = new_omega.add(
-                    &omega_num.sub(&omega_denom)?
-                )?;
             }
+
+            let new_omega: PointG2 = r_claim.witness.omega.add(
+                &omega_num.sub(&omega_denom)?
+            )?;
 
             r_claim.witness.v = accum.v.clone();
             r_claim.witness.omega = new_omega;
@@ -462,8 +659,8 @@ impl ProofBuilder {
         Ok(())
     }
 
-    fn _init_eq_proof(issuer_pub_key: &IssuerPrimaryPublicKey, c1: &PrimaryClaimSignature, claim_schema: &ClaimSchema, sub_proof_request: &SubProofRequest,
-                      m1_tilde: &BigNumber, m2_t: Option<BigNumber>) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
+    fn _init_eq_proof(issuer_pub_key: &IssuerPrimaryPublicKey, c1: &PrimaryClaimSignature, claim_schema: &ClaimSchema,
+                      sub_proof_request: &SubProofRequest, m1_tilde: &BigNumber, m2_t: Option<BigNumber>) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
         trace!("ProofBuilder::_init_eq_proof: >>> issuer_pub_key: {:?}, c1: {:?}, claim_schema: {:?}, sub_proof_request: {:?}, m1_tilde: {:?}, m2_t: {:?}",
                issuer_pub_key, c1, claim_schema, sub_proof_request, m1_tilde, m2_t);
 
@@ -485,21 +682,17 @@ impl ProofBuilder {
 
         let a_prime = issuer_pub_key.s
             .mod_exp(&r, &issuer_pub_key.n, Some(&mut ctx))?
-            .mul(&c1.a, Some(&mut ctx))?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
-
-        let large_e_start = BigNumber::from_dec(&LARGE_E_START.to_string())?;
+            .mod_mul(&c1.a, &issuer_pub_key.n, Some(&mut ctx))?;
 
         let v_prime = c1.v.sub(
             &c1.e.mul(&r, Some(&mut ctx))?
         )?;
 
         let e_prime = c1.e.sub(
-            &BigNumber::from_dec("2")?.exp(&large_e_start, Some(&mut ctx))?
+            &BigNumber::from_dec("2")?.exp(&BigNumber::from_dec(&LARGE_E_START.to_string())?, Some(&mut ctx))?
         )?;
 
-        let t = calc_teq(&issuer_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m1_tilde,
-                         &m2_tilde, &unrevealed_attrs)?;
+        let t = calc_teq(&issuer_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, m1_tilde, &m2_tilde, &unrevealed_attrs)?;
 
         let primary_equal_init_proof = PrimaryEqualInitProof {
             a_prime,
@@ -550,14 +743,8 @@ impl ProofBuilder {
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in u1", i)))?;
 
             let cur_r = bn_rand(LARGE_VPRIME)?;
-
-            let cut_t = issuer_pub_key.z
-                .mod_exp(&cur_u, &issuer_pub_key.n, Some(&mut ctx))?
-                .mul(
-                    &issuer_pub_key.s.mod_exp(&cur_r, &issuer_pub_key.n, Some(&mut ctx))?,
-                    Some(&mut ctx)
-                )?
-                .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+            let cut_t = get_pedersen_commitment(&issuer_pub_key.z, &cur_u, &issuer_pub_key.s,
+                                                &cur_r, &issuer_pub_key.n, &mut ctx)?;
 
             r.insert(i.to_string(), cur_r);
             t.insert(i.to_string(), cut_t.clone()?);
@@ -566,13 +753,8 @@ impl ProofBuilder {
 
         let r_delta = bn_rand(LARGE_VPRIME)?;
 
-        let t_delta = issuer_pub_key.z
-            .mod_exp(&BigNumber::from_dec(&delta.to_string())?, &issuer_pub_key.n, Some(&mut ctx))?
-            .mul(
-                &issuer_pub_key.s.mod_exp(&r_delta, &issuer_pub_key.n, Some(&mut ctx))?,
-                Some(&mut ctx)
-            )?
-            .modulus(&issuer_pub_key.n, Some(&mut ctx))?;
+        let t_delta = get_pedersen_commitment(&issuer_pub_key.z, &BigNumber::from_dec(&delta.to_string())?,
+                                              &issuer_pub_key.s, &r_delta, &issuer_pub_key.n, &mut ctx)?;
 
         r.insert("DELTA".to_string(), r_delta);
         t.insert("DELTA".to_string(), t_delta.clone()?);
@@ -611,18 +793,18 @@ impl ProofBuilder {
         Ok(primary_predicate_ge_init_proof)
     }
 
-    fn _finalize_eq_proof(master_secret: &BigNumber, init_proof: &PrimaryEqualInitProof, c_h: &BigNumber,
+    fn _finalize_eq_proof(master_secret: &BigNumber, init_proof: &PrimaryEqualInitProof, challenge: &BigNumber,
                           claim_schema: &ClaimSchema, claim_values: &ClaimValues, sub_proof_request: &SubProofRequest) -> Result<PrimaryEqualProof, IndyCryptoError> {
-        trace!("ProofBuilder::_finalize_eq_proof: >>> master_secret: {:?}, init_proof: {:?}, c_h: {:?}, claim_schema: {:?}, claim_values: {:?}, sub_proof_request: {:?}",
-               master_secret, init_proof, c_h, claim_schema, claim_values, sub_proof_request);
+        trace!("ProofBuilder::_finalize_eq_proof: >>> master_secret: {:?}, init_proof: {:?}, challenge: {:?}, claim_schema: {:?}, claim_values: {:?}, sub_proof_request: {:?}",
+               master_secret, init_proof, challenge, claim_schema, claim_values, sub_proof_request);
 
         let mut ctx = BigNumber::new_context()?;
 
-        let e = c_h
+        let e = challenge
             .mul(&init_proof.e_prime, Some(&mut ctx))?
             .add(&init_proof.e_tilde)?;
 
-        let v = c_h
+        let v = challenge
             .mul(&init_proof.v_prime, Some(&mut ctx))?
             .add(&init_proof.v_tilde)?;
 
@@ -641,21 +823,20 @@ impl ProofBuilder {
             let cur_val = claim_values.attrs_values.get(k)
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in attributes_values", k)))?;
 
-            let val = c_h
+            let val = challenge
                 .mul(&cur_val, Some(&mut ctx))?
                 .add(&cur_mtilde)?;
 
             m.insert(k.clone(), val);
         }
 
-        let m1 = c_h
+        let m1 = challenge
             .mul(&master_secret, Some(&mut ctx))?
             .add(&init_proof.m1_tilde)?;
 
-        let m2 = c_h
+        let m2 = challenge
             .mul(&init_proof.m2, Some(&mut ctx))?
             .add(&init_proof.m2_tilde)?;
-
 
         let mut revealed_attrs_with_values: HashMap<String, BigNumber> = HashMap::new();
 
@@ -694,14 +875,10 @@ impl ProofBuilder {
         let mut urproduct = BigNumber::new()?;
 
         for i in 0..ITERATION {
-            let cur_utilde = init_proof.u_tilde.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.u_tilde", i)))?;
-            let cur_u = init_proof.u.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.u", i)))?;
-            let cur_rtilde = init_proof.r_tilde.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.r_tilde", i)))?;
-            let cur_r = init_proof.r.get(&i.to_string())
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.r", i)))?;
+            let cur_utilde = &init_proof.u_tilde[&i.to_string()];
+            let cur_u = &init_proof.u[&i.to_string()];
+            let cur_rtilde = &init_proof.r_tilde[&i.to_string()];
+            let cur_r = &init_proof.r[&i.to_string()];
 
             let new_u: BigNumber = c_h
                 .mul(&cur_u, Some(&mut ctx))?
@@ -717,33 +894,24 @@ impl ProofBuilder {
                 .mul(&cur_r, Some(&mut ctx))?
                 .add(&urproduct)?;
 
-            let cur_rtilde_delta = init_proof.r_tilde.get("DELTA")
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.r_tilde", "DELTA")))?;
-            let cur_r_delta = init_proof.r.get("DELTA")
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.r", "DELTA")))?;
+            let cur_rtilde_delta = &init_proof.r_tilde["DELTA"];
 
             let new_delta = c_h
-                .mul(&cur_r_delta, Some(&mut ctx))?
+                .mul(&init_proof.r["DELTA"], Some(&mut ctx))?
                 .add(&cur_rtilde_delta)?;
 
             r.insert("DELTA".to_string(), new_delta);
         }
 
-        let r_delta = init_proof.r.get("DELTA")
-            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in init_proof.r", "DELTA")))?;
-
-        let alpha = r_delta
+        let alpha = init_proof.r["DELTA"]
             .sub(&urproduct)?
             .mul(&c_h, Some(&mut ctx))?
             .add(&init_proof.alpha_tilde)?;
 
-        let mj = eq_proof.m.get(&init_proof.predicate.attr_name)
-            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in eq_proof.m", init_proof.predicate.attr_name)))?;
-
         let primary_predicate_ge_proof = PrimaryPredicateGEProof {
             u,
             r,
-            mj: mj.clone()?,
+            mj: eq_proof.m[&init_proof.predicate.attr_name].clone()?,
             alpha,
             t: clone_bignum_map(&init_proof.t)?,
             predicate: init_proof.predicate.clone()
@@ -754,17 +922,17 @@ impl ProofBuilder {
         Ok(primary_predicate_ge_proof)
     }
 
-    fn _finalize_primary_proof(master_secret: &BigNumber, init_proof: &PrimaryInitProof, c_h: &BigNumber,
+    fn _finalize_primary_proof(master_secret: &BigNumber, init_proof: &PrimaryInitProof, challenge: &BigNumber,
                                claim_schema: &ClaimSchema, claim_values: &ClaimValues, sub_proof_request: &SubProofRequest)
                                -> Result<PrimaryProof, IndyCryptoError> {
-        trace!("ProofBuilder::_finalize_primary_proof: >>> master_secret: {:?}, init_proof: {:?}, c_h: {:?}, claim_schema: {:?}, claim_values: {:?}, sub_proof_request: {:?}",
-               master_secret, init_proof, c_h, claim_schema, claim_values, sub_proof_request);
+        trace!("ProofBuilder::_finalize_primary_proof: >>> master_secret: {:?}, init_proof: {:?}, challenge: {:?}, claim_schema: {:?}, claim_values: {:?}, sub_proof_request: {:?}",
+               master_secret, init_proof, challenge, claim_schema, claim_values, sub_proof_request);
 
-        let eq_proof = ProofBuilder::_finalize_eq_proof(master_secret, &init_proof.eq_proof, c_h, claim_schema, claim_values, sub_proof_request)?;
+        let eq_proof = ProofBuilder::_finalize_eq_proof(master_secret, &init_proof.eq_proof, challenge, claim_schema, claim_values, sub_proof_request)?;
         let mut ge_proofs: Vec<PrimaryPredicateGEProof> = Vec::new();
 
         for init_ge_proof in init_proof.ge_proofs.iter() {
-            let ge_proof = ProofBuilder::_finalize_ge_proof(c_h, init_ge_proof, &eq_proof)?;
+            let ge_proof = ProofBuilder::_finalize_ge_proof(challenge, init_ge_proof, &eq_proof)?;
             ge_proofs.push(ge_proof);
         }
 
@@ -938,7 +1106,7 @@ mod tests {
         let ms = mocks::master_secret();
 
         let blinded_primary_master_secret = Prover::_generate_blinded_primary_master_secret(&pk, &ms).unwrap();
-        assert_eq!(blinded_primary_master_secret, mocks::primary_master_secret_blinding_data());
+        assert_eq!(blinded_primary_master_secret, mocks::primary_blinded_master_secret_data());
     }
 
     #[test]
@@ -954,14 +1122,18 @@ mod tests {
         MockHelper::inject();
 
         let pk = issuer::mocks::issuer_public_key();
+        let key_correctness_proof = issuer::mocks::issuer_key_correctness_proof();
         let ms = super::mocks::master_secret();
+        let nonce = new_nonce().unwrap();
 
-        let (blinded_master_secret, master_secret_blinding_data) = Prover::blind_master_secret(&pk, &ms).unwrap();
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&pk, &key_correctness_proof, &ms, &nonce).unwrap();
 
-        assert_eq!(blinded_master_secret.u, mocks::primary_master_secret_blinding_data().u);
-        assert_eq!(master_secret_blinding_data.v_prime, mocks::primary_master_secret_blinding_data().v_prime);
+        assert_eq!(blinded_master_secret.u, mocks::primary_blinded_master_secret_data().u);
+        assert_eq!(master_secret_blinding_data.v_prime, mocks::primary_blinded_master_secret_data().v_prime);
         assert!(blinded_master_secret.ur.is_some());
         assert!(master_secret_blinding_data.vr_prime.is_some());
+        assert_eq!(blinded_master_secret_correctness_proof, mocks::blinded_master_secret_correctness_proof())
     }
 
     #[test]
@@ -969,24 +1141,30 @@ mod tests {
         MockHelper::inject();
 
         let mut claim = issuer::mocks::primary_claim();
-        let v_prime = mocks::primary_master_secret_blinding_data().v_prime;
+        let v_prime = mocks::primary_blinded_master_secret_data().v_prime;
 
         Prover::_process_primary_claim(&mut claim, &v_prime).unwrap();
 
         assert_eq!(mocks::primary_claim(), claim);
     }
 
+    #[ignore]
     #[test]
     fn process_claim_works() {
         MockHelper::inject();
 
-        let mut claim = issuer::mocks::claim();
+        let mut claim_signature = issuer::mocks::claim();
+        let claim_values = issuer::mocks::claim_values();
         let pk = issuer::mocks::issuer_public_key();
         let master_secret_blinding_data = mocks::master_secret_blinding_data();
+        let signature_correctness_proof = issuer::mocks::signature_correctness_proof();
+        let master_secret = mocks::master_secret();
+        let nonce = new_nonce().unwrap();
 
-        Prover::process_claim_signature(&mut claim, &master_secret_blinding_data, &pk, None).unwrap();
+        Prover::process_claim_signature(&mut claim_signature, &claim_values, &signature_correctness_proof,
+                                        &master_secret_blinding_data, &master_secret, &pk, &nonce, None).unwrap();
 
-        assert_eq!(mocks::primary_claim(), claim.p_claim);
+        assert_eq!(mocks::primary_claim(), claim_signature.p_claim);
     }
 
     #[test]
@@ -1147,17 +1325,32 @@ pub mod mocks {
         }
     }
 
+    pub fn blinded_master_secret() -> BlindedMasterSecret {
+        BlindedMasterSecret {
+            u: primary_blinded_master_secret_data().u,
+            ur: Some(PointG1::new().unwrap())
+        }
+    }
+
     pub fn master_secret_blinding_data() -> MasterSecretBlindingData {
         MasterSecretBlindingData {
-            v_prime: primary_master_secret_blinding_data().v_prime,
+            v_prime: primary_blinded_master_secret_data().v_prime,
             vr_prime: Some(GroupOrderElement::new().unwrap())
         }
     }
 
-    pub fn primary_master_secret_blinding_data() -> PrimaryBlindedMasterSecretData {
+    pub fn primary_blinded_master_secret_data() -> PrimaryBlindedMasterSecretData {
         PrimaryBlindedMasterSecretData {
             u: BigNumber::from_dec("62131613458491212647450749026110557315107248063999634018939493990510661547774785043368606327349972438752553705268389551695956681591088513470965951022916188426635920785711858270846103151952143962999882605158874187727930917543065819603904033232476213318716946483165845049857055843524772096401162219219325766151823342237298870123405045483888204774734861333194064636771376483246576553005091050395021110616183024926509075608486405908792354917392247618138553245001668496721002592137124689913074323672408089937272809493673139956967625985778946668553397964410414804110497637727146455394436693696946473591314513302670305281967").unwrap(),
             v_prime: BigNumber::from_dec("1921424195886158938744777125021406748763985122590553448255822306242766229793715475428833504725487921105078008192433858897449555181018215580757557939320974389877538474522876366787859030586130885280724299566241892352485632499791646228580480458657305087762181033556428779333220803819945703716249441372790689501824842594015722727389764537806761583087605402039968357991056253519683582539703803574767702877615632257021995763302779502949501243649740921598491994352181379637769188829653918416991301420900374928589100515793950374255826572066003334385555085983157359122061582085202490537551988700484875690854200826784921400257387622318582276996322436").unwrap()
+        }
+    }
+
+    pub fn blinded_master_secret_correctness_proof() -> BlindedMasterSecretProofCorrectness {
+        BlindedMasterSecretProofCorrectness {
+            c: BigNumber::from_dec("52137369980632673493737033552515064939059690422305746663811070172506104777402").unwrap(),
+            v_dash_cap: BigNumber::from_dec("100178004190656296709382768266993008006192123775546308472004838908263655980002661618812200326095517513896314235318396861641844081038339080245834294986311650268277002681501961202201354240585429054570148600990153497019833835914428296961607268346660960169537692713492348151980001678663537641011879357217094065860571602027702957622349600138469663504845636058906380091257296916263981409178122520880134668945366310455288500536044965599841374353463485072366621036299763735166990852126470485334333183557681132032478074913598666038536308397333451267604586296535112398514673382419863470564828872194942245571811574369529292047096277182779649038491125213094465380484398723691085901333739038351893040913174459790508752106395148017").unwrap(),
+            ms_cap: BigNumber::from_dec("10838856720335086997514321042683948406546868531902400157813178645110522107191934557397777281590228583921844895012204904115940161924029804276568405758117610916478858828990080308705").unwrap()
         }
     }
 
@@ -1174,8 +1367,8 @@ pub mod mocks {
 
     pub fn primary_claim() -> PrimaryClaimSignature {
         PrimaryClaimSignature {
-            m_2: BigNumber::from_dec("52860447312636183767369476481903349046618423276302392993759146262753859184069").unwrap(),
-            a: BigNumber::from_dec("42346013283891624356845593609972612732277099460808703423355031452333398587460249347554583456785568352770358601256261145961117826420380272416387829159844410014785426604095869040832710421201960517786309019912783315267089765677766811003940302066320412180304382053168981384009266136660799893688028251946293637550958281867142669430870313657294704058632411088409642095191207839719892618500769362572243815788078229669302285658706213213138796427929865832385051039056434673653356180049577892616238217062562161769551903089986522565357147971417777037476294925507410600661934181377140384456587982053682992622578078710737752284145").unwrap(),
+            m_2: BigNumber::from_dec("94880167908247457149699082277807545911629132893821703817366687134445318249228").unwrap(),
+            a: BigNumber::from_dec("49132363239670159787093110938226673449134304271682974269447432344742116194321299671237726890946751467604148940160960878389315018748968369324920041829812940290495892617484508167397279335797727252561964527234608788562556758908905751101202717778202353145195614091112566435036522962919148975492906117295892318112254557428194748194500923814804029097083178321689709119206691962548916694618289798605008896501236499585406286135857829085917853488040591522806635137841948126557076578432458560145981983607545219636425132731496278118460851115172092828609386003425340146394948070616734134255308348098680856366416432858457119085389").unwrap(),
             e: BigNumber::from_dec("259344723055062059907025491480697571938277889515152306249728583105665800713306759149981690559193987143012367913206299323899696942213235956742930201588264091397308910346117473868881").unwrap(),
             v: BigNumber::from_dec("6620937836014079781509458870800001917950459774302786434315639456568768602266735503527631640833663968617512880802104566048179854406925811731340920442625764155409951969854303612644127544973467090784833169581477025096651956458587024481106269073426545688878633368395090950721246745797130514914475184220252785922714892764536041334549342283500382915967329086709002330282037812607548379718641877595592743676836398647524633348205332354808351273389207425490367080293557186321576642355686995967422099839906367044852871358174711678743078106239862383119503287568833606375474359241383490799700740580296717320354647238288294827855343155547056851646090370313395520915221874011198982966904484363631910557996205942678772502957389321620232931357572315089162587705606682143499451357592399858038685832965830759409094928957246320485487746463").unwrap()
         }
@@ -1189,8 +1382,8 @@ pub mod mocks {
     }
 
     pub fn primary_equal_init_proof() -> PrimaryEqualInitProof {
-        let a_prime = BigNumber::from_dec("55843178746788520435119921377390286268231906459093621159092786036045167470853237525750282569899268449257074522170415569390034716112368052014334531932423576902914762587842041027851281255714993168169397606683305211998762679155888831040910409096324726866578032630340975792746967149464040920396539558743125725962501042923116270042003617984521164987313533431008960902795014252204100220831622879715088891023369836472708006594040942575574164603258335948975612936260979474698634607068185834612498203540495530063764980572148330080073950973355083221837170619929706589683883912936747392721735783231955174948213742908010137510059").unwrap();
-        let t = BigNumber::from_dec("48973018977144055944669519989481642869215488929062998734901463664459756294241601155321632240182242741351527618397570977014997144652907498803199568473576436659761897383165560744484277311963229373730027481518334564056910664855021973780670809391869976972256366927266299588055669244439406136391755306452039493468720569572147236503337456803407016560119357108968937752154999009135739288690305269248049643647114493574609913368697724563902578317988938688111455603289064969925062487403801982788918294180433456215967608275862853309081415780863179218684897030156771304698466844021124396633227553157619577905096144602889860383546").unwrap();
+        let a_prime = BigNumber::from_dec("78898446861620412792842654750764062040328278229512305141968113883981382363496282144663134736579155174079489370417319571673509223278120964571470845241120645551554926623342854372134490258764319573521094387838327414281853828589221808686724921231593704540280532970373640199731641395199082059405080075465486634762457150037380987024458877755472383081895051555492507651039311433558129052743301554647361730000005427464464246044639541830130535925782175383878030954151669817492221872824859563277713273959367410746090482942312443321505241905381190352109064384380161190069276865755285156358570714184139481480304254835854046883548").unwrap();
+        let t = BigNumber::from_dec("37914978573013682015952967814616518692481372452542105037617069181070971905204966553219043437658169765912031143021675514514577011185656373414958242090351114594533636784052907330077014062209045618845579711804374387517660179011982489730203769871735698274791150764594282050172065273674092586808773775881050644266596441443533550303048063996952056765813548653973258606974460042186445095255377980703230984472995063940293700376667962671153418936388405441149268653617224146388772719618663280132182347760114744963580362159898202404232995554256561519180861258131147514023572009869216379017751386174351316118610777025755748506325").unwrap();
         let e_tilde = BigNumber::from_dec("162083298053730499878539835193560156486733663622707027216327685550780519347628838870322946818623352681120371349972731968874009673965057322").unwrap();
         let e_prime = BigNumber::from_dec("524456141360955985047633523128638545").unwrap();
         let v_tilde = BigNumber::from_dec("241132863422049783305938184561371219250127488499746090592218003869595412171810997360214885239402274273939963489505434726467041932541499422544431299362364797699330176612923593931231233163363211565697860685967381420219969754969010598350387336530924879073366177641099382257720898488467175132844984811431059686249020737675861448309521855120928434488546976081485578773933300425198911646071284164884533755653094354378714645351464093907890440922615599556866061098147921890790915215227463991346847803620736586839786386846961213073783437136210912924729098636427160258710930323242639624389905049896225019051952864864612421360643655700799102439682797806477476049234033513929028472955119936073490401848509891547105031112859155855833089675654686301183778056755431562224990888545742379494795601542482680006851305864539769704029428620446639445284011289708313620219638324467338840766574612783533920114892847440641473989502440960354573501").unwrap();
@@ -1199,7 +1392,7 @@ pub mod mocks {
 
         let m1_tilde = BigNumber::from_dec("67940925789970108743024738273926421512152745397724199848594503731042154269417576665420030681245389493783225644817826683796657351721363490290016166310023506339911751676800452438014771736117676826911321621579680668201191205819012441197794443970687648330757835198888257781967404396196813475280544039772512800509").unwrap();
         let m2_tilde = BigNumber::from_dec("6461691768834933403326572830814516653957231030793837560544354737855803497655300429843454445497126567767486684087006218691084619904526729989680526652503377438786587511370042964338").unwrap();
-        let m2 = BigNumber::from_dec("52860447312636183767369476481903349046618423276302392993759146262753859184069").unwrap();
+        let m2 = BigNumber::from_dec("94880167908247457149699082277807545911629132893821703817366687134445318249228").unwrap();
 
         PrimaryEqualInitProof {
             a_prime,
@@ -1308,12 +1501,12 @@ pub mod mocks {
 
         PrimaryEqualProof {
             revealed_attrs,
-            a_prime: BigNumber::from_dec("55843178746788520435119921377390286268231906459093621159092786036045167470853237525750282569899268449257074522170415569390034716112368052014334531932423576902914762587842041027851281255714993168169397606683305211998762679155888831040910409096324726866578032630340975792746967149464040920396539558743125725962501042923116270042003617984521164987313533431008960902795014252204100220831622879715088891023369836472708006594040942575574164603258335948975612936260979474698634607068185834612498203540495530063764980572148330080073950973355083221837170619929706589683883912936747392721735783231955174948213742908010137510059").unwrap(),
+            a_prime: BigNumber::from_dec("78898446861620412792842654750764062040328278229512305141968113883981382363496282144663134736579155174079489370417319571673509223278120964571470845241120645551554926623342854372134490258764319573521094387838327414281853828589221808686724921231593704540280532970373640199731641395199082059405080075465486634762457150037380987024458877755472383081895051555492507651039311433558129052743301554647361730000005427464464246044639541830130535925782175383878030954151669817492221872824859563277713273959367410746090482942312443321505241905381190352109064384380161190069276865755285156358570714184139481480304254835854046883548").unwrap(),
             e: BigNumber::from_dec("162083298053730499878539868675621169436369451197643364049023367091432000132455800020257076120708238452276269567894398158050524769029842452").unwrap(),
             v: BigNumber::from_dec("241132863422049783305938575438970984968886174719777147285301544874444739988430486983952995820260097840839069440378394346753879604392851933586337358561654582254955422523682312898019724436529062720828313475600193232595180909715451462600156154893650696125774460890921102329846137078074382707757647774945043683720900258432094924802673704740906359826573881239743758685541361718016925837587696092410894740410057107458758557447620998360525272595382152876024857626077651578395225059761356087394593446798198952106185244345409492051630909148188459601119687896316694712657729049955088211383277523909796073178401612271233635772969741130113707687830672377452944696453914387935655490225348165302887058751092766205283395163137925794804058129811328946552494253968865890668669461930678189893633436518087402186509936569439729722305359388858552931085264558311600831146504998575898993873331466073087451895775323562065569650308485086554411659").unwrap(),
             m,
             m1: BigNumber::from_dec("67940925789970108743024738273926421512152745397724199848594503731042154269417576665420030681245389493783225644817826683796657351721363490290016166310023507717485270084329765530473051446860852464706042958744244302789614711475323377257526784176458583145354771172858130808467331945526902877938301707061812969839").unwrap(),
-            m2: BigNumber::from_dec("6461691768834933403326576205504185652188833909247892684532892373128377494563032881387418065880893736940737234136484040150156890221922307233945402959479775946632391123924880274404").unwrap(),
+            m2: BigNumber::from_dec("6461691768834933403326578888105718505728223587635918716029631036880873089632406454446365479864836382766718108773927309946281006850562266201583930422493421759789521997998623210730").unwrap(),
         }
     }
 
