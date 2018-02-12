@@ -47,9 +47,16 @@ def windowsPublishing() {
                         bat "cargo build"
                     }
 
-                    withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
+                    sh "mkdir libindy_crypto-zip"
+//                    sh "mkdir libindy_crypto-zip/lib"
+//                    sh "cp -r ./include ./libindy_crypto-zip"
+//                    sh "cp ./target/debug/*.dll ./libindy_crypto-zip/lib/"
+//                    sh "powershell.exe -nologo -noprofile -command \"& { Add-Type -A 'System.IO.Compression.FileSystem'; [IO.Compression.ZipFile]::CreateFromDirectory('libindy_crypto-zip', 'libindy_crypto_$version.zip'); }\""
+//                    sh "rm -rf ./libindy-zip"
+
+/*                    withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
                         sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' test $env.BUILD_NUMBER"
-                    }
+                    }*/
                 }
             }
             finally {
