@@ -488,7 +488,7 @@ mod tests {
         println!("g to the power mod m {:?}", product_modm);
         println!("g to the power mod n {:?}", product_modn);
         assert_eq!(accumulator, g_pr_mod_m);
-//        assert_eq!(accumulator, g_pr_mod_n);
+        assert_ne!(accumulator, g_pr_mod_n);
     }
 
     #[cfg(feature = "serialization")]
