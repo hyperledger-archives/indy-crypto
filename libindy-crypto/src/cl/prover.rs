@@ -1311,6 +1311,114 @@ mod tests {
 
         assert_eq!(proof_tau_list.as_slice().unwrap(), proof_tau_list_calc.as_slice().unwrap());
     }
+
+    extern crate time;
+
+
+    /*
+    Results:
+
+    N = 100
+    Create RevocationRegistry Time: Duration { secs: 0, nanos: 153759082 }
+    Update NonRevocation Claim Time: Duration { secs: 0, nanos: 490382 }
+    Total Time for 100 claims: Duration { secs: 5, nanos: 45915383 }
+
+    N = 1000
+    Create RevocationRegistry Time: Duration { secs: 1, nanos: 636113212 }
+    Update NonRevocation Claim Time: Duration { secs: 0, nanos: 5386575 }
+    Total Time for 1000 claims: Duration { secs: 6, nanos: 685771457 }
+
+    N = 10000
+    Create RevocationRegistry Time: Duration { secs: 16, nanos: 844061103 }
+    Update NonRevocation Claim Time: Duration { secs: 0, nanos: 52396763 }
+    Total Time for 10000 claims: Duration { secs: 29, nanos: 628240611 }
+
+    N = 100000
+    Create RevocationRegistry Time: Duration { secs: 175, nanos: 666428558 }
+    Update NonRevocation Claim Time: Duration { secs: 0, nanos: 667879620 }
+    Total Time for 100000 claims: Duration { secs: 185, nanos: 810126906 }
+
+    N = 1000000
+    Create RevocationRegistry Time: Duration { secs: 1776, nanos: 485208599 }
+    Update NonRevocation Claim Time: Duration { secs: 6, nanos: 35027554 }
+    Total Time for 1000000 claims: Duration { secs: 1798, nanos: 420564334 }
+    */
+    #[test]
+    fn test_update_proof() {
+        println!("Update Proof test -> start");
+        let n = 100;
+
+        let total_start_time = time::get_time();
+
+        let claim_schema = issuer::mocks::claim_schema();
+        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = issuer::Issuer::new_keys(&claim_schema, true).unwrap();
+
+        let start_time = time::get_time();
+
+        let (mut rev_reg_pub, rev_reg_priv) = issuer::Issuer::new_revocation_registry(&issuer_pub_key, n).unwrap();
+
+        let end_time = time::get_time();
+
+        println!("Create RevocationRegistry Time: {:?}", end_time - start_time);
+
+        let claim_values = issuer::mocks::claim_values();
+
+        // Issue first correct Claim
+        let master_secret = Prover::new_master_secret().unwrap();
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&issuer_pub_key,
+                                        &issuer_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        let claim_issuance_nonce = new_nonce().unwrap();
+
+        let (mut claim_signature, signature_correctness_proof) = issuer::Issuer::sign_claim("NcYxiDXkpYi6ov5FcYDi1e",
+                                                                                            &blinded_master_secret,
+                                                                                            &blinded_master_secret_correctness_proof,
+                                                                                            &master_secret_blinding_nonce,
+                                                                                            &claim_issuance_nonce,
+                                                                                            &claim_values,
+                                                                                            &issuer_pub_key,
+                                                                                            &issuer_priv_key,
+                                                                                            Some(1),
+                                                                                            Some(&mut rev_reg_pub),
+                                                                                            Some(&rev_reg_priv)).unwrap();
+        Prover::process_claim_signature(&mut claim_signature,
+                                        &claim_values,
+                                        &signature_correctness_proof,
+                                        &master_secret_blinding_data,
+                                        &master_secret,
+                                        &issuer_pub_key,
+                                        &claim_issuance_nonce,
+                                        Some(&rev_reg_pub)).unwrap();
+
+        // Populate accumulator
+        for i in 2..n {
+            let index = rev_reg_pub.acc.max_claim_num + 1 - i;
+
+            rev_reg_pub.acc.acc = rev_reg_pub.acc.acc.add(&rev_reg_pub.tails.tails_dash[&index]).unwrap();
+
+            rev_reg_pub.acc.v.insert(i);
+        }
+
+        // Update NonRevoc Claim
+
+        let start_time = time::get_time();
+
+        ProofBuilder::_update_non_revocation_claim(&mut claim_signature.r_claim.unwrap(), &rev_reg_pub.acc, &rev_reg_pub.tails.tails_dash).unwrap();
+
+        let end_time = time::get_time();
+
+        println!("Update NonRevocation Claim Time: {:?}", end_time - start_time);
+
+        let total_end_time = time::get_time();
+        println!("Total Time for {} claims: {:?}", n, total_end_time - total_start_time);
+
+        println!("Update Proof test -> end");
+    }
 }
 
 pub mod mocks {
