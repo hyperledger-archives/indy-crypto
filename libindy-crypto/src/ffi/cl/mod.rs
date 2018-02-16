@@ -19,6 +19,66 @@ type FFITailTake = extern fn(ctx: *const c_void, idx: u32, tail_p: *mut *const c
 type FFITailPut = extern fn(ctx: *const c_void, tail: *const c_void) -> ErrorCode;
 
 #[no_mangle]
+pub extern fn indy_crypto_cl_tails_generator_next(rev_tails_generator: *const c_void,
+                                                  tail_p: *mut *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_tails_generator_next: >>> rev_tails_generator: {:?}, tail_p {:?}",
+           rev_tails_generator, tail_p);
+
+    check_useful_mut_c_reference!(rev_tails_generator, RevocationTailsGenerator, ErrorCode::CommonInvalidParam1);
+    check_useful_c_ptr!(tail_p, ErrorCode::CommonInvalidParam2);
+
+    let res = match rev_tails_generator.next() {
+        Ok(tail) => {
+            unsafe {
+                *tail_p = Box::into_raw(Box::new(tail)) as *const c_void;
+                trace!("indy_crypto_cl_tails_generator_next: *tail_p: {:?}", *tail_p);
+            }
+            ErrorCode::Success
+        }
+        Err(err) => err.to_error_code(),
+    };
+
+    trace!("indy_crypto_cl_tails_generator_next: <<< {:?}", res);
+    res
+}
+
+#[no_mangle]
+pub extern fn indy_crypto_cl_tails_generator_count(rev_tails_generator: *const c_void,
+                                                   count_p: *mut u32) -> ErrorCode {
+    trace!("indy_crypto_cl_tails_generator_count: >>> rev_tails_generator: {:?}, count_p {:?}",
+           rev_tails_generator, count_p);
+
+    check_useful_mut_c_reference!(rev_tails_generator, RevocationTailsGenerator, ErrorCode::CommonInvalidParam1);
+    check_useful_c_ptr!(count_p, ErrorCode::CommonInvalidParam2);
+
+    let cnt = rev_tails_generator.count();
+    unsafe {
+        *count_p = cnt;
+        trace!("indy_crypto_cl_tails_generator_count: *count_p: {:?}", *count_p);
+    }
+    let res = ErrorCode::Success;
+
+
+    trace!("indy_crypto_cl_tails_generator_count: <<< {:?}", res);
+    res
+}
+
+#[no_mangle]
+pub extern fn indy_crypto_cl_tail_free(tail: *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_tail_free: >>> tail: {:?}", tail);
+
+    check_useful_c_ptr!(tail, ErrorCode::CommonInvalidParam1);
+
+    let tail = unsafe { Box::from_raw(tail as *mut Tail); };
+    trace!("indy_crypto_cl_tail_free: entity: tail: {:?}", tail);
+
+    let res = ErrorCode::Success;
+
+    trace!("indy_crypto_cl_tail_free: <<< res: {:?}", res);
+    res
+}
+
+#[no_mangle]
 pub extern fn indy_crypto_cl_witness_new(rev_idx: u32,
                                          max_cred_num: u32,
                                          rev_reg_delta: *const c_void,
@@ -592,7 +652,7 @@ impl RevocationTailsAccessor for FFITailsAccessor {
                 format!("FFI call take_tail {:?} (ctx {:?}, id {}) failed: tail_p {:?}, returned error code {:?}",
                         self.take, self.ctx, tail_id, tail_p, res)));
         }
-        let tail: *const Tail = tail_p  as *const Tail;
+        let tail: *const Tail = tail_p as *const Tail;
 
         accessor(&unsafe { *tail });
 
@@ -1034,18 +1094,20 @@ pub mod mocks {
 
 
     pub struct FFISimpleTailStorage {
-        tails: Box<Vec<Box<Tail>>>
+        tails: Box<Vec<*const c_void>>
     }
 
     impl FFISimpleTailStorage {
-        pub fn new(rtg: *const c_void) -> Self {
-            let rev_tails_generator: &mut RevocationTailsGenerator = unsafe { &mut *(rtg as *mut RevocationTailsGenerator) };
-
+        pub fn new(rev_tails_generator: *const c_void) -> Self {
             let mut tails = Vec::new();
-            let cnt = rev_tails_generator.count();
-            for i in 0..cnt {
-                let tail = rev_tails_generator.next().unwrap();
-                tails.push(Box::new(tail));
+            let mut cnt = 0u32;
+            let res = indy_crypto_cl_tails_generator_count(rev_tails_generator, &mut cnt);
+            assert_eq!(res, ErrorCode::Success);
+            for _ in 0..cnt {
+                let mut tail = ptr::null();
+                let res = indy_crypto_cl_tails_generator_next(rev_tails_generator, &mut tail);
+                assert_eq!(res, ErrorCode::Success);
+                tails.push(tail);
             }
             Self {
                 tails: Box::new(tails)
@@ -1053,7 +1115,7 @@ pub mod mocks {
         }
 
         pub fn get_ctx(&self) -> *const c_void {
-            let ctx: *const Vec<Box<Tail>> = &*self.tails;
+            let ctx: *const Vec<*const c_void> = &*self.tails;
             ctx as *const c_void
         }
 
@@ -1064,12 +1126,11 @@ pub mod mocks {
         pub extern "C" fn tail_take(ctx: *const c_void,
                                     idx: u32,
                                     tail_p: *mut *const c_void) -> ErrorCode {
-            let tails: &Vec<Box<Tail>> = unsafe { &*(ctx as *const Vec<Box<Tail>>) };
+            let tails: &Vec<*const c_void> = unsafe { &*(ctx as *const Vec<*const c_void>) };
 
-            let tail: &Box<Tail> = tails.get(idx as usize).unwrap();
-            let tail: *const Tail = &**tail;
+            let tail: *const c_void = *tails.get(idx as usize).unwrap();
 
-            unsafe { *tail_p = tail as *const c_void };
+            unsafe { *tail_p = tail };
 
             ErrorCode::Success
         }
