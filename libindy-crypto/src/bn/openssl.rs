@@ -308,6 +308,14 @@ impl BigNumber {
         Ok(res)
     }
 
+    pub fn random_QR(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+        let qr = n
+            .rand_range()?
+            .sqr(None)?
+            .modulus(&n, None)?;
+        Ok(qr)
+    }
+
     pub fn clone(&self) -> Result<BigNumber, IndyCryptoError> {
         Ok(BigNumber {
             openssl_bn: BigNum::from_slice(&self.openssl_bn.to_vec()[..])?
