@@ -3,7 +3,22 @@ use utils::commitment::get_pedersen_commitment;
 use errors::IndyCryptoError;
 use super::constants::*;
 
-
+/// Generate a double commitment, i.e pedersen commitment to pedersen commitment over a secret
+///
+/// # Arguments
+/// * `g_1` - first generator of the first commitment
+/// * `h_1` - second generator of the first commitment
+/// * `g_2` - first generator of the second commitment
+/// * `h_2` - second generator of the second commitment
+/// * `secret` - the secret to which the first commitment is made
+/// * `policy_address` - the random value to be used in the second commitment
+/// * `mod1` - modulus for the first commitment
+/// * `mod2` - modulus for the second commitment
+/// * `ctx` - big number context
+///
+/// # Result
+/// Return the double commitment, `C_2` and the random value `r_0` of the first commitment,
+/// i.e `C_2 = (g_2^C_1)*(h_2^policy_address) where C_1 = (g_1^secret)*(h_1^r_0)`
 pub fn gen_double_commitment_to_secret(g_1: &BigNumber, h_1: &BigNumber, secret: &BigNumber,
                                        g_2: &BigNumber, h_2: &BigNumber,
                                        policy_address: &BigNumber, mod1: &BigNumber,
