@@ -6,15 +6,14 @@ use super::constants::*;
 
 
 pub fn generate_policy_address(ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
-    let n1 = BigNumber::from_dec(ACCUM1_MODULUS_BY_4)?;
-    let n2 = BigNumber::from_dec(ACCUM2_MODULUS_BY_4)?;
-    let mut i;
+    let p_0 = BigNumber::from_dec(P_0)?;
+    let mut policy_address;
     loop {
-        i = BigNumber::rand(ACCUM_MODULUS_SIZE-2)?;
+        policy_address = BigNumber::rand(POLICY_ADDRESS_SIZE)?;
         // Since n1 and n2 are calculated only once, the next line can be reduced to only one comparison by comparing with just the smaller of n1 and n2
-        if i < n1 && i < n2 { break; }
+        if policy_address < p_0 { break; }
     }
-    Ok(i)
+    Ok(policy_address)
 }
 
 /// Generate a double commitment, i.e pedersen commitment to pedersen commitment over a secret
@@ -40,12 +39,14 @@ pub fn gen_double_commitment_to_secret(g_1: &BigNumber, h_1: &BigNumber, secret:
     trace!("helpers::gen_double_commitment_to_secret: >>> g_1: {:?}, h_1: {:?}, secret: {:?}, \
     g_2: {:?}, h_2: {:?}, policy_address: {:?}", g_1, h_1, secret, g_2, h_2, policy_address);
 
+    let p_0 = BigNumber::from_dec(P_0)?;
+
     let mut double_commitment;
     let mut r_0;
 
     loop {
-        // TODO: Revisit `R_0_SIZE`, the paper constraints it to < N/4 which should matter R_0_SIZE << ACCUM1_MODULUS
         r_0 = BigNumber::rand(R_0_SIZE)?;
+        if r_0 >= p_0 { continue; }
         let first_commitment = get_pedersen_commitment(g_1, secret, h_1, &r_0, mod1, ctx)?;
         double_commitment = get_pedersen_commitment(g_2, &first_commitment, h_2, policy_address, mod2, ctx)?;
         if double_commitment.is_prime(Some(ctx))? { break; }
@@ -74,30 +75,38 @@ mod tests {
         let secret = BigNumber::rand(SECRET_SIZE).unwrap();;
         let policy_address = BigNumber::rand(POLICY_ADDRESS_SIZE).unwrap();
 
-        let (comm, _) = gen_double_commitment_to_secret(&g_1, &h_1, &secret, &g_2, &h_2,
+        let (comm, r_0) = gen_double_commitment_to_secret(&g_1, &h_1, &secret, &g_2, &h_2,
                                                         &policy_address, &mod_1,
                                                         &mod_2, &mut ctx).unwrap();
         assert!(comm.is_prime(Some(&mut ctx)).unwrap());
+        assert!(r_0 < BigNumber::from_dec(P_0).unwrap());
     }
 
     #[test]
     #[ignore] //TODO Expensive test, only run to generate public params
     fn test_generate_public_ps() {
-        // Generating p_1, p_2, p_3, such that all 3 are safe primes satisfying
+        // Generating primes p_0, p_1, p_2, p_3, such that p_1, p_2, p_3 are safe primes satisfying
         // p_1 = 2p_0 + 1; p_2 = 2p_1 + 1; p_3 = 2p_2 + 1
         let mut ctx = BigNumber::new_context().unwrap();
+        let mut p_0;
         let mut p_1;
         let mut p_2;
         let mut p_3;
+        let number1 = BigNumber::from_u32(1).unwrap();
+        let number2 = BigNumber::from_u32(2).unwrap();
         loop {
-            p_1 = BigNumber::generate_safe_prime(P_SIZE).unwrap();
+            p_0 = BigNumber::generate_prime(P_SIZE).unwrap();
+            println!("p_0 is {:?}", p_0);
+            p_1 = p_0.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap();
             println!("p_1 is {:?}", p_1);
-            p_2 = p_1.mul(&BigNumber::from_u32(2).unwrap(), Some(&mut ctx)).unwrap().add(&BigNumber::from_u32(1).unwrap()).unwrap();
-            println!("p_2 is {:?}", p_2);
-            if p_2.is_prime(Some(&mut ctx)).unwrap() {
-                p_3 = p_2.mul(&BigNumber::from_u32(2).unwrap(), Some(&mut ctx)).unwrap().add(&BigNumber::from_u32(1).unwrap()).unwrap();
-                println!("p_3 is {:?}", p_3);
-                if p_3.is_prime(Some(&mut ctx)).unwrap() { break; }
+            if p_1.is_prime(Some(&mut ctx)).unwrap() {
+                p_2 = p_1.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap();
+                println!("p_2 is {:?}", p_2);
+                if p_2.is_prime(Some(&mut ctx)).unwrap() {
+                    p_3 = p_2.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap();
+                    println!("p_3 is {:?}", p_3);
+                    if p_3.is_prime(Some(&mut ctx)).unwrap() { break; }
+                }
             }
         }
     }
@@ -105,17 +114,24 @@ mod tests {
     #[test]
     fn test_check_public_ps() {
         let mut ctx = BigNumber::new_context().unwrap();
+        let p_0 = BigNumber::from_dec(P_0).unwrap();
         let p_1 = BigNumber::from_dec(P_1).unwrap();
         let p_2 = BigNumber::from_dec(P_2).unwrap();
         let p_3 = BigNumber::from_dec(P_3).unwrap();
-        assert!(p_1.is_prime(Some(&mut ctx)).unwrap());
-        assert!(p_2.is_prime(Some(&mut ctx)).unwrap());
-        assert!(p_3.is_prime(Some(&mut ctx)).unwrap());
+        let number1 = BigNumber::from_u32(1).unwrap();
+        let number2 = BigNumber::from_u32(2).unwrap();
+        assert!(p_0.is_prime(Some(&mut ctx)).unwrap());
+        assert!(p_1.is_safe_prime(Some(&mut ctx)).unwrap());
+        assert!(p_2.is_safe_prime(Some(&mut ctx)).unwrap());
+        assert!(p_3.is_safe_prime(Some(&mut ctx)).unwrap());
+        assert_eq!(p_1, p_0.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap());
+        assert_eq!(p_2, p_1.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap());
+        assert_eq!(p_3, p_2.mul(&number2, Some(&mut ctx)).unwrap().add(&number1).unwrap());
     }
 
     #[test]
     #[ignore] //TODO Expensive test, only run to generate public params
-    fn test_generate_generators() {
+    fn test_generate_public_generators() {
         // Generating g_1, g_2, g_3, h_1, h_2, h_3
         let mut g_1;
         let mut g_2;
@@ -161,7 +177,7 @@ mod tests {
 
     #[test]
     #[ignore] //TODO Expensive test, only run to generate public params
-    fn test_generate_accumulator_moduli() {
+    fn test_generate_public_accumulator_moduli() {
         let mut ctx = BigNumber::new_context().unwrap();
         let n1 = generate_RSA_modulus(ACCUM_MODULUS_SIZE, &mut ctx).unwrap();
         let n2 = generate_RSA_modulus(ACCUM_MODULUS_SIZE, &mut ctx).unwrap();
@@ -178,7 +194,6 @@ mod tests {
     fn test_generate_policy_address() {
         let mut ctx = BigNumber::new_context().unwrap();
         let i = generate_policy_address(&mut ctx).unwrap();
-        assert!(i < BigNumber::from_dec(ACCUM1_MODULUS_BY_4).unwrap());
-        assert!(i < BigNumber::from_dec(ACCUM2_MODULUS_BY_4).unwrap());
+        assert!(i < BigNumber::from_dec(P_0).unwrap());
     }
 }

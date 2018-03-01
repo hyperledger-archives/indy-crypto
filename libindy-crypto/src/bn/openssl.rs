@@ -85,6 +85,18 @@ impl BigNumber {
         }
     }
 
+    pub fn is_safe_prime(&self, ctx: Option<&mut BigNumberContext>) -> Result<bool, IndyCryptoError> {
+        let c1 = self.is_prime(ctx)?;
+        if c1 {
+            Ok(
+                self.sub(&BigNumber::from_u32(1)?)?
+                    .div(&BigNumber::from_u32(2)?, None)?.is_prime(None)?
+            )
+        } else {
+            Ok(false)
+        }
+    }
+
     pub fn rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
         let mut bn = BigNumber::new()?;
         BigNumRef::rand(&mut bn.openssl_bn, size as i32, MSB_MAYBE_ZERO, false)?;
@@ -435,6 +447,16 @@ mod tests {
         let vec3 = vec![1, 153, 25]; // big endian representation of 104729
         let v3 = BigNumber::from_bytes(&vec3).unwrap();
         assert!(v3.is_prime(None).unwrap());
+    }
+
+    #[test]
+    fn is_safe_prime_works() {
+        let prime1 = BigNumber::generate_safe_prime(256).unwrap();
+        let prime2 = BigNumber::generate_safe_prime(1024).unwrap();
+        let prime3 = BigNumber::generate_safe_prime(4096).unwrap();
+        assert!(prime1.is_safe_prime(None).unwrap());
+        assert!(prime2.is_safe_prime(None).unwrap());
+        assert!(prime3.is_safe_prime(None).unwrap());
     }
 
     #[cfg(feature = "serialization")]
