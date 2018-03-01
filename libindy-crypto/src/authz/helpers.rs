@@ -5,7 +5,7 @@ use errors::IndyCryptoError;
 use super::constants::*;
 
 
-pub fn generate_policy_address(ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+pub fn generate_policy_address() -> Result<BigNumber, IndyCryptoError> {
     let p_0 = BigNumber::from_dec(P_0)?;
     let mut policy_address;
     loop {
@@ -192,8 +192,7 @@ mod tests {
 
     #[test]
     fn test_generate_policy_address() {
-        let mut ctx = BigNumber::new_context().unwrap();
-        let i = generate_policy_address(&mut ctx).unwrap();
+        let i = generate_policy_address().unwrap();
         assert!(i < BigNumber::from_dec(P_0).unwrap());
     }
 }
