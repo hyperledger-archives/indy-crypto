@@ -1,7 +1,21 @@
 use bn::{BigNumber, BigNumberContext};
 use utils::commitment::get_pedersen_commitment;
+use utils::rsa::generate_RSA_modulus;
 use errors::IndyCryptoError;
 use super::constants::*;
+
+
+pub fn generate_policy_address(ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+    let n1 = BigNumber::from_dec(ACCUM1_MODULUS_BY_4)?;
+    let n2 = BigNumber::from_dec(ACCUM2_MODULUS_BY_4)?;
+    let mut i;
+    loop {
+        i = BigNumber::rand(ACCUM_MODULUS_SIZE-2)?;
+        // Since n1 and n2 are calculated only once, the next line can be reduced to only one comparison by comparing with just the smaller of n1 and n2
+        if i < n1 && i < n2 { break; }
+    }
+    Ok(i)
+}
 
 /// Generate a double commitment, i.e pedersen commitment to pedersen commitment over a secret
 ///
@@ -30,6 +44,7 @@ pub fn gen_double_commitment_to_secret(g_1: &BigNumber, h_1: &BigNumber, secret:
     let mut r_0;
 
     loop {
+        // TODO: Revisit `R_0_SIZE`, the paper constraints it to < N/4 which should matter R_0_SIZE << ACCUM1_MODULUS
         r_0 = BigNumber::rand(R_0_SIZE)?;
         let first_commitment = get_pedersen_commitment(g_1, secret, h_1, &r_0, mod1, ctx)?;
         double_commitment = get_pedersen_commitment(g_2, &first_commitment, h_2, policy_address, mod2, ctx)?;
@@ -56,8 +71,8 @@ mod tests {
         let mod_1 = BigNumber::from_dec(P_1).unwrap();
         let mod_2 = BigNumber::from_dec(P_2).unwrap();
 
-        let secret = BigNumber::rand(POLICY_ADDRESS_SIZE).unwrap();;
-        let policy_address = BigNumber::rand(SECRET_SIZE).unwrap();
+        let secret = BigNumber::rand(SECRET_SIZE).unwrap();;
+        let policy_address = BigNumber::rand(POLICY_ADDRESS_SIZE).unwrap();
 
         let (comm, _) = gen_double_commitment_to_secret(&g_1, &h_1, &secret, &g_2, &h_2,
                                                         &policy_address, &mod_1,
@@ -142,5 +157,28 @@ mod tests {
             if number1 != h_3 { break; }
         }
         println!("h_3 is {:?}", h_3);
+    }
+
+    #[test]
+    #[ignore] //TODO Expensive test, only run to generate public params
+    fn test_generate_accumulator_moduli() {
+        let mut ctx = BigNumber::new_context().unwrap();
+        let n1 = generate_RSA_modulus(ACCUM_MODULUS_SIZE, &mut ctx).unwrap();
+        let n2 = generate_RSA_modulus(ACCUM_MODULUS_SIZE, &mut ctx).unwrap();
+        println!("n1 is {:?}", n1.0);
+        println!("n2 is {:?}", n2.0);
+        let number4 = BigNumber::from_u32(4).unwrap();
+        let n1_by4 = n1.0.div(&number4, Some(&mut ctx)).unwrap();
+        let n2_by4 = n2.0.div(&number4, Some(&mut ctx)).unwrap();
+        println!("n1_by4 is {:?}", n1_by4);
+        println!("n2_by4 is {:?}", n2_by4);
+    }
+
+    #[test]
+    fn test_generate_policy_address() {
+        let mut ctx = BigNumber::new_context().unwrap();
+        let i = generate_policy_address(&mut ctx).unwrap();
+        assert!(i < BigNumber::from_dec(ACCUM1_MODULUS_BY_4).unwrap());
+        assert!(i < BigNumber::from_dec(ACCUM2_MODULUS_BY_4).unwrap());
     }
 }
