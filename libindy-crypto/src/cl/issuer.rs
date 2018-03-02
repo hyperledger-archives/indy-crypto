@@ -4,6 +4,7 @@ use errors::IndyCryptoError;
 use pair::*;
 use cl::constants::*;
 use cl::helpers::*;
+use utils::commitment::*;
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -139,8 +140,8 @@ impl Issuer {
     /// use indy_crypto::cl::issuer::Issuer;
     ///
     /// let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-    /// credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-    /// credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
+    /// credential_values_builder.add_dec_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+    /// credential_values_builder.add_dec_value("name", "1139481716457488690172217916278103335").unwrap();
     /// let _credential_values = credential_values_builder.finalize().unwrap();
     /// ```
     pub fn new_credential_values_builder() -> Result<CredentialValuesBuilder, IndyCryptoError> {
@@ -178,7 +179,7 @@ impl Issuer {
     ///      Prover::blind_master_secret(&credential_pub_key, &cred_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
     ///
     /// let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-    /// credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+    /// credential_values_builder.add_dec_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
     /// let credential_values = credential_values_builder.finalize().unwrap();
     ///
     /// let credential_issuance_nonce = new_nonce().unwrap();
@@ -194,22 +195,34 @@ impl Issuer {
     ///                             &credential_priv_key).unwrap();
     /// ```
     pub fn sign_credential(prover_id: &str,
-                           blinded_master_secret: &BlindedMasterSecret,
-                           blinded_master_secret_correctness_proof: &BlindedMasterSecretCorrectnessProof,
-                           master_secret_blinding_nonce: &Nonce,
+                           blinded_credential_secrets: &BlindedCredentialSecrets,
+                           blinded_credential_secrets_correctness_proof: &BlindedCredentialSecretsCorrectnessProof,
+                           credential_nonce: &Nonce,
                            credential_issuance_nonce: &Nonce,
                            credential_values: &CredentialValues,
                            credential_pub_key: &CredentialPublicKey,
                            credential_priv_key: &CredentialPrivateKey) -> Result<(CredentialSignature, SignatureCorrectnessProof), IndyCryptoError> {
-        trace!("Issuer::sign_credential: >>> prover_id: {:?}, blinded_master_secret: {:?}, blinded_master_secret_correctness_proof: {:?},\
-        master_secret_blinding_nonce: {:?}, credential_issuance_nonce: {:?}, credential_values: {:?}, credential_pub_key: {:?}, credential_priv_key: {:?}",
-               prover_id, blinded_master_secret, blinded_master_secret_correctness_proof, master_secret_blinding_nonce, credential_values, credential_issuance_nonce,
-               credential_pub_key, credential_priv_key);
+        trace!("Issuer::sign_credential: >>> prover_id: {:?}, \
+                                             blinded_credential_secrets: {:?}, \
+                                             blinded_credential_secrets_correctness_proof: {:?}, \
+                                             credential_nonce: {:?}, \
+                                             credential_issuance_nonce: {:?}, \
+                                             credential_values: {:?}, \
+                                             credential_pub_key: {:?}, \
+                                             credential_priv_key: {:?}",
+                                            prover_id,
+                                            blinded_credential_secrets,
+                                            blinded_credential_secrets_correctness_proof,
+                                            credential_nonce,
+                                            credential_values,
+                                            credential_issuance_nonce,
+                                            credential_pub_key,
+                                            credential_priv_key);
 
-        Issuer::_check_blinded_master_secret_correctness_proof(blinded_master_secret,
-                                                               blinded_master_secret_correctness_proof,
-                                                               master_secret_blinding_nonce,
-                                                               &credential_pub_key.p_key)?;
+        Issuer::_check_blinded_credential_secrets_correctness_proof(blinded_credential_secrets,
+                                                                    blinded_credential_secrets_correctness_proof,
+                                                                    credential_nonce,
+                                                                    &credential_pub_key.p_key)?;
 
         // In the anoncreds whitepaper, `credential context` is denoted by `m2`
         let cred_context = Issuer::_gen_credential_context(prover_id, None)?;
@@ -217,7 +230,7 @@ impl Issuer {
         let (p_cred, q) = Issuer::_new_primary_credential(&cred_context,
                                                           credential_pub_key,
                                                           credential_priv_key,
-                                                          blinded_master_secret,
+                                                          blinded_credential_secrets,
                                                           credential_values)?;
 
         let cred_signature = CredentialSignature { p_credential: p_cred, r_credential: None };
@@ -299,9 +312,9 @@ impl Issuer {
     ///                                        &simple_tail_accessor).unwrap();
     /// ```
     pub fn sign_credential_with_revoc<RTA>(prover_id: &str,
-                                           blinded_master_secret: &BlindedMasterSecret,
-                                           blinded_master_secret_correctness_proof: &BlindedMasterSecretCorrectnessProof,
-                                           master_secret_blinding_nonce: &Nonce,
+                                           blinded_credential_secrets: &BlindedCredentialSecrets,
+                                           blinded_credential_secrets_correctness_proof: &BlindedCredentialSecretsCorrectnessProof,
+                                           credential_nonce: &Nonce,
                                            credential_issuance_nonce: &Nonce,
                                            credential_values: &CredentialValues,
                                            credential_pub_key: &CredentialPublicKey,
@@ -317,13 +330,13 @@ impl Issuer {
         trace!("Issuer::sign_credential: >>> prover_id: {:?}, blinded_master_secret: {:?}, blinded_master_secret_correctness_proof: {:?},\
         master_secret_blinding_nonce: {:?}, credential_issuance_nonce: {:?}, credential_values: {:?}, credential_pub_key: {:?}, credential_priv_key: {:?}, \
         rev_idx: {:?}, max_cred_num: {:?}, rev_reg: {:?}, rev_key_priv: {:?}",
-               prover_id, blinded_master_secret, blinded_master_secret_correctness_proof, master_secret_blinding_nonce, credential_values, credential_issuance_nonce,
+               prover_id, blinded_credential_secrets, blinded_credential_secrets_correctness_proof, credential_nonce, credential_values, credential_issuance_nonce,
                credential_pub_key, credential_priv_key, rev_idx, max_cred_num, rev_reg, rev_key_priv);
 
-        Issuer::_check_blinded_master_secret_correctness_proof(blinded_master_secret,
-                                                               blinded_master_secret_correctness_proof,
-                                                               master_secret_blinding_nonce,
-                                                               &credential_pub_key.p_key)?;
+        Issuer::_check_blinded_credential_secrets_correctness_proof(blinded_credential_secrets,
+                                                                    blinded_credential_secrets_correctness_proof,
+                                                                    credential_nonce,
+                                                                    &credential_pub_key.p_key)?;
 
         // In the anoncreds whitepaper, `credential context` is denoted by `m2`
         let cred_context = Issuer::_gen_credential_context(prover_id, Some(rev_idx))?;
@@ -331,12 +344,12 @@ impl Issuer {
         let (p_cred, q) = Issuer::_new_primary_credential(&cred_context,
                                                           credential_pub_key,
                                                           credential_priv_key,
-                                                          blinded_master_secret,
+                                                          blinded_credential_secrets,
                                                           credential_values)?;
 
         let (r_cred, rev_reg_delta) = Issuer::_new_non_revocation_credential(rev_idx,
                                                                              &cred_context,
-                                                                             blinded_master_secret,
+                                                                             blinded_credential_secrets,
                                                                              credential_pub_key,
                                                                              credential_priv_key,
                                                                              max_cred_num,
@@ -450,55 +463,6 @@ impl Issuer {
     ///  * rev_idx` - Index of the user in the revocation registry.
     /// * `rev_tails_accessor` - Revocation registry tails accessor.
     ///
-    /// # Example
-    /// ```
-    /// use indy_crypto::cl::{new_nonce, SimpleTailsAccessor};
-    /// use indy_crypto::cl::issuer::Issuer;
-    /// use indy_crypto::cl::prover::Prover;
-    ///
-    /// let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
-    /// credential_schema_builder.add_attr("name").unwrap();
-    /// let credential_schema = credential_schema_builder.finalize().unwrap();
-    ///
-    /// let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
-    ///
-    /// let max_cred_num = 5;
-    /// let (_rev_key_pub, rev_key_priv, mut rev_reg, mut rev_tails_generator) = Issuer::new_revocation_registry_def(&cred_pub_key, max_cred_num, false).unwrap();
-    ///
-    /// let simple_tail_accessor = SimpleTailsAccessor::new(&mut rev_tails_generator).unwrap();
-    ///
-    /// let master_secret = Prover::new_master_secret().unwrap();
-    ///
-    /// let master_secret_blinding_nonce = new_nonce().unwrap();
-    ///
-    /// let (blinded_master_secret, _master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-    ///     Prover::blind_master_secret(&cred_pub_key, &cred_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
-    ///
-    /// let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-    /// credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-    /// let cred_values = credential_values_builder.finalize().unwrap();
-    ///
-    /// let credential_issuance_nonce = new_nonce().unwrap();
-    ///
-    /// let rev_idx = 1;
-    /// let (_cred_signature, _signature_correctness_proof, _rev_reg_delta) =
-    ///     Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-    ///                                        &blinded_master_secret,
-    ///                                        &blinded_master_secret_correctness_proof,
-    ///                                        &master_secret_blinding_nonce,
-    ///                                        &credential_issuance_nonce,
-    ///                                        &cred_values,
-    ///                                        &cred_pub_key,
-    ///                                        &cred_priv_key,
-    ///                                        rev_idx,
-    ///                                        max_cred_num,
-    ///                                        false,
-    ///                                        &mut rev_reg,
-    ///                                        &rev_key_priv,
-    ///                                         &simple_tail_accessor).unwrap();
-    /// Issuer::revoke_credential(&mut rev_reg, max_cred_num, rev_idx, &simple_tail_accessor).unwrap();
-    /// Issuer::recovery_credential(&mut rev_reg, max_cred_num, rev_idx, &simple_tail_accessor).unwrap();
-    /// ```
     pub fn recovery_credential<RTA>(rev_reg: &mut RevocationRegistry,
                                     max_cred_num: u32,
                                     rev_idx: u32,
@@ -561,10 +525,9 @@ impl Issuer {
 
         let z = s.mod_exp(&xz, &n, Some(&mut ctx))?;
 
-        let rms = s.mod_exp(&gen_x(&p, &q)?, &n, Some(&mut ctx))?;
         let rctxt = s.mod_exp(&gen_x(&p, &q)?, &n, Some(&mut ctx))?;
 
-        let cred_pr_pub_key = CredentialPrimaryPublicKey { n, s, rms, rctxt, r, z };
+        let cred_pr_pub_key = CredentialPrimaryPublicKey { n, s, rctxt, r, z };
         let cred_pr_priv_key = CredentialPrimaryPrivateKey { p, q };
         let cred_pr_pub_key_metadata = CredentialPrimaryPublicKeyMetadata { xz, xr };
 
@@ -701,44 +664,61 @@ impl Issuer {
         Ok((rev_key_pub, rev_key_priv))
     }
 
-    fn _check_blinded_master_secret_correctness_proof(blinded_ms: &BlindedMasterSecret,
-                                                      blinded_ms_correctness_proof: &BlindedMasterSecretCorrectnessProof,
-                                                      nonce: &Nonce,
-                                                      cred_pr_pub_key: &CredentialPrimaryPublicKey) -> Result<(), IndyCryptoError> {
-        trace!("Issuer::_check_blinded_master_secret_correctness_proof: >>> blinded_ms: {:?}, blinded_ms_correctness_proof: {:?},\
-         nonce: {:?}, cred_pr_pub_key: {:?}", blinded_ms, blinded_ms_correctness_proof, nonce, cred_pr_pub_key);
+    fn _check_blinded_credential_secrets_correctness_proof(blinded_cred_secrets: &BlindedCredentialSecrets,
+                                                           blinded_cred_secrets_correctness_proof: &BlindedCredentialSecretsCorrectnessProof,
+                                                           nonce: &Nonce,
+                                                           cred_pr_pub_key: &CredentialPrimaryPublicKey) -> Result<(), IndyCryptoError> {
+        trace!("Issuer::_check_blinded_credential_secrets_correctness_proof: >>> blinded_cred_secrets: {:?}, blinded_cred_secrets_correctness_proof: {:?},\
+         nonce: {:?}, cred_pr_pub_key: {:?}", blinded_cred_secrets, blinded_cred_secrets_correctness_proof, nonce, cred_pr_pub_key);
 
+        let mut values: Vec<u8> = Vec::new();
         let mut ctx = BigNumber::new_context()?;
 
-        let u_cap =
-            blinded_ms.u
+        let mut u_cap =
+            blinded_cred_secrets.u
                 .inverse(&cred_pr_pub_key.n, Some(&mut ctx))?
-                .mod_exp(&blinded_ms_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
+                .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
                 .mod_mul(
-                    &cred_pr_pub_key.s.mod_exp(&blinded_ms_correctness_proof.v_dash_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
-                    &cred_pr_pub_key.n,
-                    Some(&mut ctx)
-                )?
-                .mod_mul(
-                    &cred_pr_pub_key.rms.mod_exp(&blinded_ms_correctness_proof.ms_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
+                    &cred_pr_pub_key.s.mod_exp(&blinded_cred_secrets_correctness_proof.v_dash_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
                     &cred_pr_pub_key.n,
                     Some(&mut ctx)
                 )?;
 
-        let mut values: Vec<u8> = Vec::new();
-        values.extend_from_slice(&blinded_ms.u.to_bytes()?);
+        for (key, value) in &blinded_cred_secrets.committed_attributes {
+            let pk_r = cred_pr_pub_key.r
+                .get(key)
+                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
+
+            let m_cap = &blinded_cred_secrets_correctness_proof.m_caps[key];
+
+            u_cap = u_cap.mod_mul(&pk_r.mod_exp(&m_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
+                                  &cred_pr_pub_key.n, Some(&mut ctx))?;
+
+            let comm_att_cap = value.inverse(&cred_pr_pub_key.n, Some(&mut ctx))?
+                                    .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
+                                    .mod_mul(&get_pedersen_commitment(&cred_pr_pub_key.z, &m_cap,
+                                                                      &cred_pr_pub_key.s, &blinded_cred_secrets_correctness_proof.r_caps[key],
+                                                                      &cred_pr_pub_key.n, &mut ctx)?,
+                                             &cred_pr_pub_key.n, Some(&mut ctx))?;
+
+            values.extend_from_slice(&comm_att_cap.to_bytes()?);
+            values.extend_from_slice(&value.to_bytes()?);
+        }
+
+
+        values.extend_from_slice(&blinded_cred_secrets.u.to_bytes()?);
         values.extend_from_slice(&u_cap.to_bytes()?);
         values.extend_from_slice(&nonce.to_bytes()?);
 
-        let c = get_hash_as_int(&mut vec![values])?;
+        let c = get_hash_as_int(&vec![values])?;
 
-        let valid = blinded_ms_correctness_proof.c.eq(&c);
+        let valid = blinded_cred_secrets_correctness_proof.c.eq(&c);
 
         if !valid {
-            return Err(IndyCryptoError::InvalidStructure(format!("Invalid BlindedMasterSecret correctness proof")));
+            return Err(IndyCryptoError::InvalidStructure(format!("Invalid BlindedCredentialSecrets correctness proof")));
         }
 
-        trace!("Issuer::_check_blinded_master_secret_correctness_proof: <<<");
+        trace!("Issuer::_check_blinded_credential_secrets_correctness_proof: <<<");
 
         Ok(())
     }
@@ -752,13 +732,11 @@ impl Issuer {
         let prover_id_bn = encode_attribute(prover_id, ByteOrder::Little)?;
         let rev_idx_bn = encode_attribute(&rev_idx.to_string(), ByteOrder::Little)?;
 
-        let mut s = vec![
-            bitwise_or_big_int(&rev_idx_bn, &prover_id_bn)?.to_bytes()?
-        ];
+        let mut values: Vec<u8> = Vec::new();
+        values.extend_from_slice(&prover_id_bn.to_bytes()?);
+        values.extend_from_slice(&rev_idx_bn.to_bytes()?);
 
-        /* TODO: FIXME: use const!!! */
-        let pow_2 = BigNumber::from_u32(2)?.exp(&BigNumber::from_u32(LARGE_MASTER_SECRET)?, None)?;
-        let credential_context = get_hash_as_int(&mut s)?.modulus(&pow_2, None)?;
+        let credential_context = get_hash_as_int(&mut vec![values])?;
 
         trace!("Issuer::_gen_credential_context: <<< credential_context: {:?}", credential_context);
 
@@ -768,10 +746,10 @@ impl Issuer {
     fn _new_primary_credential(credential_context: &BigNumber,
                                cred_pub_key: &CredentialPublicKey,
                                cred_priv_key: &CredentialPrivateKey,
-                               blinded_ms: &BlindedMasterSecret,
+                               blinded_credential_secrets: &BlindedCredentialSecrets,
                                cred_values: &CredentialValues) -> Result<(PrimaryCredentialSignature, BigNumber), IndyCryptoError> {
         trace!("Issuer::_new_primary_credential: >>> credential_context: {:?}, cred_pub_key: {:?}, cred_priv_key: {:?}, blinded_ms: {:?},\
-         cred_values: {:?}", credential_context, cred_pub_key, cred_priv_key, blinded_ms, cred_values);
+         cred_values: {:?}", credential_context, cred_pub_key, cred_priv_key, blinded_credential_secrets, cred_values);
 
         let v = generate_v_prime_prime()?;
 
@@ -781,7 +759,7 @@ impl Issuer {
             .add(&e_start)?;
 
         let e = generate_prime_in_range(&e_start, &e_end)?;
-        let (a, q) = Issuer::_sign_primary_credential(cred_pub_key, cred_priv_key, &credential_context, &cred_values, &v, blinded_ms, &e)?;
+        let (a, q) = Issuer::_sign_primary_credential(cred_pub_key, cred_priv_key, &credential_context, &cred_values, &v, blinded_credential_secrets, &e)?;
 
         let pr_cred_sig = PrimaryCredentialSignature { m_2: credential_context.clone()?, a, e, v };
 
@@ -795,10 +773,10 @@ impl Issuer {
                                 cred_context: &BigNumber,
                                 cred_values: &CredentialValues,
                                 v: &BigNumber,
-                                blnd_ms: &BlindedMasterSecret,
+                                blinded_cred_secrets: &BlindedCredentialSecrets,
                                 e: &BigNumber) -> Result<(BigNumber, BigNumber), IndyCryptoError> {
         trace!("Issuer::_sign_primary_credential: >>> cred_pub_key: {:?}, cred_priv_key: {:?}, cred_context: {:?}, cred_values: {:?}, v: {:?},\
-         blnd_ms: {:?}, e: {:?}", cred_pub_key, cred_priv_key, cred_context, cred_values, v, blnd_ms, e);
+         blnd_ms: {:?}, e: {:?}", cred_pub_key, cred_priv_key, cred_context, cred_values, v, blinded_cred_secrets, e);
 
         let p_pub_key = &cred_pub_key.p_key;
         let p_priv_key = &cred_priv_key.p_key;
@@ -808,20 +786,20 @@ impl Issuer {
         let mut rx = p_pub_key.s
             .mod_exp(&v, &p_pub_key.n, Some(&mut context))?;
 
-        if blnd_ms.u != BigNumber::from_u32(0)? {
-            rx = blnd_ms.u.modulus(&p_pub_key.n, Some(&mut context))?
+        if blinded_cred_secrets.u != BigNumber::from_u32(0)? {
+            rx = blinded_cred_secrets.u.modulus(&p_pub_key.n, Some(&mut context))?
                 .mul(&rx, Some(&mut context))?;
         }
 
         rx = p_pub_key.rctxt.mod_exp(&cred_context, &p_pub_key.n, Some(&mut context))?
             .mul(&rx, Some(&mut context))?;
 
-        for (key, value) in &cred_values.attrs_values {
+        for (key, attr) in cred_values.attrs_values.iter().filter(|&(_, v)| v.blinding_factor.is_none()) {
             let pk_r = p_pub_key.r
                 .get(key)
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
 
-            rx = pk_r.mod_exp(&value, &p_pub_key.n, Some(&mut context))?
+            rx = pk_r.mod_exp(&attr.value, &p_pub_key.n, Some(&mut context))?
                 .mod_mul(&rx, &p_pub_key.n, Some(&mut context))?;
         }
 
@@ -879,7 +857,7 @@ impl Issuer {
 
     fn _new_non_revocation_credential(rev_idx: u32,
                                       cred_context: &BigNumber,
-                                      blinded_ms: &BlindedMasterSecret,
+                                      blinded_credential_secrets: &BlindedCredentialSecrets,
                                       cred_pub_key: &CredentialPublicKey,
                                       cred_priv_key: &CredentialPrivateKey,
                                       max_cred_num: u32,
@@ -890,9 +868,9 @@ impl Issuer {
                                       -> Result<(NonRevocationCredentialSignature, Option<RevocationRegistryDelta>), IndyCryptoError> {
         trace!("Issuer::_new_non_revocation_credential: >>> rev_idx: {:?}, cred_context: {:?}, blinded_ms: {:?}, cred_pub_key: {:?}, cred_priv_key: {:?}, \
         max_cred_num: {:?}, issuance_by_default: {:?}, rev_reg: {:?}, rev_key_priv: {:?}",
-               rev_idx, cred_context, blinded_ms, cred_pub_key, cred_priv_key, max_cred_num, issuance_by_default, rev_reg, rev_key_priv);
+               rev_idx, cred_context, blinded_credential_secrets, cred_pub_key, cred_priv_key, max_cred_num, issuance_by_default, rev_reg, rev_key_priv);
 
-        let ur = blinded_ms.ur
+        let ur = blinded_credential_secrets.ur
             .ok_or(IndyCryptoError::InvalidStructure(format!("No revocation part present in blinded master secret.")))?;
 
         let r_pub_key: &CredentialRevocationPublicKey = cred_pub_key.r_key
@@ -976,6 +954,8 @@ impl Issuer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cl::prover::*;
+    use cl::prover::mocks::*;
     use cl::issuer::{Issuer, mocks};
     use cl::helpers::MockHelper;
 
@@ -983,9 +963,9 @@ mod tests {
     fn generate_context_attribute_works() {
         let rev_idx = 110;
         let user_id = "111";
-        let answer = BigNumber::from_dec("59059690488564137142247698318091397258460906844819605876079330034815387295451").unwrap();
+        //let answer = BigNumber::from_dec("31894574610223295263712513093148707509913459424901632064286025736442349335521").unwrap();
         let result = Issuer::_gen_credential_context(user_id, Some(rev_idx)).unwrap();
-        assert_eq!(result, answer);
+        assert_eq!(result, mocks::context_attribute());
     }
 
     #[test]
@@ -1005,12 +985,12 @@ mod tests {
     #[test]
     fn credential_values_builder_works() {
         let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-        credential_values_builder.add_value("sex", "89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap();
-        credential_values_builder.add_value("name", "58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
+        credential_values_builder.add_dec_value("sex", "89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap();
+        credential_values_builder.add_dec_value("name", "58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
         let credential_values = credential_values_builder.finalize().unwrap();
 
-        assert!(credential_values.attrs_values.get("sex").unwrap().eq(&BigNumber::from_dec("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap()));
-        assert!(credential_values.attrs_values.get("name").unwrap().eq(&BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap()));
+        assert!(credential_values.attrs_values.get("sex").unwrap().value.eq(&BigNumber::from_dec("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap()));
+        assert!(credential_values.attrs_values.get("name").unwrap().value.eq(&BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap()));
         assert!(credential_values.attrs_values.get("age").is_none());
     }
 
@@ -1018,7 +998,7 @@ mod tests {
     fn issuer_new_credential_def_works() {
         MockHelper::inject();
 
-        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&mocks::credential_schema(), true).unwrap();
+        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), true).unwrap();
         assert_eq!(pub_key.p_key, mocks::credential_primary_public_key());
         assert_eq!(priv_key.p_key, mocks::credential_primary_private_key());
         assert_eq!(key_correctness_proof, mocks::credential_key_correctness_proof());
@@ -1030,7 +1010,7 @@ mod tests {
     fn issuer_new_credential_def_works_without_revocation_part() {
         MockHelper::inject();
 
-        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&mocks::credential_schema(), false).unwrap();
+        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), false).unwrap();
         assert_eq!(pub_key.p_key, mocks::credential_primary_public_key());
         assert_eq!(priv_key.p_key, mocks::credential_primary_private_key());
         assert_eq!(key_correctness_proof, mocks::credential_key_correctness_proof());
@@ -1049,7 +1029,7 @@ mod tests {
     fn issuer_new_revocation_registry_def_works() {
         MockHelper::inject();
 
-        let (pub_key, _, _) = Issuer::new_credential_def(&mocks::credential_schema(), true).unwrap();
+        let (pub_key, _, _) = Issuer::new_credential_def(&prover::mocks::credential_schema(), true).unwrap();
         Issuer::new_revocation_registry_def(&pub_key, 100, false).unwrap();
     }
 
@@ -1058,19 +1038,23 @@ mod tests {
         MockHelper::inject();
 
         let (pub_key, secret_key) = (mocks::credential_public_key(), mocks::credential_private_key());
-        let context_attribute = BigNumber::from_dec("59059690488564137142247698318091397258460906844819605876079330034815387295451").unwrap();
-
-        let credential_values = mocks::credential_values();
 
         let v = BigNumber::from_dec("5237513942984418438429595379849430501110274945835879531523435677101657022026899212054747703201026332785243221088006425007944260107143086435227014329174143861116260506019310628220538205630726081406862023584806749693647480787838708606386447727482772997839699379017499630402117304253212246286800412454159444495341428975660445641214047184934669036997173182682771745932646179140449435510447104436243207291913322964918630514148730337977117021619857409406144166574010735577540583316493841348453073326447018376163876048624924380855323953529434806898415857681702157369526801730845990252958130662749564283838280707026676243727830151176995470125042111348846500489265328810592848939081739036589553697928683006514398844827534478669492201064874941684905413964973517155382540340695991536826170371552446768460042588981089470261358687308").unwrap();
 
         let u = BigNumber::from_dec("72637991796589957272144423539998982864769854130438387485781642285237707120228376409769221961371420625002149758076600738245408098270501483395353213773728601101770725294535792756351646443825391806535296461087756781710547778467803194521965309091287301376623972321639262276779134586366620773325502044026364814032821517244814909708610356590687571152567177116075706850536899272749781370266769562695357044719529245223811232258752001942940813585440938291877640445002571323841625932424781535818087233087621479695522263178206089952437764196471098717335358765920438275944490561172307673744212256272352897964947435086824617146019").unwrap();
         let e = BigNumber::from_dec("259344723055062059907025491480697571938277889515152306249728583105665800713306759149981690559193987143012367913206299323899696942213235956742930214202955935602153431795703076242907").unwrap();
 
-        let expected_signature = BigNumber::from_dec("28748151213526235356806559302394713234708919908503693283861771311017778909029307989059154007823711057388221409308121224597301914007508580498985253922086489241065285193059997346332076248684330624957067344016446755572964815456056930278425883796750731908534333384959509746585564275501093362841366335955561237226624645170675067095743367895186059835073250297480315430811087601896371266213408739927940580173817412189118678276094925364341985978659550229327835510932814819830163166484857629278032552734675432915303389204079219287453130354714417551011163735621955266079226631695289893390164242695387374962452897413162593627569").unwrap();
-        let expected_q = BigNumber::from_dec("62363291072105309734429421111781667277622338652614541474016228570557906784227711277508032382480694834439351345015578229222850418542973745058822742491558379363835885374702190788016205722518754261589148352959080144887818045985349619774317322203773276528345285327751288976595236600315518298828390132112243875494849058906743589411550479599132880095939710337582014885376559000168175623243474494316451725482257681430068204444716308910642965319732117037454207020297910067729648337741704358082947378729621100937295340132926246628185800807161500324382279607244112382284981206740340575810018294756514449073650757734843766249759").unwrap();
+        let expected_signature = BigNumber::from_dec("51756877575661148119436429527229232604266086511502575413412002534598934802004159904626151244214143371787509047155192345964327778969905246151551428601982401245522489230370314496872571578700213125523785664883126408955420645953005298828726807444268872401346082286518152302793210246882726731654840910733196012340887910970351041188100147914556098014360907911127670736409504899168470236932678670431665564917039680753109891635515871262504254940428913003076259073402198278806650239709758730044004765156116522738338492773204490799479627784334290416983709204164043893918903877361220225484590579312505417126696646719987559025339").unwrap();
+        let expected_q = BigNumber::from_dec("16139740091002525376476960748446138506164394309014165623190613620281377599818592081324765874784138849517889721361960958517284509280078706212100445514589711416397573656059295333273664393098035956170804601100114047461165900802596404452552133379339701657829499968771458503092237095880773885848638486488094864010596691291013460125552172352885198107160911327813308005823130470173369690828583682567455987292427266665791977359788243875135194042918385739183491267761055668664761800711502396184655897636007586520719134683428079978647529342180101721740937797422915134751176194262289677437189457839080022551742241490221575806035").unwrap();
 
-        let (credential_signature, q) = Issuer::_sign_primary_credential(&pub_key, &secret_key, &context_attribute, &credential_values, &v, &BlindedMasterSecret { u: u, ur: None }, &e).unwrap();
+
+        let (credential_signature, q) = Issuer::_sign_primary_credential(&pub_key,
+                                                                         &secret_key,
+                                                                         &mocks::context_attribute(),
+                                                                         &prover::mocks::credential_values(),
+                                                                         &v,
+                                                                         &BlindedCredentialSecrets { u: u, ur: None, committed_attributes: BTreeMap::new() },
+                                                                         &e).unwrap();
         assert_eq!(expected_signature, credential_signature);
         assert_eq!(expected_q, q);
     }
@@ -1079,20 +1063,14 @@ mod tests {
     fn sign_credential_signature_works() {
         MockHelper::inject();
 
-        let (pub_key, priv_key) = (mocks::credential_public_key(), mocks::credential_private_key());
-        let blinded_master_secret_nonce = new_nonce().unwrap();
-        let (blinded_master_secret, blinded_master_secret_correctness_proof) =
-            (prover::mocks::blinded_master_secret(), prover::mocks::blinded_master_secret_correctness_proof());
-
-        let credential_issuance_nonce = new_nonce().unwrap();
-        let (credential_signature_signature, signature_correctness_proof) = Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                                                                                    &blinded_master_secret,
-                                                                                                    &blinded_master_secret_correctness_proof,
-                                                                                                    &blinded_master_secret_nonce,
-                                                                                                    &credential_issuance_nonce,
-                                                                                                    &mocks::credential_values(),
-                                                                                                    &pub_key,
-                                                                                                    &priv_key).unwrap();
+        let (credential_signature_signature, signature_correctness_proof) = Issuer::sign_credential(&prover::mocks::PROVER_DID,
+                                                                                                    &prover::mocks::blinded_credential_secrets(),
+                                                                                                    &prover::mocks::blinded_credential_secrets_correctness_proof(),
+                                                                                                    &prover::mocks::credential_nonce(),
+                                                                                                    &mocks::credential_issuance_nonce(),
+                                                                                                    &prover::mocks::credential_values(),
+                                                                                                    &mocks::credential_public_key(),
+                                                                                                    &mocks::credential_private_key()).unwrap();
 
         assert_eq!(mocks::primary_credential(), credential_signature_signature.p_credential);
         assert_eq!(mocks::signature_correctness_proof(), signature_correctness_proof);
@@ -1101,6 +1079,12 @@ mod tests {
 
 pub mod mocks {
     use super::*;
+    use amcl::big::BIG;
+    use cl::prover::mocks::*;
+
+    pub fn context_attribute() -> BigNumber {
+        BigNumber::from_dec("31894574610223295263712513093148707509913459424901632064286025736442349335521").unwrap()
+    }
 
     pub fn credential_public_key() -> CredentialPublicKey {
         CredentialPublicKey {
@@ -1117,58 +1101,42 @@ pub mod mocks {
     }
 
     pub fn credential_key_correctness_proof() -> CredentialKeyCorrectnessProof {
-        let mut xr_cap = BTreeMap::new();
-        xr_cap.insert("age".to_string(), BigNumber::from_dec("1892231043724130909171141289812960615426192763023418622932834943058282432968198987153126474388668979622947264509624644685841143428132616237743193881655603543892398769262916442024063101723277760823416453262665595605413303749293649394575427429231094228050006371082139202645115071447248921364818624346023096421568826743647498028863458488776307399553475370443302355461781568944402350106239705726036665437182231254430750846071779577750530648388732768012623381961314442543645998258153643016348344220528405876072425692989455706003666388719067824778596213331852938073597370702167042039617821822401076715832575652516496480221563316441949008136915415492164815053192131153384072074830072935640451598321664").unwrap());
-        xr_cap.insert("height".to_string(), BigNumber::from_dec("1892231043724130909171141289812960615426192763023418622932834943058282432968198987153126474388668979622947264509624644685841143428132616237743193881655603543892398769262916442024063101723277760823416453262665595605413303749293649394575427429231094228050006371082139202645115071447248921364818624346023096421568826743647498028863458488776307399553475370443302355461781568944402350106239705726036665437182231254430750846071779577750530648388732768012623381961314442543645998258153643016348344220528405876072425692989455706003666388719067824778596213331852938073597370702167042039617821822401076715832575652516496480221563316441949008136915415492164815053192131153384072074830072935640451598321664").unwrap());
-        xr_cap.insert("name".to_string(), BigNumber::from_dec("1892231043724130909171141289812960615426192763023418622932834943058282432968198987153126474388668979622947264509624644685841143428132616237743193881655603543892398769262916442024063101723277760823416453262665595605413303749293649394575427429231094228050006371082139202645115071447248921364818624346023096421568826743647498028863458488776307399553475370443302355461781568944402350106239705726036665437182231254430750846071779577750530648388732768012623381961314442543645998258153643016348344220528405876072425692989455706003666388719067824778596213331852938073597370702167042039617821822401076715832575652516496480221563316441949008136915415492164815053192131153384072074830072935640451598321664").unwrap());
-        xr_cap.insert("sex".to_string(), BigNumber::from_dec("1892231043724130909171141289812960615426192763023418622932834943058282432968198987153126474388668979622947264509624644685841143428132616237743193881655603543892398769262916442024063101723277760823416453262665595605413303749293649394575427429231094228050006371082139202645115071447248921364818624346023096421568826743647498028863458488776307399553475370443302355461781568944402350106239705726036665437182231254430750846071779577750530648388732768012623381961314442543645998258153643016348344220528405876072425692989455706003666388719067824778596213331852938073597370702167042039617821822401076715832575652516496480221563316441949008136915415492164815053192131153384072074830072935640451598321664").unwrap());
         CredentialKeyCorrectnessProof {
-            c: BigNumber::from_dec("86973363028626279158199826465770246126907236299495499221033315518220576867327").unwrap(),
-            xz_cap: BigNumber::from_dec("1892231043724130909171141289812960615426192763023418622932834943058282432968198987153126474388668979622947264509624644685841143428132616237743193881655603543892398769262916442024063101723277760823416453262665595605413303749293649394575427429231094228050006371082139202645115071447248921364818624346023096421568826743647498028863458488776307399553475370443302355461781568944402350106239705726036665437182231254430750846071779577750530648388732768012623381961314442543645998258153643016348344220528405876072425692989455706003666388719067824778596213331852938073597370702167042039617821822401076715832575652516496480221563316441949008136915415492164815053192131153384072074830072935640451598321664").unwrap(),
-            xr_cap
+            c: BigNumber::from_dec("100106049974222168831996448086485741777991664124878758088584364203057899227900").unwrap(),
+            xz_cap: BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+            xr_cap: btreemap![
+                String::from("age") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+                String::from("gender") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+                String::from("height") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+                String::from("link_secret") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+                String::from("name") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap(),
+                String::from("policy_address") => BigNumber::from_dec("2177951602992237658370774270771544151326309421506803803347011698290069700739758331803454440686877762632306322517341667534699457677900159466927541605774666242106256241441561385139361113671097719444141941202229322436843690416655142638933496415525461448253192188503734703992168081943755289922530213540393375805611734439623129883511785278088605406827034155837883459256816520437946850409974727474744596063766785013734142024207309632886919442178649184579704290849897847640182586565090235350277878660904401656055938299842568444764871277431314404904719687380000097728978284082372724810000897936055872222738379038687142164851728982797063147471058300489840107375548275875433933947975617476030383356402138").unwrap()
+            ]
         }
     }
 
     pub fn credential_primary_public_key() -> CredentialPrimaryPublicKey {
-        let n = BigNumber::from_dec("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap();
-        let s = BigNumber::from_dec("64684820421150545443421261645532741305438158267230326415141505826951816460650437611148133267480407958360035501128469885271549378871140475869904030424615175830170939416512594291641188403335834762737251794282186335118831803135149622404791467775422384378569231649224208728902565541796896860352464500717052768431523703881746487372385032277847026560711719065512366600220045978358915680277126661923892187090579302197390903902744925313826817940566429968987709582805451008234648959429651259809188953915675063700676546393568304468609062443048457324721450190021552656280473128156273976008799243162970386898307404395608179975243").unwrap();
-        let rms = BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
-
-        let mut r: BTreeMap<String, BigNumber> = BTreeMap::new();
-        r.insert("sex".to_string(), BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap());
-        r.insert("name".to_string(), BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap());
-        r.insert("age".to_string(), BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap());
-        r.insert("height".to_string(), BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap());
-
-        let rctxt = BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
-        let z = BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
-
-        CredentialPrimaryPublicKey { n, s, rms, r, rctxt, z }
+        CredentialPrimaryPublicKey {
+	        n: BigNumber::from_dec("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap(),
+	        s: BigNumber::from_dec("64684820421150545443421261645532741305438158267230326415141505826951816460650437611148133267480407958360035501128469885271549378871140475869904030424615175830170939416512594291641188403335834762737251794282186335118831803135149622404791467775422384378569231649224208728902565541796896860352464500717052768431523703881746487372385032277847026560711719065512366600220045978358915680277126661923892187090579302197390903902744925313826817940566429968987709582805451008234648959429651259809188953915675063700676546393568304468609062443048457324721450190021552656280473128156273976008799243162970386898307404395608179975243").unwrap(),
+	        rctxt: BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+	        z: BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+	        r: btreemap![
+                String::from("age") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+                String::from("gender") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+                String::from("height") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+                String::from("link_secret") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+                String::from("name") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap(),
+                String::from("policy_address") => BigNumber::from_dec("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap()
+            ]
+        }
     }
 
     pub fn credential_primary_private_key() -> CredentialPrimaryPrivateKey {
-        let p = BigNumber::from_dec("149212738775716179659508649034140914067267873385650452563221860367878267143635191771233591587868730221903476199105022913859057555905442876114559838735355652672950963033972314646471235775711934244481758977047119803475879470383993713606231800156950590334088086141997103196482505556481059579729337361392854778311").unwrap();
-        let q = BigNumber::from_dec("149212738775716179659508649034140914067267873385650452563221860367878267143635191771233591587868730221903476199105022913859057555905442876114559838735355652672950963033972314646471235775711934244481758977047119803475879470383993713606231800156950590334088086141997103196482505556481059579729337361392854778311").unwrap();
-
-        CredentialPrimaryPrivateKey { p, q }
-    }
-
-    pub fn credential_schema() -> CredentialSchema {
-        let mut credential_schema_builder = CredentialSchemaBuilder::new().unwrap();
-        credential_schema_builder.add_attr("name").unwrap();
-        credential_schema_builder.add_attr("age").unwrap();
-        credential_schema_builder.add_attr("height").unwrap();
-        credential_schema_builder.add_attr("sex").unwrap();
-        credential_schema_builder.finalize().unwrap()
-    }
-
-    pub fn credential_values() -> CredentialValues {
-        let mut credential_values_builder = CredentialValuesBuilder::new().unwrap();
-        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        credential_values_builder.add_value("age", "28").unwrap();
-        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        credential_values_builder.add_value("height", "175").unwrap();
-        credential_values_builder.finalize().unwrap()
+        CredentialPrimaryPrivateKey {
+            p: BigNumber::from_dec("149212738775716179659508649034140914067267873385650452563221860367878267143635191771233591587868730221903476199105022913859057555905442876114559838735355652672950963033972314646471235775711934244481758977047119803475879470383993713606231800156950590334088086141997103196482505556481059579729337361392854778311").unwrap(),
+            q: BigNumber::from_dec("149212738775716179659508649034140914067267873385650452563221860367878267143635191771233591587868730221903476199105022913859057555905442876114559838735355652672950963033972314646471235775711934244481758977047119803475879470383993713606231800156950590334088086141997103196482505556481059579729337361392854778311").unwrap()
+        }
     }
 
     pub fn credential() -> CredentialSignature {
@@ -1178,19 +1146,23 @@ pub mod mocks {
         }
     }
 
+    pub fn credential_issuance_nonce() -> Nonce {
+        BigNumber::from_dec("526193306511429638192053").unwrap()
+    }
+
     pub fn primary_credential() -> PrimaryCredentialSignature {
         PrimaryCredentialSignature {
-            m_2: BigNumber::from_dec("79198861930494722247098854124679815411215565468368019592091735771996515839812").unwrap(),
-            a: BigNumber::from_dec("2015509093129106237691981433225679632774255267161330031955213488684080337772589661796272396005429999572765056564502896756584978722526495279899984542746563590582561692675025757898334695221229933231304404189890550211532764993559283672307725561940191641851157625662904809711682211053992968131340525941580045401951996762335579069985811415532641838234302256559149674721325965693307667573037324373216732925398827597304601333904583644212982848121263412244201228166100334275374295995076714802844245430263875269888443704086843131227874627682947957080489690366818166145882129549310321236789991170607896175695451648282033539854").unwrap(),
+            m_2: BigNumber::from_dec("69277050336954731912953999596899794023422356864020449587821228635678593076726").unwrap(),
+            a: BigNumber::from_dec("59576650729757014001266415495048651014371875592452607038291814388111315911848291102110497520252073850059895120162321101149178450199060886721905586280704576277966012808672880874635221160361161880289965721881196877768108586929304787520934823952926459697296988463659936307341225404107666757142995151042428995859916215979973310048071060845782364280443800907503315348117229725994495933944492229338552866398085646193855519664376641572721062419860464686594200135802645323748450574040748736978128316478992822369888152234869857797942929992424339164545866301175765533370751998934550269667261831972378348502681712036651084791677").unwrap(),
             e: BigNumber::from_dec("259344723055062059907025491480697571938277889515152306249728583105665800713306759149981690559193987143012367913206299323899696942213235956742930201588264091397308910346117473868881").unwrap(),
-            v: BigNumber::from_dec("6620937836014079781509458870800001917950459774302786434315639456568768602266735503527631640833663968617512880802104566048179854406925811731340920442625764155409951969854303612644125623549271204625894424804352003689903192473464433927658013251120302922648839652919662117216521257876025436906282750361355336367533874548955283776610021309110505377492806210342214471251451681722267655419075635703240258044336607001296052867746675049720589092355650996711033859489737240617860392914314205277920274997312351322125481593636904917159990500837822414761512231315313922792934655437808723096823124948039695324591344458785345326611693414625458359651738188933757751726392220092781991665483583988703321457480411992304516676385323318285847376271589157730040526123521479652961899368891914982347831632139045838008837541334927738208491424027").unwrap()
+            v: BigNumber::from_dec("6620937836014079781509458870800001917950459774302786434315639456568768602266735503527631640833663968617512880802104566048179854406925811731340920442625764155409951969854303612644125623549271204625894424804352003689903192473464433927658013251120302922648839652919662117216521257876025436906282750361355336367533874548955283776610021309110505377492806210342214471251451681722267655419075635703240258044336607001296052867746675049720589092355650996711033859489737240617860392914314205277920274997312351322125481593636904917159990500837822414761512231315313922792934655437808723096823124948039695324591344458785345326611693414625458359651738188933757751726392220092781991665483583988703321457480411992304516676385323318285847376271589157730040526123521479652961899368891914982347831632139045838008837541334927738208491424027").unwrap(),
         }
     }
 
     pub fn signature_correctness_proof() -> SignatureCorrectnessProof {
         SignatureCorrectnessProof {
-            se: BigNumber::from_dec("2867182988873870181255627349227831046791694164118209127116572638244509572025021916261962130207547328863447729702686926496508433257557339124176299613296377411163151406688199246232396418861179359172020811052147235396534737968322518954078287279318544461509931619642909378833468508005205055106687589375873270523669653723490309768542021891720464501437671542685518550495957409788172739863568679796589846789698040159530816920085324699754124124222177973692274292167815374272822640605758257682733226162790101966911029062233704666526794753275670414075670096002626035474717637906458773215726535442042214417461860636241718792853").unwrap(),
-            c: BigNumber::from_dec("38689741549120078408010091653015945512217729474158229796203853185078442030991").unwrap(),
+            se: BigNumber::from_dec("4359806026932570972005002115004855513137801468153085802103125699099444860429826876484720166943916292559705748243400038454199487701813056947328036252178846097182035089819748042108217580199840484192195237322364433335758552474189258678435709084101988569300000464092058396808235335766899155809860536554918318090107768660077903412447736854772189705952999215896097404770942536882338427022595773835184141181082311239554205460415598620866872509184547352850910248307574375129986682991907191337174610021802932720767462265749763393310672481596173511707065560430341217133432761604508275607240643678210464766905882622884364580783").unwrap(),
+            c: BigNumber::from_dec("113042807352802523503228902412909354917179109592309864414288979689439382029834").unwrap()
         }
     }
 
@@ -1222,25 +1194,24 @@ pub mod mocks {
 
     pub fn credential_revocation_public_key() -> CredentialRevocationPublicKey {
         CredentialRevocationPublicKey {
-            g: PointG1::from_string("false F7061FFC5D86BD FEA559D709EBB4 184F0E83E83C7F 77518EACC28D21 1B2D4E76 86D88DDE8770D0 5034DD68624C0 CA409B38BD8B6A EC15B842470D5B 2188CB11 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            g_dash: PointG2::from_string("false B689CDF1EEE6B9 7879E722A8927E 7A5F92EB847EF4 CB7D2B559A4B7A 94DFCE9 F353AFC74815B1 DF1DB4459153A0 FEBB4F1B0DC6CB 375723BC12026E 3A02BC0 CA432D2B712EBE 28310825C67A82 FCD05276543D75 4A06A4C1A05435 1DA19E B02395BAE668B8 10BD3BCD5F1CC9 92FC516611102D CC2E8568C3C687 1A06AE72 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
-            h: PointG1::from_string("false E6C4969BF7F6E4 D2FF8C24B9EAA4 88F6451A20353E E46C8775910036 1F23D6AB E7E72372E2006B 20894EC16703C2 E97C22B6CFA42A A7EAD87F1E74BE 242E67D3 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            h0: PointG1::from_string("false BEBA02E97255CC CB4AA09F541688 7AF29F26C85B42 6F3597F4EF2844 205788E5 8A078274BC3198 ADAC33647064BA 7E67D45EF39249 58FD2A0AFE6250 18010994 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            h1: PointG1::from_string("false 9661FB704E366 51836F20094702 27521DB454AEB9 801E3DA189E912 A37E50F 367705F353C794 515F17102321FC 9A7D613710C121 84DCCCAA671F2D 10CF357E FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            h2: PointG1::from_string("false C242FAE6B2465C 952C5CFEB62F09 CAA6A61B8238EA 67C2CE0F7EFB6A 190433AA FFA4D1B5551EEA A35F5F43E84616 B92A757ABD51D6 8110F04280410A 664C174 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            htilde: PointG1::from_string("false 1AE71B910A158E 330457779B6C85 F1C907A134D795 19A9DB2FD49411 D3B769E 6015F30C57A0E7 310B6007D23DBD C1B8D416480847 85C92B35A32A25 18E8F8A2 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            h_cap: PointG2::from_string("false 1A1C59765D49BE BCE6181A3B736A BAB72551F8F462 5F99B2715F2A25 1FEFD0C7 8A6472CB371D3E C4F6C33AA80CB 86EAAE909EA09 197B4EC78A3B09 1333E51F 2DC7441E28B2D4 C388A79FA4961A 79058DBBCF4C8A 8B2F97E23D4342 FBC67FF 52B82226D2995D 34D053907E3850 D965050D54F027 A4E7CF8D2A5220 8C29822 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
-            u: PointG2::from_string("false 9B1FCFE75F79F8 73D1BC00D107C7 577D8010343FC0 35533CFE595E1F 13CEE3F8 8F38C7640C9982 F42092066D94BB D309384A81D943 340E1CCB6D1788 22A6CB75 43CC781E5A6C8F 4BD67F27D8C58D 884C09DE7F5DD6 5687B2A7047663 1441F423 313BC475C70F5B 36957040BCE3BA D9E78497E2F745 48902ADC4EC27B 853A4A3 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
-            pk: PointG1::from_string("false 14A982E1F1C801 30A3F71F937305 E9780E68F9B8A3 11A7A4ECED7FF2 1D873FD7 24632538A440FA E77FAD44B8C9A 78854503568CAC 1A0BC5C8E7F1B9 8EAF176 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
-            y: PointG2::from_string("false 8B7A8A72F510A 72414040912D7 760941DAB9E957 4D95E546557B75 6025130 7A9DB180AD2CA9 4FB0C15F96EB6E D753A5F9284015 D75962552FE3E5 1682A17B 30DA4BF8C17A8A 5DA41C9E4F7BED 4F01B812A1E5E1 7F5151E1A47E99 1358AD80 4E75A24CC7339 AC18180F5D570A BE9C1DA918469B 578E1909A8B1F C7EDD39 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
-
+            g: PointG1::from_string("false F60F69A1E13425 F73E546433CFD0 637C41C79B9A20 A7C1C61FF3C8DC CE301AF A5B963E8F819BA A1BEDEBBC6969D 5D8AE7E9520A03 61B5E1B0F66956 66BA1F5 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            g_dash: PointG2::from_string("false A8C2313283814C 4158ED9E0C3D39 91BACB977CFDE6 52E34A79A2214E 133BB6A5 1CCC0C0DFC68F1 E01261CACF6FEE 79059429DD1685 133B200E3C3981 20332F20 FBCEB270DA3CAC 2B48592768214A AAC1E363238BB2 1FCD181EFECFD 2467DC72 A9DE4A1D6F2BBE 35644E82B1D167 693B0BBF673C0 4C7728DBFFAC6B 1588E22F FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
+            h: PointG1::from_string("false FD2B5AD0538033 D015DF671528A6 F529C6D3C1E86 3619CB74900509 88FD6A1 206BE198E9FD2E 3A2AF838B850DD BFD3676C34A56A 7E9396B580460B 18CE0C9E FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            h0: PointG1::from_string("false BC70A9E3B966DA 5C20B7CF04326C 1995F7EDE0FA55 8647224A1B94FD 215E7D7 B70990359F1ECC C253AECA1AF037 CD5C39F0F5FEB6 DE29EC1B333A0E 1A416931 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            h1: PointG1::from_string("false 3F208F32C3A1EA F9C17CD8CBC476 FF6FE3AD3E638C F60F09CC9354FC 24B6A0D9 E66FDC8EA9A500 C9F6DD1A422220 552AA0E2555006 6C4FEC4A4DD5E4 5A80875 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            h2: PointG1::from_string("false 12B39984A618C2 8301484A361459 3178A1EF7A475D 560744F8926BF1 F0CC09B 566C31CA56F841 BA448A640130E7 5C094012CB08EA 14BF1613BFD884 18F83F38 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            htilde: PointG1::from_string("false 1B9C6C124255F0 DCDD43865C2C5B 71C506B6DAED7D C9B07D3475B680 F64FDD9 6788BC29CC436C DFB69513E3443F 80F349D6B3AEDD 249185A03F1894 B5A30D6 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            h_cap: PointG2::from_string("false 40D72C85B11CE9 BF72E0BFF2EF7D A0BF05E6B65730 D3196DA7F1E2AE 21DECE46 B6A71B2793E03F 365980B4BBC513 EEF7E36A2C4EF2 97A24735BB35D3 24CD0EC8 B61E9C0CAADBA1 D188893578CDE9 189941E2A97F86 D3FDA76C77446E 11C00332 B8EBFEFA4806ED 2B24292A60E93D 58A6B808268819 7332DB02354F60 22F5DCAB FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
+            u: PointG2::from_string("false 949870C263DD9D F4AF6AA66AF766 51BFF0CB997107 9B088B00E9010F 1B83B3E2 A1C934F44D4EBE ED5B25CEA92EB6 5A9EC1AE6DA6A 78BC99E18F65C1 54B7102 FCACE93A8DB060 4B53C12B6811CC C4127B919DE7D0 A7E41A24369A90 C309A89 CB0142A1B8D145 8BBE86201B83F5 96BB41F2907C00 842592B2DBECF8 15FF67F7 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap(),
+            pk: PointG1::from_string("false AE93B6098E05F C7CFECF37CCB8E E2E93AAC0E460F 4D2C7DFF61504B C498846 CB979E2650AB30 9F892BE1DCCFBF 2F6C9070B5A281 B578E8C6428FB2 12CF0F26 FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD").unwrap(),
+            y: PointG2::from_string("false BDAD2F22EF14CF AE5D9A51E77EE0 E89DDD10883E27 5C37117977D66B 211AE2CC DA45AF79987D7A 2A19F08C9A2FCC 6795935F9ED1E6 DECB5E087C411B 1DDF53D2 54E6378BB99D77 2C90E57308CACF 9D66330D2FA668 DD7C8C8ABB6AE8 251B8CD4 1E00DEB599A5A5 5F80E6AA5FAE14 DB48A68FEA6131 B9F2CDF5DDEEA2 167298BC FFFFFF7D07A8A8 FFFF7888802F07 FFC63D474548B7 F417D05FB10933 95E45DD 0 0 0 0 0").unwrap()
         }
     }
 
     pub fn credential_revocation_private_key() -> CredentialRevocationPrivateKey {
         CredentialRevocationPrivateKey {
-            x: GroupOrderElement::new().unwrap(),
-            sk: GroupOrderElement::new().unwrap()
+            x: GroupOrderElement::from_string("15828423A33686 D8963528DB5407 A879E05D368FE6 7905F61394DA42 12EFD625").unwrap(),
+            sk: GroupOrderElement::from_string("FB1C5F110B9C9 BDA290C1C4AD27 F5F95DCDF3B1A0 FA9EF0550BD3DE 2522B69E").unwrap()
         }
     }
 
@@ -1271,9 +1242,5 @@ pub mod mocks {
             issued: hashset![1],
             revoked: HashSet::new()
         }
-    }
-
-    pub fn r_cnxt_m2() -> BigNumber {
-        BigNumber::from_dec("52860447312636183767369476481903349046618423276302392993759146262753859184069").unwrap()
     }
 }

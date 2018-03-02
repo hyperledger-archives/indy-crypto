@@ -12,7 +12,7 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::hash::Hash;
 
 /// Creates random nonce
@@ -58,16 +58,44 @@ impl CredentialSchemaBuilder {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub struct CredentialValue {
+    value: BigNumber,
+    blinding_factor: Option<BigNumber>
+}
+
+impl CredentialValue {
+    fn clone(&self) -> Result<CredentialValue, IndyCryptoError> {
+        Ok(CredentialValue {
+            value: self.value.clone()?,
+            blinding_factor: match &self.blinding_factor {
+                &Some(ref m) => Some(m.clone()?),
+                &None => None
+            }
+        })
+    }
+    pub fn new(v: &BigNumber) -> Result<CredentialValue, IndyCryptoError> {
+        Ok(CredentialValue {
+            value: v.clone()?,
+            blinding_factor: None,
+        })
+    }
+}
+
+impl JsonEncodable for CredentialValue {}
+
+impl<'a> JsonDecodable<'a> for CredentialValue {}
+
 /// Values of attributes from `Claim Schema` (must be integers).
 #[derive(Debug)]
 pub struct CredentialValues {
-    attrs_values: HashMap<String, BigNumber>
+    attrs_values: BTreeMap<String, CredentialValue>
 }
 
 impl CredentialValues {
     pub fn clone(&self) -> Result<CredentialValues, IndyCryptoError> {
         Ok(CredentialValues {
-            attrs_values: clone_bignum_map(&self.attrs_values)?
+            attrs_values: clone_credentialvalue_map(&self.attrs_values)?
         })
     }
 }
@@ -75,18 +103,28 @@ impl CredentialValues {
 /// A Builder of `Claim Values`.
 #[derive(Debug)]
 pub struct CredentialValuesBuilder {
-    attrs_values: HashMap<String, BigNumber> /* attr_name -> int representation of value */
+    attrs_values: BTreeMap<String, CredentialValue> /* attr_name -> int representation of value */
 }
 
 impl CredentialValuesBuilder {
     pub fn new() -> Result<CredentialValuesBuilder, IndyCryptoError> {
         Ok(CredentialValuesBuilder {
-            attrs_values: HashMap::new()
+            attrs_values: BTreeMap::new()
         })
     }
 
-    pub fn add_value(&mut self, attr: &str, dec_value: &str) -> Result<(), IndyCryptoError> {
-        self.attrs_values.insert(attr.to_owned(), BigNumber::from_dec(dec_value)?);
+    pub fn add_dec_value(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue { value: BigNumber::from_dec(value)?, blinding_factor: None });
+        Ok(())
+    }
+
+    pub fn add_value(&mut self, attr: &str, value: &BigNumber) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue{value: value.clone()?, blinding_factor: None});
+        Ok(())
+    }
+
+    pub fn add_credential_value(&mut self, attr: &str, value: &BigNumber, bf: &BigNumber) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue { value: value.clone()?, blinding_factor: Some(bf.clone()?) });
         Ok(())
     }
 
@@ -152,7 +190,6 @@ impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 pub struct CredentialPrimaryPublicKey {
     n: BigNumber,
     s: BigNumber,
-    rms: BigNumber,
     r: BTreeMap<String /* attr_name */, BigNumber>,
     rctxt: BigNumber,
     z: BigNumber
@@ -163,7 +200,6 @@ impl CredentialPrimaryPublicKey {
         Ok(CredentialPrimaryPublicKey {
             n: self.n.clone()?,
             s: self.s.clone()?,
-            rms: self.rms.clone()?,
             r: clone_btree_bignum_map(&self.r)?,
             rctxt: self.rctxt.clone()?,
             z: self.z.clone()?
@@ -356,7 +392,7 @@ pub trait RevocationTailsAccessor {
     fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError>;
 }
 
-/// Simple implementation of `RevocationTailsAccessor` that stores all tails as HashMap.
+/// Simple implementation of `RevocationTailsAccessor` that stores all tails as BTreeMap.
 #[derive(Debug, Clone)]
 pub struct SimpleTailsAccessor {
     tails: Vec<Tail>
@@ -515,8 +551,8 @@ pub struct WitnessSignature {
 
 /// Secret key encoded in a credential that is used to prove that prover owns the credential; can be used to
 /// prove linkage across credentials.
-/// Prover blinds master secret, generating `BlindedMasterSecret` and `MasterSecretBlindingData` (blinding factors)
-/// and sends the `BlindedMasterSecret` to Issuer who then encodes it credential creation.
+/// Prover blinds master secret, generating `BlindedCredentialSecrets` and `CredentialSecretsBlindingFactors` (blinding factors)
+/// and sends the `BlindedCredentialSecrets` to Issuer who then encodes it credential creation.
 /// The blinding factors are used by Prover for post processing of issued credentials.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecret {
@@ -535,49 +571,51 @@ impl<'a> JsonDecodable<'a> for MasterSecret {}
 
 /// Blinded Master Secret uses by Issuer in credential creation.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct BlindedMasterSecret {
+pub struct BlindedCredentialSecrets {
     u: BigNumber,
-    ur: Option<PointG1>
+    ur: Option<PointG1>,
+    committed_attributes: BTreeMap<String, BigNumber>
 }
 
-impl JsonEncodable for BlindedMasterSecret {}
+impl JsonEncodable for BlindedCredentialSecrets {}
 
-impl<'a> JsonDecodable<'a> for BlindedMasterSecret {}
+impl<'a> JsonDecodable<'a> for BlindedCredentialSecrets {}
 
-/// `Master Secret Blinding Data` used by Prover for post processing of credentials received from Issuer.
-/// TODO: Should be renamed `MasterSecretBlindingFactors`
+/// `CredentialSecretsBlindingFactors` used by Prover for post processing of credentials received from Issuer.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MasterSecretBlindingData {
+pub struct CredentialSecretsBlindingFactors {
     v_prime: BigNumber,
     vr_prime: Option<GroupOrderElement>
 }
 
-impl JsonEncodable for MasterSecretBlindingData {}
+impl JsonEncodable for CredentialSecretsBlindingFactors {}
 
-impl<'a> JsonDecodable<'a> for MasterSecretBlindingData {}
+impl<'a> JsonDecodable<'a> for CredentialSecretsBlindingFactors {}
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct PrimaryBlindedMasterSecretData {
+pub struct PrimaryBlindedCredentialSecretsFactors {
     u: BigNumber,
     v_prime: BigNumber,
+    committed_attributes: BTreeMap<String, BigNumber>
 }
 
 #[derive(Debug)]
-pub struct RevocationBlindedMasterSecretData {
+pub struct RevocationBlindedCredentialSecretsFactors {
     ur: PointG1,
     vr_prime: GroupOrderElement,
 }
 
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct BlindedMasterSecretCorrectnessProof {
-    c: BigNumber,
-    v_dash_cap: BigNumber,
-    ms_cap: BigNumber
+pub struct BlindedCredentialSecretsCorrectnessProof {
+    c: BigNumber,                       // Fiat-Shamir challenge hash
+    v_dash_cap: BigNumber,              // Value to prove knowledge of `u` construction in `BlindedCredentialSecrets`
+    m_caps: BTreeMap<String, BigNumber>, // Values for proving knowledge of committed values
+    r_caps: BTreeMap<String, BigNumber>  // Blinding values for m_caps
 }
 
-impl JsonEncodable for BlindedMasterSecretCorrectnessProof {}
+impl JsonEncodable for BlindedCredentialSecretsCorrectnessProof {}
 
-impl<'a> JsonDecodable<'a> for BlindedMasterSecretCorrectnessProof {}
+impl<'a> JsonDecodable<'a> for BlindedCredentialSecretsCorrectnessProof {}
 
 /// “Sub Proof Request” - input to create a Proof for a credential;
 /// Contains attributes to be revealed and predicates.
@@ -649,7 +687,7 @@ pub enum PredicateType {
 /// 3) Claim contains attributes with valid predicates that verifier wants the prover to satisfy.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
-    proofs: HashMap<String /* issuer pub key id */, SubProof>,
+    proofs: BTreeMap<String /* issuer pub key id */, SubProof>,
     aggregated_proof: AggregatedProof,
 }
 
@@ -677,22 +715,21 @@ pub struct PrimaryProof {
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PrimaryEqualProof {
-    revealed_attrs: HashMap<String /* attr_name of revealed */, BigNumber>,
+    revealed_attrs: BTreeMap<String /* attr_name of revealed */, BigNumber>,
     a_prime: BigNumber,
     e: BigNumber,
     v: BigNumber,
-    m: HashMap<String /* attr_name of all except revealed */, BigNumber>,
-    m1: BigNumber,
+    m: BTreeMap<String /* attr_name of all except revealed */, BigNumber>,
     m2: BigNumber
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PrimaryPredicateGEProof {
-    u: HashMap<String, BigNumber>,
-    r: HashMap<String, BigNumber>,
+    u: BTreeMap<String, BigNumber>,
+    r: BTreeMap<String, BigNumber>,
     mj: BigNumber,
     alpha: BigNumber,
-    t: HashMap<String, BigNumber>,
+    t: BTreeMap<String, BigNumber>,
     predicate: Predicate
 }
 
@@ -764,8 +801,7 @@ pub struct PrimaryEqualInitProof {
     e_prime: BigNumber,
     v_tilde: BigNumber,
     v_prime: BigNumber,
-    m_tilde: HashMap<String, BigNumber>,
-    m1_tilde: BigNumber,
+    m_tilde: BTreeMap<String, BigNumber>,
     m2_tilde: BigNumber,
     m2: BigNumber
 }
@@ -784,13 +820,13 @@ impl PrimaryEqualInitProof {
 pub struct PrimaryPredicateGEInitProof {
     c_list: Vec<BigNumber>,
     tau_list: Vec<BigNumber>,
-    u: HashMap<String, BigNumber>,
-    u_tilde: HashMap<String, BigNumber>,
-    r: HashMap<String, BigNumber>,
-    r_tilde: HashMap<String, BigNumber>,
+    u: BTreeMap<String, BigNumber>,
+    u_tilde: BTreeMap<String, BigNumber>,
+    r: BTreeMap<String, BigNumber>,
+    r_tilde: BTreeMap<String, BigNumber>,
     alpha_tilde: BigNumber,
     predicate: Predicate,
-    t: HashMap<String, BigNumber>
+    t: BTreeMap<String, BigNumber>
 }
 
 impl PrimaryPredicateGEInitProof {
@@ -941,18 +977,27 @@ impl AppendByteArray for Vec<Vec<u8>> {
     }
 }
 
-fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>)
-                                          -> Result<HashMap<K, BigNumber>, IndyCryptoError> {
-    let mut res: HashMap<K, BigNumber> = HashMap::new();
+fn clone_bignum_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, BigNumber>)
+                                          -> Result<BTreeMap<K, BigNumber>, IndyCryptoError> {
+    let mut res: BTreeMap<K, BigNumber> = BTreeMap::new();
     for (k, v) in other {
         res.insert(k.clone(), v.clone()?);
     }
     Ok(res)
 }
 
-fn clone_btree_bignum_map<K: Clone + Eq + Hash + Ord>(other: &BTreeMap<K, BigNumber>)
+fn clone_btree_bignum_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, BigNumber>)
                                                       -> Result<BTreeMap<K, BigNumber>, IndyCryptoError> {
     let mut res: BTreeMap<K, BigNumber> = BTreeMap::new();
+    for (k, v) in other {
+        res.insert(k.clone(), v.clone()?);
+    }
+    Ok(res)
+}
+
+fn clone_credentialvalue_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, CredentialValue>)
+                                                    -> Result<BTreeMap<K, CredentialValue>, IndyCryptoError> {
+    let mut res: BTreeMap<K, CredentialValue> = BTreeMap::new();
     for (k, v) in other {
         res.insert(k.clone(), v.clone()?);
     }
@@ -963,176 +1008,185 @@ fn clone_btree_bignum_map<K: Clone + Eq + Hash + Ord>(other: &BTreeMap<K, BigNum
 mod test {
     use super::*;
     use self::issuer::Issuer;
-    use self::prover::Prover;
-    use self::verifier::Verifier;
 
     #[test]
     fn demo() {
-        let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
-        credential_schema_builder.add_attr("name").unwrap();
-        credential_schema_builder.add_attr("sex").unwrap();
-        credential_schema_builder.add_attr("age").unwrap();
-        credential_schema_builder.add_attr("height").unwrap();
-        let credential_schema = credential_schema_builder.finalize().unwrap();
+        let (credential_schema,
+             credential_values,
+             credential_nonce,
+             credential_pub_key,
+             credential_priv_key,
+             credential_key_correctness_proof,
+             blinded_credential_secrets,
+             credential_secrets_blinding_factors,
+             blinded_credential_secrets_correctness_proof,
+             credential_issuance_nonce) = test_helpers::setup_test();
 
-        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+        let (mut credential_signature, signature_correctness_proof) =
+                    Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
+                                            &blinded_credential_secrets,
+                                            &blinded_credential_secrets_correctness_proof,
+                                            &credential_nonce,
+                                            &credential_issuance_nonce,
+                                            &credential_values,
+                                            &credential_pub_key,
+                                            &credential_priv_key).unwrap();
 
-        let master_secret = Prover::new_master_secret().unwrap();
-
-        let master_secret_blinding_nonce = new_nonce().unwrap();
-
-        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-            Prover::blind_master_secret(&cred_pub_key,
-                                        &cred_key_correctness_proof,
-                                        &master_secret,
-                                        &master_secret_blinding_nonce).unwrap();
-
-        let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        credential_values_builder.add_value("age", "28").unwrap();
-        credential_values_builder.add_value("height", "175").unwrap();
-        let cred_values = credential_values_builder.finalize().unwrap();
-
-        let cred_issuance_nonce = new_nonce().unwrap();
-
-        let (mut cred_signature, signature_correctness_proof) = Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                                                                        &blinded_master_secret,
-                                                                                        &blinded_master_secret_correctness_proof,
-                                                                                        &master_secret_blinding_nonce,
-                                                                                        &cred_issuance_nonce,
-                                                                                        &cred_values,
-                                                                                        &cred_pub_key,
-                                                                                        &cred_priv_key).unwrap();
-
-        Prover::process_credential_signature(&mut cred_signature,
-                                             &cred_values,
-                                             &signature_correctness_proof,
-                                             &master_secret_blinding_data,
-                                             &master_secret,
-                                             &cred_pub_key,
-                                             &cred_issuance_nonce,
-                                             None,
-                                             None,
-                                             None).unwrap();
-
-        let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
-        sub_proof_request_builder.add_revealed_attr("name").unwrap();
-        sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
-        let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
-        let mut proof_builder = Prover::new_proof_builder().unwrap();
-        proof_builder.add_sub_proof_request("issuer_key_id_1",
-                                            &sub_proof_request,
-                                            &credential_schema,
-                                            &cred_signature,
-                                            &cred_values,
-                                            &cred_pub_key,
-                                            None,
-                                            None).unwrap();
-
-        let proof_request_nonce = new_nonce().unwrap();
-        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
-
-        let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
-        proof_verifier.add_sub_proof_request("issuer_key_id_1",
-                                             &sub_proof_request,
-                                             &credential_schema,
-                                             &cred_pub_key,
-                                             None,
-                                             None).unwrap();
-        assert!(proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
+        test_helpers::compute_proof(credential_schema,
+                                    credential_values,
+                                    &mut credential_signature,
+                                    signature_correctness_proof,
+                                    credential_secrets_blinding_factors,
+                                    credential_pub_key,
+                                    credential_issuance_nonce,
+                        None, None, None)
     }
 
     #[test]
     fn demo_revocation() {
-        let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
-        credential_schema_builder.add_attr("name").unwrap();
-        credential_schema_builder.add_attr("sex").unwrap();
-        credential_schema_builder.add_attr("age").unwrap();
-        credential_schema_builder.add_attr("height").unwrap();
-        let credential_schema = credential_schema_builder.finalize().unwrap();
+        let (credential_schema,
+             credential_values,
+             credential_nonce,
+             credential_pub_key,
+             credential_priv_key,
+             credential_key_correctness_proof,
+             blinded_credential_secrets,
+             credential_secrets_blinding_factors,
+             blinded_credential_secrets_correctness_proof,
+             credential_issuance_nonce) = test_helpers::setup_test();
 
-        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
-
-        let max_cred_num = 5;
         let issuance_by_default = false;
         let (rev_key_pub, rev_key_priv, mut rev_reg, mut rev_tails_generator) =
-            Issuer::new_revocation_registry_def(&cred_pub_key, max_cred_num, issuance_by_default).unwrap();
+            Issuer::new_revocation_registry_def(&credential_pub_key, issuer::mocks::max_cred_num(), issuance_by_default).unwrap();
 
         let simple_tail_accessor = SimpleTailsAccessor::new(&mut rev_tails_generator).unwrap();
 
-        let master_secret = Prover::new_master_secret().unwrap();
-
-        let master_secret_blinding_nonce = new_nonce().unwrap();
-
-        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-            Prover::blind_master_secret(&cred_pub_key,
-                                        &cred_key_correctness_proof,
-                                        &master_secret,
-                                        &master_secret_blinding_nonce).unwrap();
-
-        let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        credential_values_builder.add_value("age", "28").unwrap();
-        credential_values_builder.add_value("height", "175").unwrap();
-        let cred_values = credential_values_builder.finalize().unwrap();
-
-        let credential_issuance_nonce = new_nonce().unwrap();
-
         let rev_idx = 1;
-        let (mut cred_signature, signature_correctness_proof, rev_reg_delta) =
+        let (mut credential_signature, signature_correctness_proof, rev_reg_delta) =
             Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                               &blinded_master_secret,
-                                               &blinded_master_secret_correctness_proof,
-                                               &master_secret_blinding_nonce,
+                                               &blinded_credential_secrets,
+                                               &blinded_credential_secrets_correctness_proof,
+                                               &credential_nonce,
                                                &credential_issuance_nonce,
-                                               &cred_values,
-                                               &cred_pub_key,
-                                               &cred_priv_key,
+                                               &credential_values,
+                                               &credential_pub_key,
+                                               &credential_priv_key,
                                                rev_idx,
-                                               max_cred_num,
+                                               issuer::mocks::max_cred_num(),
                                                issuance_by_default,
                                                &mut rev_reg,
                                                &rev_key_priv,
                                                &simple_tail_accessor).unwrap();
 
-        let witness = Witness::new(rev_idx, max_cred_num, &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
+        let witness = Witness::new(rev_idx, issuer::mocks::max_cred_num(), &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
 
-        Prover::process_credential_signature(&mut cred_signature,
-                                             &cred_values,
+        test_helpers::compute_proof(credential_schema,
+                                    credential_values,
+                                    &mut credential_signature,
+                                    signature_correctness_proof,
+                                    credential_secrets_blinding_factors,
+                                    credential_pub_key,
+                                    credential_issuance_nonce,
+                                    Some(&rev_key_pub),
+                                    Some(&rev_reg),
+                                    Some(&witness));
+    }
+}
+
+mod test_helpers {
+    use super::*;
+    use self::issuer::Issuer;
+    use self::prover::Prover;
+    use self::verifier::Verifier;
+    use self::prover::mocks::*;
+
+    pub const PROVER_ID: &'static str = "CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW";
+
+    pub fn setup_test() -> (CredentialSchema,
+                            CredentialValues,
+                            Nonce,
+                            CredentialPublicKey,
+                            CredentialPrivateKey,
+                            CredentialKeyCorrectnessProof,
+                            BlindedCredentialSecrets,
+                            CredentialSecretsBlindingFactors,
+                            BlindedCredentialSecretsCorrectnessProof,
+                            Nonce) {
+
+        let credential_schema = prover::mocks::credential_schema();
+        let credential_values = prover::mocks::credential_values();
+        let credential_nonce = new_nonce().unwrap();
+        let (credential_pub_key,
+             credential_priv_key,
+             credential_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+
+        let (blinded_credential_secrets,
+             credential_secrets_blinding_factors,
+             blinded_credential_secrets_correctness_proof) =
+                                Prover::blind_credential_secrets(&credential_pub_key,
+                                                                 &credential_key_correctness_proof,
+                                                                 &credential_values,
+                                                                 &credential_nonce).unwrap();
+
+        (
+            credential_schema,
+            credential_values,
+            credential_nonce,
+            credential_pub_key,
+            credential_priv_key,
+            credential_key_correctness_proof,
+            blinded_credential_secrets,
+            credential_secrets_blinding_factors,
+            blinded_credential_secrets_correctness_proof,
+            new_nonce().unwrap()
+        )
+    }
+
+    pub fn compute_proof(credential_schema: CredentialSchema,
+                         credential_values: CredentialValues,
+                         credential_signature: &mut CredentialSignature,
+                         signature_correctness_proof: SignatureCorrectnessProof,
+                         credential_secrets_blinding_factors: CredentialSecretsBlindingFactors,
+                         credential_pub_key: CredentialPublicKey,
+                         credential_issuance_nonce: Nonce,
+                         rev_key_pub: Option<&RevocationKeyPublic>,
+                         rev_reg: Option<&RevocationRegistry>,
+                         witness: Option<&Witness>) {
+        Prover::process_credential_signature(credential_signature,
+                                             &credential_values,
                                              &signature_correctness_proof,
-                                             &master_secret_blinding_data,
-                                             &master_secret,
-                                             &cred_pub_key,
+                                             &credential_secrets_blinding_factors,
+                                             &credential_pub_key,
                                              &credential_issuance_nonce,
-                                             Some(&rev_key_pub),
-                                             Some(&rev_reg),
-                                             Some(&witness)).unwrap();
+                                             rev_key_pub,
+                                             rev_reg,
+                                             witness).unwrap();
 
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
+
         proof_builder.add_sub_proof_request("issuer_key_id_1",
                                             &sub_proof_request,
                                             &credential_schema,
-                                            &cred_signature,
-                                            &cred_values,
-                                            &cred_pub_key,
-                                            Some(&rev_reg),
-                                            Some(&witness)).unwrap();
+                                            &credential_signature,
+                                            &credential_values,
+                                            &credential_pub_key,
+                                            rev_reg,
+                                            witness).unwrap();
+
         let proof_request_nonce = new_nonce().unwrap();
-        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
+        let proof = proof_builder.finalize(&proof_request_nonce).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request("issuer_key_id_1",
                                              &sub_proof_request,
                                              &credential_schema,
-                                             &cred_pub_key,
-                                             Some(&rev_key_pub),
-                                             Some(&rev_reg)).unwrap();
-        assert_eq!(true, proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
+                                             &credential_pub_key,
+                                             rev_key_pub,
+                                             rev_reg).unwrap();
+        assert!(proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
     }
 }

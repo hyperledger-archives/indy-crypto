@@ -767,8 +767,8 @@ pub extern fn indy_crypto_cl_issuer_sign_credential(prover_id: *const c_char,
            credential_signature_p, credential_signature_correctness_proof_p);
 
     check_useful_c_str!(prover_id, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(blinded_master_secret, BlindedMasterSecret, ErrorCode::CommonInvalidParam2);
-    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedMasterSecretCorrectnessProof, ErrorCode::CommonInvalidParam3);
+    check_useful_c_reference!(blinded_master_secret, BlindedCredentialSecrets, ErrorCode::CommonInvalidParam2);
+    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(master_secret_blinding_nonce, Nonce, ErrorCode::CommonInvalidParam4);
     check_useful_c_reference!(credential_issuance_nonce, Nonce, ErrorCode::CommonInvalidParam5);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam6);
@@ -864,8 +864,8 @@ pub extern fn indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id: *const
            credential_values, credential_pub_key, credential_priv_key, rev_idx, rev_reg, rev_key_priv, credential_signature_p, credential_signature_correctness_proof_p);
 
     check_useful_c_str!(prover_id, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(blinded_master_secret, BlindedMasterSecret, ErrorCode::CommonInvalidParam2);
-    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedMasterSecretCorrectnessProof, ErrorCode::CommonInvalidParam3);
+    check_useful_c_reference!(blinded_master_secret, BlindedCredentialSecrets, ErrorCode::CommonInvalidParam2);
+    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(master_secret_blinding_nonce, Nonce, ErrorCode::CommonInvalidParam4);
     check_useful_c_reference!(credential_issuance_nonce, Nonce, ErrorCode::CommonInvalidParam5);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam6);
@@ -1254,787 +1254,787 @@ pub extern fn indy_crypto_cl_issuer_recovery_credential(rev_reg: *const c_void,
 mod tests {
     use super::*;
 
-    use std::ptr;
-    use ffi::cl::mocks::*;
-    use ffi::cl::issuer::mocks::*;
-    use ffi::cl::prover::mocks::*;
-
-    #[test]
-    fn indy_crypto_cl_issuer_new_credential_def_works() {
-        let credential_schema = _credential_schema();
-        let mut credential_pub_key: *const c_void = ptr::null();
-        let mut credential_priv_key: *const c_void = ptr::null();
-        let mut credential_key_correctness_proof: *const c_void = ptr::null();
-
-        let err_code = indy_crypto_cl_issuer_new_credential_def(credential_schema,
-                                                                true,
-                                                                &mut credential_pub_key,
-                                                                &mut credential_priv_key,
-                                                                &mut credential_key_correctness_proof);
-
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_pub_key.is_null());
-        assert!(!credential_priv_key.is_null());
-        assert!(!credential_key_correctness_proof.is_null());
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_public_key_to_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_pub_key_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_public_key_to_json(credential_pub_key, &mut credential_pub_key_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_public_key_from_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_pub_key_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_public_key_to_json(credential_pub_key, &mut credential_pub_key_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut credential_pub_key_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_credential_public_key_from_json(credential_pub_key_json_p, &mut credential_pub_key_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_private_key_to_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_priv_key_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_private_key_to_json(credential_priv_key, &mut credential_priv_key_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_private_key_from_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_priv_key_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_private_key_to_json(credential_priv_key, &mut credential_priv_key_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut credential_priv_key_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_private_key_from_json(credential_priv_key_json_p, &mut credential_priv_key_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_key_correctness_proof_to_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_key_correctness_proof_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_key_correctness_proof_to_json(credential_key_correctness_proof, &mut credential_key_correctness_proof_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_issuer_key_correctness_proof_from_json_works() {
-        let credential_schema = _credential_schema();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let mut credential_key_correctness_proof_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_key_correctness_proof_to_json(credential_key_correctness_proof, &mut credential_key_correctness_proof_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut credential_key_correctness_proof_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_credential_key_correctness_proof_from_json(credential_key_correctness_proof_json_p,
-                                                                                 &mut credential_key_correctness_proof_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_schema(credential_schema);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_def_free_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-
-        let err_code = indy_crypto_cl_credential_public_key_free(credential_pub_key);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_credential_private_key_free(credential_priv_key);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_credential_key_correctness_proof_free(credential_key_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    #[test]
-    fn indy_crypto_cl_issuer_new_revocation_registry_def_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let mut rev_key_pub_p: *const c_void = ptr::null();
-        let mut rev_key_priv_p: *const c_void = ptr::null();
-        let mut rev_reg_p: *const c_void = ptr::null();
-        let mut rev_tails_generator_p: *const c_void = ptr::null();
-
-        let err_code = indy_crypto_cl_issuer_new_revocation_registry_def(credential_pub_key,
-                                                                         100,
-                                                                         false,
-                                                                         &mut rev_key_pub_p,
-                                                                         &mut rev_key_priv_p,
-                                                                         &mut rev_reg_p,
-                                                                         &mut rev_tails_generator_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!rev_key_pub_p.is_null());
-        assert!(!rev_key_priv_p.is_null());
-        assert!(!rev_reg_p.is_null());
-        assert!(!rev_tails_generator_p.is_null());
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub_p, rev_key_priv_p, rev_reg_p, rev_tails_generator_p);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_key_public_to_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_key_pub_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_public_to_json(rev_key_pub, &mut rev_key_pub_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_key_public_from_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_key_pub_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_public_to_json(rev_key_pub, &mut rev_key_pub_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut rev_key_pub_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_public_from_json(rev_key_pub_json_p, &mut rev_key_pub_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_key_private_to_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_key_priv_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_private_to_json(rev_key_priv, &mut rev_key_priv_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_key_private_from_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_key_priv_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_private_to_json(rev_key_priv, &mut rev_key_priv_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut rev_key_priv_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_revocation_key_private_from_json(rev_key_priv_json_p, &mut rev_key_priv_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_registry_to_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_reg_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_registry_to_json(rev_reg, &mut rev_reg_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_registry_from_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_reg_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_registry_to_json(rev_reg, &mut rev_reg_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut rev_reg_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_revocation_registry_from_json(rev_reg_json_p, &mut rev_reg_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_tails_generator_to_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_tails_generator_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_generator, &mut rev_tails_generator_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_tails_generator_from_json_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let mut rev_tails_generator_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_generator, &mut rev_tails_generator_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut rev_tails_generator_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_revocation_tails_generator_from_json(rev_tails_generator_json_p, &mut rev_tails_generator_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-    }
-
-    #[test]
-    fn indy_crypto_cl_revocation_registry_def_free_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-
-        let err_code = indy_crypto_cl_revocation_key_public_free(rev_key_pub);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_key_private_free(rev_key_priv);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_registry_free(rev_reg);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_tails_generator_free(rev_tails_generator);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_issuer_sign_credential_with_revoc_works() {
-        let prover_id = _prover_did();
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let credential_issuance_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let rev_idx = 1;
-        let max_cred_num = 5;
-        let issuance_by_default = false;
-
-        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
-
-        let mut credential_signature_p: *const c_void = ptr::null();
-        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
-        let mut revocation_registry_delta_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id.as_ptr(),
-                                                                        blinded_master_secret,
-                                                                        blinded_master_secret_correctness_proof,
-                                                                        master_secret_blinding_nonce,
-                                                                        credential_issuance_nonce,
-                                                                        credential_values,
-                                                                        credential_pub_key,
-                                                                        credential_priv_key,
-                                                                        rev_idx,
-                                                                        max_cred_num,
-                                                                        issuance_by_default,
-                                                                        rev_reg,
-                                                                        rev_key_priv,
-                                                                        tail_storage.get_ctx(),
-                                                                        FFISimpleTailStorage::tail_take,
-                                                                        FFISimpleTailStorage::tail_put,
-                                                                        &mut credential_signature_p,
-                                                                        &mut credential_signature_correctness_proof_p,
-                                                                        &mut revocation_registry_delta_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_signature_p.is_null());
-        assert!(!credential_signature_correctness_proof_p.is_null());
-        assert!(!revocation_registry_delta_p.is_null());
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_master_secret(master_secret);
-        _free_credential_signature_with_revoc(credential_signature_p, credential_signature_correctness_proof_p, revocation_registry_delta_p);
-    }
-
-    #[test]
-    fn indy_crypto_cl_issuer_sign_credential_works() {
-        let prover_id = _prover_did();
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let credential_issuance_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-
-        let mut credential_signature_p: *const c_void = ptr::null();
-        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_sign_credential(prover_id.as_ptr(),
-                                                             blinded_master_secret,
-                                                             blinded_master_secret_correctness_proof,
-                                                             master_secret_blinding_nonce,
-                                                             credential_issuance_nonce,
-                                                             credential_values,
-                                                             credential_pub_key,
-                                                             credential_priv_key,
-                                                             &mut credential_signature_p,
-                                                             &mut credential_signature_correctness_proof_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_signature_p.is_null());
-        assert!(!credential_signature_correctness_proof_p.is_null());
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_master_secret(master_secret);
-        _free_credential_signature(credential_signature_p, credential_signature_correctness_proof_p);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_signature_to_json_works() {
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-
-
-        let mut credential_signature_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_signature_to_json(credential_signature, &mut credential_signature_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_signature_from_json_works() {
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-
-
-        let mut credential_signature_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_credential_signature_to_json(credential_signature, &mut credential_signature_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut credential_signature_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_credential_signature_from_json(credential_signature_json_p, &mut credential_signature_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_signature_correctness_proof_to_json_works() {
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-
-        let mut signature_correctness_proof_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_signature_correctness_proof_to_json(signature_correctness_proof,
-                                                                          &mut signature_correctness_proof_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_signature_correctness_proof_from_json_works() {
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-
-        let mut signature_correctness_proof_json_p: *const c_char = ptr::null();
-        let err_code = indy_crypto_cl_signature_correctness_proof_to_json(signature_correctness_proof,
-                                                                          &mut signature_correctness_proof_json_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let mut signature_correctness_proof_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_signature_correctness_proof_from_json(signature_correctness_proof_json_p,
-                                                                            &mut signature_correctness_proof_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_credential_signature_free_works() {
-        let credential_values = _credential_values();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_credential_values(credential_values);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-    }
-
-    #[test]
-    fn indy_crypto_cl_issuer_revoke_credential_works() {
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
-
-        let (credential_signature, signature_correctness_proof, revocation_registry_delta) =
-            _credential_signature_with_revoc(blinded_master_secret,
-                                             blinded_master_secret_correctness_proof,
-                                             master_secret_blinding_nonce,
-                                             credential_issuance_nonce,
-                                             credential_pub_key,
-                                             credential_priv_key,
-                                             rev_key_priv,
-                                             rev_reg,
-                                             tail_storage.get_ctx());
-
-        let mut revocation_registry_delta_p: *const c_void = ptr::null();
-
-        let err_code = indy_crypto_cl_issuer_revoke_credential(rev_reg,
-                                                               5,
-                                                               1,
-                                                               tail_storage.get_ctx(),
-                                                               FFISimpleTailStorage::tail_take,
-                                                               FFISimpleTailStorage::tail_put,
-                                                               &mut revocation_registry_delta_p);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_credential_signature_with_revoc(credential_signature, signature_correctness_proof, revocation_registry_delta);
-    }
+//    use std::ptr;
+//    use ffi::cl::mocks::*;
+//    use ffi::cl::issuer::mocks::*;
+//    use ffi::cl::prover::mocks::*;
+
+//    #[test]
+//    fn indy_crypto_cl_issuer_new_credential_def_works() {
+//        let credential_schema = _credential_schema();
+//        let mut credential_pub_key: *const c_void = ptr::null();
+//        let mut credential_priv_key: *const c_void = ptr::null();
+//        let mut credential_key_correctness_proof: *const c_void = ptr::null();
+//
+//        let err_code = indy_crypto_cl_issuer_new_credential_def(credential_schema,
+//                                                                true,
+//                                                                &mut credential_pub_key,
+//                                                                &mut credential_priv_key,
+//                                                                &mut credential_key_correctness_proof);
+//
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_pub_key.is_null());
+//        assert!(!credential_priv_key.is_null());
+//        assert!(!credential_key_correctness_proof.is_null());
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_public_key_to_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_pub_key_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_public_key_to_json(credential_pub_key, &mut credential_pub_key_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_public_key_from_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_pub_key_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_public_key_to_json(credential_pub_key, &mut credential_pub_key_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut credential_pub_key_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_credential_public_key_from_json(credential_pub_key_json_p, &mut credential_pub_key_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_private_key_to_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_priv_key_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_private_key_to_json(credential_priv_key, &mut credential_priv_key_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_private_key_from_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_priv_key_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_private_key_to_json(credential_priv_key, &mut credential_priv_key_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut credential_priv_key_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_issuer_private_key_from_json(credential_priv_key_json_p, &mut credential_priv_key_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_key_correctness_proof_to_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_key_correctness_proof_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_key_correctness_proof_to_json(credential_key_correctness_proof, &mut credential_key_correctness_proof_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_issuer_key_correctness_proof_from_json_works() {
+//        let credential_schema = _credential_schema();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let mut credential_key_correctness_proof_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_key_correctness_proof_to_json(credential_key_correctness_proof, &mut credential_key_correctness_proof_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut credential_key_correctness_proof_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_credential_key_correctness_proof_from_json(credential_key_correctness_proof_json_p,
+//                                                                                 &mut credential_key_correctness_proof_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_schema(credential_schema);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_def_free_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//
+//        let err_code = indy_crypto_cl_credential_public_key_free(credential_pub_key);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_credential_private_key_free(credential_priv_key);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_credential_key_correctness_proof_free(credential_key_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_issuer_new_revocation_registry_def_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let mut rev_key_pub_p: *const c_void = ptr::null();
+//        let mut rev_key_priv_p: *const c_void = ptr::null();
+//        let mut rev_reg_p: *const c_void = ptr::null();
+//        let mut rev_tails_generator_p: *const c_void = ptr::null();
+//
+//        let err_code = indy_crypto_cl_issuer_new_revocation_registry_def(credential_pub_key,
+//                                                                         100,
+//                                                                         false,
+//                                                                         &mut rev_key_pub_p,
+//                                                                         &mut rev_key_priv_p,
+//                                                                         &mut rev_reg_p,
+//                                                                         &mut rev_tails_generator_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!rev_key_pub_p.is_null());
+//        assert!(!rev_key_priv_p.is_null());
+//        assert!(!rev_reg_p.is_null());
+//        assert!(!rev_tails_generator_p.is_null());
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub_p, rev_key_priv_p, rev_reg_p, rev_tails_generator_p);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_key_public_to_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_key_pub_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_public_to_json(rev_key_pub, &mut rev_key_pub_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_key_public_from_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_key_pub_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_public_to_json(rev_key_pub, &mut rev_key_pub_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut rev_key_pub_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_public_from_json(rev_key_pub_json_p, &mut rev_key_pub_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_key_private_to_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_key_priv_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_private_to_json(rev_key_priv, &mut rev_key_priv_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_key_private_from_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_key_priv_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_private_to_json(rev_key_priv, &mut rev_key_priv_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut rev_key_priv_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_key_private_from_json(rev_key_priv_json_p, &mut rev_key_priv_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_registry_to_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_reg_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_registry_to_json(rev_reg, &mut rev_reg_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_registry_from_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_reg_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_registry_to_json(rev_reg, &mut rev_reg_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut rev_reg_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_registry_from_json(rev_reg_json_p, &mut rev_reg_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_tails_generator_to_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_tails_generator_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_generator, &mut rev_tails_generator_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_tails_generator_from_json_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let mut rev_tails_generator_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_generator, &mut rev_tails_generator_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut rev_tails_generator_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_revocation_tails_generator_from_json(rev_tails_generator_json_p, &mut rev_tails_generator_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_revocation_registry_def_free_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//
+//        let err_code = indy_crypto_cl_revocation_key_public_free(rev_key_pub);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_key_private_free(rev_key_priv);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_registry_free(rev_reg);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_tails_generator_free(rev_tails_generator);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_issuer_sign_credential_with_revoc_works() {
+//        let prover_id = _prover_did();
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let credential_issuance_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let rev_idx = 1;
+//        let max_cred_num = 5;
+//        let issuance_by_default = false;
+//
+//        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
+//
+//        let mut credential_signature_p: *const c_void = ptr::null();
+//        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
+//        let mut revocation_registry_delta_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id.as_ptr(),
+//                                                                        blinded_master_secret,
+//                                                                        blinded_master_secret_correctness_proof,
+//                                                                        master_secret_blinding_nonce,
+//                                                                        credential_issuance_nonce,
+//                                                                        credential_values,
+//                                                                        credential_pub_key,
+//                                                                        credential_priv_key,
+//                                                                        rev_idx,
+//                                                                        max_cred_num,
+//                                                                        issuance_by_default,
+//                                                                        rev_reg,
+//                                                                        rev_key_priv,
+//                                                                        tail_storage.get_ctx(),
+//                                                                        FFISimpleTailStorage::tail_take,
+//                                                                        FFISimpleTailStorage::tail_put,
+//                                                                        &mut credential_signature_p,
+//                                                                        &mut credential_signature_correctness_proof_p,
+//                                                                        &mut revocation_registry_delta_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_signature_p.is_null());
+//        assert!(!credential_signature_correctness_proof_p.is_null());
+//        assert!(!revocation_registry_delta_p.is_null());
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_master_secret(master_secret);
+//        _free_credential_signature_with_revoc(credential_signature_p, credential_signature_correctness_proof_p, revocation_registry_delta_p);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_issuer_sign_credential_works() {
+//        let prover_id = _prover_did();
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let credential_issuance_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//
+//        let mut credential_signature_p: *const c_void = ptr::null();
+//        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_issuer_sign_credential(prover_id.as_ptr(),
+//                                                             blinded_master_secret,
+//                                                             blinded_master_secret_correctness_proof,
+//                                                             master_secret_blinding_nonce,
+//                                                             credential_issuance_nonce,
+//                                                             credential_values,
+//                                                             credential_pub_key,
+//                                                             credential_priv_key,
+//                                                             &mut credential_signature_p,
+//                                                             &mut credential_signature_correctness_proof_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_signature_p.is_null());
+//        assert!(!credential_signature_correctness_proof_p.is_null());
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_master_secret(master_secret);
+//        _free_credential_signature(credential_signature_p, credential_signature_correctness_proof_p);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_signature_to_json_works() {
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//
+//
+//        let mut credential_signature_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_signature_to_json(credential_signature, &mut credential_signature_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_signature_from_json_works() {
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//
+//
+//        let mut credential_signature_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_credential_signature_to_json(credential_signature, &mut credential_signature_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut credential_signature_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_credential_signature_from_json(credential_signature_json_p, &mut credential_signature_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_signature_correctness_proof_to_json_works() {
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//
+//        let mut signature_correctness_proof_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_signature_correctness_proof_to_json(signature_correctness_proof,
+//                                                                          &mut signature_correctness_proof_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_signature_correctness_proof_from_json_works() {
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//
+//        let mut signature_correctness_proof_json_p: *const c_char = ptr::null();
+//        let err_code = indy_crypto_cl_signature_correctness_proof_to_json(signature_correctness_proof,
+//                                                                          &mut signature_correctness_proof_json_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let mut signature_correctness_proof_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_signature_correctness_proof_from_json(signature_correctness_proof_json_p,
+//                                                                            &mut signature_correctness_proof_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_credential_signature_free_works() {
+//        let credential_values = _credential_values();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_credential_values(credential_values);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_issuer_revoke_credential_works() {
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
+//
+//        let (credential_signature, signature_correctness_proof, revocation_registry_delta) =
+//            _credential_signature_with_revoc(blinded_master_secret,
+//                                             blinded_master_secret_correctness_proof,
+//                                             master_secret_blinding_nonce,
+//                                             credential_issuance_nonce,
+//                                             credential_pub_key,
+//                                             credential_priv_key,
+//                                             rev_key_priv,
+//                                             rev_reg,
+//                                             tail_storage.get_ctx());
+//
+//        let mut revocation_registry_delta_p: *const c_void = ptr::null();
+//
+//        let err_code = indy_crypto_cl_issuer_revoke_credential(rev_reg,
+//                                                               5,
+//                                                               1,
+//                                                               tail_storage.get_ctx(),
+//                                                               FFISimpleTailStorage::tail_take,
+//                                                               FFISimpleTailStorage::tail_put,
+//                                                               &mut revocation_registry_delta_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_credential_signature_with_revoc(credential_signature, signature_correctness_proof, revocation_registry_delta);
+//    }
 }
 
 pub mod mocks {
     use super::*;
 
-    use std::ffi::CString;
-    use std::ptr;
-    use ffi::cl::mocks::*;
+//    use std::ffi::CString;
+//    use std::ptr;
+//    use ffi::cl::mocks::*;
 
-    pub fn _credential_def() -> (*const c_void, *const c_void, *const c_void) {
-        let credential_schema = _credential_schema();
-
-        let mut credential_pub_key: *const c_void = ptr::null();
-        let mut credential_priv_key: *const c_void = ptr::null();
-        let mut credential_key_correctness_proof: *const c_void = ptr::null();
-
-        let err_code = indy_crypto_cl_issuer_new_credential_def(credential_schema,
-                                                                true,
-                                                                &mut credential_pub_key,
-                                                                &mut credential_priv_key,
-                                                                &mut credential_key_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_pub_key.is_null());
-        assert!(!credential_priv_key.is_null());
-        assert!(!credential_key_correctness_proof.is_null());
-
-        _free_credential_schema(credential_schema);
-
-        (credential_pub_key, credential_priv_key, credential_key_correctness_proof)
-    }
-
-    pub fn _free_credential_def(credential_pub_key: *const c_void, credential_priv_key: *const c_void, credential_key_correctness_proof: *const c_void) {
-        let err_code = indy_crypto_cl_credential_public_key_free(credential_pub_key);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_credential_private_key_free(credential_priv_key);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_credential_key_correctness_proof_free(credential_key_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    pub fn _revocation_registry_def(credential_pub_key: *const c_void) -> (*const c_void, *const c_void, *const c_void, *const c_void) {
-        let mut rev_key_pub_p: *const c_void = ptr::null();
-        let mut rev_key_priv_p: *const c_void = ptr::null();
-        let mut rev_reg_p: *const c_void = ptr::null();
-        let mut rev_tails_generator_p: *const c_void = ptr::null();
-
-        let err_code = indy_crypto_cl_issuer_new_revocation_registry_def(credential_pub_key,
-                                                                         5,
-                                                                         false,
-                                                                         &mut rev_key_pub_p,
-                                                                         &mut rev_key_priv_p,
-                                                                         &mut rev_reg_p,
-                                                                         &mut rev_tails_generator_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!rev_key_pub_p.is_null());
-        assert!(!rev_key_priv_p.is_null());
-        assert!(!rev_reg_p.is_null());
-        assert!(!rev_tails_generator_p.is_null());
-
-        (rev_key_pub_p, rev_key_priv_p, rev_reg_p, rev_tails_generator_p)
-    }
-
-    pub fn _free_revocation_registry_def(rev_key_pub: *const c_void, rev_key_priv: *const c_void,
-                                         rev_reg: *const c_void, rev_tails_generator: *const c_void) {
-        let err_code = indy_crypto_cl_revocation_key_public_free(rev_key_pub);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_key_private_free(rev_key_priv);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_registry_free(rev_reg);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_tails_generator_free(rev_tails_generator);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    pub fn _credential_signature(blinded_master_secret: *const c_void, blinded_master_secret_correctness_proof: *const c_void,
-                                 master_secret_blinding_nonce: *const c_void, credential_issuance_nonce: *const c_void, credential_pub_key: *const c_void,
-                                 credential_priv_key: *const c_void) -> (*const c_void, *const c_void) {
-        let prover_id = _prover_did();
-        let credential_values = _credential_values();
-
-        let mut credential_signature_p: *const c_void = ptr::null();
-        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_sign_credential(prover_id.as_ptr(),
-                                                             blinded_master_secret,
-                                                             blinded_master_secret_correctness_proof,
-                                                             master_secret_blinding_nonce,
-                                                             credential_issuance_nonce,
-                                                             credential_values,
-                                                             credential_pub_key,
-                                                             credential_priv_key,
-                                                             &mut credential_signature_p,
-                                                             &mut credential_signature_correctness_proof_p);
-
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_signature_p.is_null());
-        assert!(!credential_signature_correctness_proof_p.is_null());
-
-        _free_credential_values(credential_values);
-
-        (credential_signature_p, credential_signature_correctness_proof_p)
-    }
-
-    pub fn _credential_signature_with_revoc(blinded_master_secret: *const c_void, blinded_master_secret_correctness_proof: *const c_void,
-                                            master_secret_blinding_nonce: *const c_void, credential_issuance_nonce: *const c_void,
-                                            credential_pub_key: *const c_void, credential_priv_key: *const c_void, rev_key_priv: *const c_void,
-                                            rev_reg: *const c_void, tail_storage_ctx: *const c_void) -> (*const c_void, *const c_void, *const c_void) {
-        let prover_id = _prover_did();
-        let credential_values = _credential_values();
-        let rev_idx = 1;
-        let max_cred_num = 5;
-        let issuance_by_default = false;
-
-        let mut credential_signature_p: *const c_void = ptr::null();
-        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
-        let mut revocation_registry_delta_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id.as_ptr(),
-                                                                        blinded_master_secret,
-                                                                        blinded_master_secret_correctness_proof,
-                                                                        master_secret_blinding_nonce,
-                                                                        credential_issuance_nonce,
-                                                                        credential_values,
-                                                                        credential_pub_key,
-                                                                        credential_priv_key,
-                                                                        rev_idx,
-                                                                        max_cred_num,
-                                                                        issuance_by_default,
-                                                                        rev_reg,
-                                                                        rev_key_priv,
-                                                                        tail_storage_ctx,
-                                                                        FFISimpleTailStorage::tail_take,
-                                                                        FFISimpleTailStorage::tail_put,
-                                                                        &mut credential_signature_p,
-                                                                        &mut credential_signature_correctness_proof_p,
-                                                                        &mut revocation_registry_delta_p);
-
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!credential_signature_p.is_null());
-        assert!(!revocation_registry_delta_p.is_null());
-        assert!(!credential_signature_correctness_proof_p.is_null());
-
-        _free_credential_values(credential_values);
-
-        (credential_signature_p, credential_signature_correctness_proof_p, revocation_registry_delta_p)
-    }
-
-    pub fn _free_credential_signature(credential_signature: *const c_void, signature_correctness_proof: *const c_void) {
-        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    pub fn _free_credential_signature_with_revoc(credential_signature: *const c_void, signature_correctness_proof: *const c_void,
-                                                 revocation_registry_delta: *const c_void) {
-        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
-        assert_eq!(err_code, ErrorCode::Success);
-
-        let err_code = indy_crypto_cl_revocation_registry_delta_free(revocation_registry_delta);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    pub fn _prover_did() -> CString {
-        CString::new("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW").unwrap()
-    }
+//    pub fn _credential_def() -> (*const c_void, *const c_void, *const c_void) {
+//        let credential_schema = _credential_schema();
+//
+//        let mut credential_pub_key: *const c_void = ptr::null();
+//        let mut credential_priv_key: *const c_void = ptr::null();
+//        let mut credential_key_correctness_proof: *const c_void = ptr::null();
+//
+//        let err_code = indy_crypto_cl_issuer_new_credential_def(credential_schema,
+//                                                                true,
+//                                                                &mut credential_pub_key,
+//                                                                &mut credential_priv_key,
+//                                                                &mut credential_key_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_pub_key.is_null());
+//        assert!(!credential_priv_key.is_null());
+//        assert!(!credential_key_correctness_proof.is_null());
+//
+//        _free_credential_schema(credential_schema);
+//
+//        (credential_pub_key, credential_priv_key, credential_key_correctness_proof)
+//    }
+//
+//    pub fn _free_credential_def(credential_pub_key: *const c_void, credential_priv_key: *const c_void, credential_key_correctness_proof: *const c_void) {
+//        let err_code = indy_crypto_cl_credential_public_key_free(credential_pub_key);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_credential_private_key_free(credential_priv_key);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_credential_key_correctness_proof_free(credential_key_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    pub fn _revocation_registry_def(credential_pub_key: *const c_void) -> (*const c_void, *const c_void, *const c_void, *const c_void) {
+//        let mut rev_key_pub_p: *const c_void = ptr::null();
+//        let mut rev_key_priv_p: *const c_void = ptr::null();
+//        let mut rev_reg_p: *const c_void = ptr::null();
+//        let mut rev_tails_generator_p: *const c_void = ptr::null();
+//
+//        let err_code = indy_crypto_cl_issuer_new_revocation_registry_def(credential_pub_key,
+//                                                                         5,
+//                                                                         false,
+//                                                                         &mut rev_key_pub_p,
+//                                                                         &mut rev_key_priv_p,
+//                                                                         &mut rev_reg_p,
+//                                                                         &mut rev_tails_generator_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!rev_key_pub_p.is_null());
+//        assert!(!rev_key_priv_p.is_null());
+//        assert!(!rev_reg_p.is_null());
+//        assert!(!rev_tails_generator_p.is_null());
+//
+//        (rev_key_pub_p, rev_key_priv_p, rev_reg_p, rev_tails_generator_p)
+//    }
+//
+//    pub fn _free_revocation_registry_def(rev_key_pub: *const c_void, rev_key_priv: *const c_void,
+//                                         rev_reg: *const c_void, rev_tails_generator: *const c_void) {
+//        let err_code = indy_crypto_cl_revocation_key_public_free(rev_key_pub);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_key_private_free(rev_key_priv);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_registry_free(rev_reg);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_tails_generator_free(rev_tails_generator);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    pub fn _credential_signature(blinded_master_secret: *const c_void, blinded_master_secret_correctness_proof: *const c_void,
+//                                 master_secret_blinding_nonce: *const c_void, credential_issuance_nonce: *const c_void, credential_pub_key: *const c_void,
+//                                 credential_priv_key: *const c_void) -> (*const c_void, *const c_void) {
+//        let prover_id = _prover_did();
+//        let credential_values = _credential_values();
+//
+//        let mut credential_signature_p: *const c_void = ptr::null();
+//        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_issuer_sign_credential(prover_id.as_ptr(),
+//                                                             blinded_master_secret,
+//                                                             blinded_master_secret_correctness_proof,
+//                                                             master_secret_blinding_nonce,
+//                                                             credential_issuance_nonce,
+//                                                             credential_values,
+//                                                             credential_pub_key,
+//                                                             credential_priv_key,
+//                                                             &mut credential_signature_p,
+//                                                             &mut credential_signature_correctness_proof_p);
+//
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_signature_p.is_null());
+//        assert!(!credential_signature_correctness_proof_p.is_null());
+//
+//        _free_credential_values(credential_values);
+//
+//        (credential_signature_p, credential_signature_correctness_proof_p)
+//    }
+//
+//    pub fn _credential_signature_with_revoc(blinded_master_secret: *const c_void, blinded_master_secret_correctness_proof: *const c_void,
+//                                            master_secret_blinding_nonce: *const c_void, credential_issuance_nonce: *const c_void,
+//                                            credential_pub_key: *const c_void, credential_priv_key: *const c_void, rev_key_priv: *const c_void,
+//                                            rev_reg: *const c_void, tail_storage_ctx: *const c_void) -> (*const c_void, *const c_void, *const c_void) {
+//        let prover_id = _prover_did();
+//        let credential_values = _credential_values();
+//        let rev_idx = 1;
+//        let max_cred_num = 5;
+//        let issuance_by_default = false;
+//
+//        let mut credential_signature_p: *const c_void = ptr::null();
+//        let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
+//        let mut revocation_registry_delta_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id.as_ptr(),
+//                                                                        blinded_master_secret,
+//                                                                        blinded_master_secret_correctness_proof,
+//                                                                        master_secret_blinding_nonce,
+//                                                                        credential_issuance_nonce,
+//                                                                        credential_values,
+//                                                                        credential_pub_key,
+//                                                                        credential_priv_key,
+//                                                                        rev_idx,
+//                                                                        max_cred_num,
+//                                                                        issuance_by_default,
+//                                                                        rev_reg,
+//                                                                        rev_key_priv,
+//                                                                        tail_storage_ctx,
+//                                                                        FFISimpleTailStorage::tail_take,
+//                                                                        FFISimpleTailStorage::tail_put,
+//                                                                        &mut credential_signature_p,
+//                                                                        &mut credential_signature_correctness_proof_p,
+//                                                                        &mut revocation_registry_delta_p);
+//
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!credential_signature_p.is_null());
+//        assert!(!revocation_registry_delta_p.is_null());
+//        assert!(!credential_signature_correctness_proof_p.is_null());
+//
+//        _free_credential_values(credential_values);
+//
+//        (credential_signature_p, credential_signature_correctness_proof_p, revocation_registry_delta_p)
+//    }
+//
+//    pub fn _free_credential_signature(credential_signature: *const c_void, signature_correctness_proof: *const c_void) {
+//        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    pub fn _free_credential_signature_with_revoc(credential_signature: *const c_void, signature_correctness_proof: *const c_void,
+//                                                 revocation_registry_delta: *const c_void) {
+//        let err_code = indy_crypto_cl_credential_signature_free(credential_signature);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_signature_correctness_proof_free(signature_correctness_proof);
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        let err_code = indy_crypto_cl_revocation_registry_delta_free(revocation_registry_delta);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    pub fn _prover_did() -> CString {
+//        CString::new("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW").unwrap()
+//    }
 }

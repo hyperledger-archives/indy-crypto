@@ -119,283 +119,283 @@ pub extern fn indy_crypto_cl_proof_verifier_verify(proof_verifier: *const c_void
 mod tests {
     use super::*;
 
-    use std::ffi::CString;
-    use std::ptr;
-    use ffi::cl::mocks::*;
-    use super::mocks::*;
-    use super::super::issuer::mocks::*;
-    use super::super::prover::mocks::*;
+//    use std::ffi::CString;
+//    use std::ptr;
+//    use ffi::cl::mocks::*;
+//    use super::mocks::*;
+//    use super::super::issuer::mocks::*;
+//    use super::super::prover::mocks::*;
 
-    #[test]
-    fn indy_crypto_cl_verifier_new_proof_verifier_works() {
-        let key_id = CString::new("key_id").unwrap();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-        let credential_schema = _credential_schema();
-        let sub_proof_request = _sub_proof_request();
-        _process_credential_signature(credential_signature,
-                                      signature_correctness_proof,
-                                      master_secret_blinding_data,
-                                      master_secret,
-                                      credential_pub_key,
-                                      credential_issuance_nonce,
-                                      ptr::null(),
-                                      ptr::null(),
-                                      ptr::null());
-
-        let proof_building_nonce = _nonce();
-        let proof = _proof(credential_pub_key,
-                           credential_signature,
-                           proof_building_nonce,
-                           master_secret,
-                           ptr::null(),
-                           ptr::null());
-
-        let mut proof_verifier_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_verifier_new_proof_verifier(&mut proof_verifier_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!proof_verifier_p.is_null());
-
-        _add_sub_proof_request(proof_verifier_p, key_id, credential_schema, credential_pub_key, sub_proof_request, ptr::null(), ptr::null());
-        _free_proof_verifier(proof_verifier_p, proof, proof_building_nonce);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_nonce(proof_building_nonce);
-        _free_credential_schema(credential_schema);
-        _free_sub_proof_request(sub_proof_request);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_proof_verifier_add_sub_proof_request_works() {
-        let key_id = CString::new("key_id").unwrap();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-        let credential_schema = _credential_schema();
-        let sub_proof_request = _sub_proof_request();
-        _process_credential_signature(credential_signature,
-                                      signature_correctness_proof,
-                                      master_secret_blinding_data,
-                                      master_secret,
-                                      credential_pub_key,
-                                      credential_issuance_nonce,
-                                      ptr::null(),
-                                      ptr::null(),
-                                      ptr::null());
-
-        let proof_building_nonce = _nonce();
-        let proof = _proof(credential_pub_key,
-                           credential_signature,
-                           proof_building_nonce,
-                           master_secret,
-                           ptr::null(),
-                           ptr::null());
-
-        let proof_verifier = _proof_verifier();
-
-        let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
-                                                                           key_id.as_ptr(),
-                                                                           sub_proof_request,
-                                                                           credential_schema,
-                                                                           credential_pub_key,
-                                                                           ptr::null(),
-                                                                           ptr::null());
-        assert_eq!(err_code, ErrorCode::Success);
-
-        _free_proof_verifier(proof_verifier, proof, proof_building_nonce);
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_nonce(proof_building_nonce);
-        _free_credential_schema(credential_schema);
-        _free_sub_proof_request(sub_proof_request);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_proof_verifier_verify_works_for_primary_proof() {
-        let key_id = CString::new("key_id").unwrap();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
-                                                                                        master_secret_blinding_nonce,
-                                                                                        credential_issuance_nonce,
-                                                                                        credential_pub_key,
-                                                                                        credential_priv_key);
-        let credential_schema = _credential_schema();
-        let sub_proof_request = _sub_proof_request();
-        _process_credential_signature(credential_signature,
-                                      signature_correctness_proof,
-                                      master_secret_blinding_data,
-                                      master_secret,
-                                      credential_pub_key,
-                                      credential_issuance_nonce,
-                                      ptr::null(),
-                                      ptr::null(),
-                                      ptr::null());
-
-        let proof_building_nonce = _nonce();
-        let proof = _proof(credential_pub_key,
-                           credential_signature,
-                           proof_building_nonce,
-                           master_secret,
-                           ptr::null(),
-                           ptr::null());
-
-        let proof_verifier = _proof_verifier();
-        _add_sub_proof_request(proof_verifier, key_id, credential_schema, credential_pub_key, sub_proof_request, ptr::null(), ptr::null());
-
-        let mut valid = false;
-        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, proof_building_nonce, &mut valid);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(valid);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_nonce(proof_building_nonce);
-        _free_credential_schema(credential_schema);
-        _free_sub_proof_request(sub_proof_request);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-
-    #[test]
-    fn indy_crypto_cl_proof_verifier_verify_works_for_revocation_proof() {
-        let key_id = CString::new("key_id").unwrap();
-        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
-        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
-        let master_secret = _master_secret();
-        let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
-        let credential_issuance_nonce = _nonce();
-        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
-
-        let (credential_signature, signature_correctness_proof, rev_reg_delta) =
-            _credential_signature_with_revoc(blinded_master_secret,
-                                             blinded_master_secret_correctness_proof,
-                                             master_secret_blinding_nonce,
-                                             credential_issuance_nonce,
-                                             credential_pub_key,
-                                             credential_priv_key,
-                                             rev_key_priv,
-                                             rev_reg,
-                                             tail_storage.get_ctx());
-        let credential_schema = _credential_schema();
-        let sub_proof_request = _sub_proof_request();
-        let witness = _witness(rev_reg_delta, tail_storage.get_ctx());
-        _process_credential_signature(credential_signature,
-                                      signature_correctness_proof,
-                                      master_secret_blinding_data,
-                                      master_secret,
-                                      credential_pub_key,
-                                      credential_issuance_nonce,
-                                      rev_key_pub,
-                                      rev_reg,
-                                      witness);
-
-        let proof_building_nonce = _nonce();
-        let proof = _proof(credential_pub_key,
-                           credential_signature,
-                           proof_building_nonce,
-                           master_secret,
-                           rev_reg,
-                           witness);
-
-        let proof_verifier = _proof_verifier();
-        _add_sub_proof_request(proof_verifier, key_id, credential_schema, credential_pub_key, sub_proof_request, rev_key_pub, rev_reg);
-
-        let mut valid = false;
-        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, proof_building_nonce, &mut valid);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(valid);
-
-        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
-        _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
-        _free_nonce(master_secret_blinding_nonce);
-        _free_nonce(credential_issuance_nonce);
-        _free_nonce(proof_building_nonce);
-        _free_witness(witness);
-        _free_credential_schema(credential_schema);
-        _free_sub_proof_request(sub_proof_request);
-        _free_credential_signature(credential_signature, signature_correctness_proof);
-    }
-}
-
-pub mod mocks {
-    use super::*;
-    use std::ptr;
-    use std::ffi::CString;
-
-    pub fn _proof_verifier() -> *const c_void {
-        let mut proof_verifier_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_verifier_new_proof_verifier(&mut proof_verifier_p);
-        assert_eq!(err_code, ErrorCode::Success);
-        assert!(!proof_verifier_p.is_null());
-
-        proof_verifier_p
-    }
-
-    pub fn _add_sub_proof_request(proof_verifier: *const c_void, key_id: CString, credential_schema: *const c_void,
-                                  credential_pub_key: *const c_void, sub_proof_request: *const c_void, rev_key_pub: *const c_void, rev_reg: *const c_void) {
-        let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
-                                                                           key_id.as_ptr(),
-                                                                           sub_proof_request,
-                                                                           credential_schema,
-                                                                           credential_pub_key,
-                                                                           rev_key_pub,
-                                                                           rev_reg);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
-
-    pub fn _free_proof_verifier(proof_verifier: *const c_void, proof: *const c_void, nonce: *const c_void) {
-        let mut valid = false;
-        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, nonce, &mut valid);
-        assert_eq!(err_code, ErrorCode::Success);
-    }
+//    #[test]
+//    fn indy_crypto_cl_verifier_new_proof_verifier_works() {
+//        let key_id = CString::new("key_id").unwrap();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//        let credential_schema = _credential_schema();
+//        let sub_proof_request = _sub_proof_request();
+//        _process_credential_signature(credential_signature,
+//                                      signature_correctness_proof,
+//                                      master_secret_blinding_data,
+//                                      master_secret,
+//                                      credential_pub_key,
+//                                      credential_issuance_nonce,
+//                                      ptr::null(),
+//                                      ptr::null(),
+//                                      ptr::null());
+//
+//        let proof_building_nonce = _nonce();
+//        let proof = _proof(credential_pub_key,
+//                           credential_signature,
+//                           proof_building_nonce,
+//                           master_secret,
+//                           ptr::null(),
+//                           ptr::null());
+//
+//        let mut proof_verifier_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_verifier_new_proof_verifier(&mut proof_verifier_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!proof_verifier_p.is_null());
+//
+//        _add_sub_proof_request(proof_verifier_p, key_id, credential_schema, credential_pub_key, sub_proof_request, ptr::null(), ptr::null());
+//        _free_proof_verifier(proof_verifier_p, proof, proof_building_nonce);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_nonce(proof_building_nonce);
+//        _free_credential_schema(credential_schema);
+//        _free_sub_proof_request(sub_proof_request);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_proof_verifier_add_sub_proof_request_works() {
+//        let key_id = CString::new("key_id").unwrap();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//        let credential_schema = _credential_schema();
+//        let sub_proof_request = _sub_proof_request();
+//        _process_credential_signature(credential_signature,
+//                                      signature_correctness_proof,
+//                                      master_secret_blinding_data,
+//                                      master_secret,
+//                                      credential_pub_key,
+//                                      credential_issuance_nonce,
+//                                      ptr::null(),
+//                                      ptr::null(),
+//                                      ptr::null());
+//
+//        let proof_building_nonce = _nonce();
+//        let proof = _proof(credential_pub_key,
+//                           credential_signature,
+//                           proof_building_nonce,
+//                           master_secret,
+//                           ptr::null(),
+//                           ptr::null());
+//
+//        let proof_verifier = _proof_verifier();
+//
+//        let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
+//                                                                           key_id.as_ptr(),
+//                                                                           sub_proof_request,
+//                                                                           credential_schema,
+//                                                                           credential_pub_key,
+//                                                                           ptr::null(),
+//                                                                           ptr::null());
+//        assert_eq!(err_code, ErrorCode::Success);
+//
+//        _free_proof_verifier(proof_verifier, proof, proof_building_nonce);
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_nonce(proof_building_nonce);
+//        _free_credential_schema(credential_schema);
+//        _free_sub_proof_request(sub_proof_request);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_proof_verifier_verify_works_for_primary_proof() {
+//        let key_id = CString::new("key_id").unwrap();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
+//                                                                                        blinded_master_secret_correctness_proof,
+//                                                                                        master_secret_blinding_nonce,
+//                                                                                        credential_issuance_nonce,
+//                                                                                        credential_pub_key,
+//                                                                                        credential_priv_key);
+//        let credential_schema = _credential_schema();
+//        let sub_proof_request = _sub_proof_request();
+//        _process_credential_signature(credential_signature,
+//                                      signature_correctness_proof,
+//                                      master_secret_blinding_data,
+//                                      master_secret,
+//                                      credential_pub_key,
+//                                      credential_issuance_nonce,
+//                                      ptr::null(),
+//                                      ptr::null(),
+//                                      ptr::null());
+//
+//        let proof_building_nonce = _nonce();
+//        let proof = _proof(credential_pub_key,
+//                           credential_signature,
+//                           proof_building_nonce,
+//                           master_secret,
+//                           ptr::null(),
+//                           ptr::null());
+//
+//        let proof_verifier = _proof_verifier();
+//        _add_sub_proof_request(proof_verifier, key_id, credential_schema, credential_pub_key, sub_proof_request, ptr::null(), ptr::null());
+//
+//        let mut valid = false;
+//        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, proof_building_nonce, &mut valid);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(valid);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_nonce(proof_building_nonce);
+//        _free_credential_schema(credential_schema);
+//        _free_sub_proof_request(sub_proof_request);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//
+//    #[test]
+//    fn indy_crypto_cl_proof_verifier_verify_works_for_revocation_proof() {
+//        let key_id = CString::new("key_id").unwrap();
+//        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+//        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+//        let master_secret = _master_secret();
+//        let master_secret_blinding_nonce = _nonce();
+//        let (blinded_master_secret, master_secret_blinding_data,
+//            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+//                                                                              credential_key_correctness_proof,
+//                                                                              master_secret,
+//                                                                              master_secret_blinding_nonce);
+//        let credential_issuance_nonce = _nonce();
+//        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
+//
+//        let (credential_signature, signature_correctness_proof, rev_reg_delta) =
+//            _credential_signature_with_revoc(blinded_master_secret,
+//                                             blinded_master_secret_correctness_proof,
+//                                             master_secret_blinding_nonce,
+//                                             credential_issuance_nonce,
+//                                             credential_pub_key,
+//                                             credential_priv_key,
+//                                             rev_key_priv,
+//                                             rev_reg,
+//                                             tail_storage.get_ctx());
+//        let credential_schema = _credential_schema();
+//        let sub_proof_request = _sub_proof_request();
+//        let witness = _witness(rev_reg_delta, tail_storage.get_ctx());
+//        _process_credential_signature(credential_signature,
+//                                      signature_correctness_proof,
+//                                      master_secret_blinding_data,
+//                                      master_secret,
+//                                      credential_pub_key,
+//                                      credential_issuance_nonce,
+//                                      rev_key_pub,
+//                                      rev_reg,
+//                                      witness);
+//
+//        let proof_building_nonce = _nonce();
+//        let proof = _proof(credential_pub_key,
+//                           credential_signature,
+//                           proof_building_nonce,
+//                           master_secret,
+//                           rev_reg,
+//                           witness);
+//
+//        let proof_verifier = _proof_verifier();
+//        _add_sub_proof_request(proof_verifier, key_id, credential_schema, credential_pub_key, sub_proof_request, rev_key_pub, rev_reg);
+//
+//        let mut valid = false;
+//        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, proof_building_nonce, &mut valid);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(valid);
+//
+//        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+//        _free_master_secret(master_secret);
+//        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+//        _free_nonce(master_secret_blinding_nonce);
+//        _free_nonce(credential_issuance_nonce);
+//        _free_nonce(proof_building_nonce);
+//        _free_witness(witness);
+//        _free_credential_schema(credential_schema);
+//        _free_sub_proof_request(sub_proof_request);
+//        _free_credential_signature(credential_signature, signature_correctness_proof);
+//    }
+//}
+//
+//pub mod mocks {
+//    use super::*;
+//    use std::ptr;
+//    use std::ffi::CString;
+//
+//    pub fn _proof_verifier() -> *const c_void {
+//        let mut proof_verifier_p: *const c_void = ptr::null();
+//        let err_code = indy_crypto_cl_verifier_new_proof_verifier(&mut proof_verifier_p);
+//        assert_eq!(err_code, ErrorCode::Success);
+//        assert!(!proof_verifier_p.is_null());
+//
+//        proof_verifier_p
+//    }
+//
+//    pub fn _add_sub_proof_request(proof_verifier: *const c_void, key_id: CString, credential_schema: *const c_void,
+//                                  credential_pub_key: *const c_void, sub_proof_request: *const c_void, rev_key_pub: *const c_void, rev_reg: *const c_void) {
+//        let err_code = indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier,
+//                                                                           key_id.as_ptr(),
+//                                                                           sub_proof_request,
+//                                                                           credential_schema,
+//                                                                           credential_pub_key,
+//                                                                           rev_key_pub,
+//                                                                           rev_reg);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
+//
+//    pub fn _free_proof_verifier(proof_verifier: *const c_void, proof: *const c_void, nonce: *const c_void) {
+//        let mut valid = false;
+//        let err_code = indy_crypto_cl_proof_verifier_verify(proof_verifier, proof, nonce, &mut valid);
+//        assert_eq!(err_code, ErrorCode::Success);
+//    }
 }
