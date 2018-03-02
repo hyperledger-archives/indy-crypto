@@ -40,6 +40,9 @@ impl MockHelper {
     }
 }
 
+
+// TODO: bn_rand should be under `bn`
+
 #[cfg(test)]
 pub fn bn_rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
     if MockHelper::is_injected() {
@@ -237,10 +240,7 @@ pub fn random_qr(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
 pub fn _random_qr(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
     trace!("Helpers::random_qr: >>> n: {:?}", n);
 
-    let qr = n
-        .rand_range()?
-        .sqr(None)?
-        .modulus(&n, None)?;
+    let qr = BigNumber::random_QR(n)?;
 
     trace!("Helpers::random_qr: <<< qr: {:?}", qr);
 

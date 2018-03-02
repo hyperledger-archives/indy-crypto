@@ -1,5 +1,6 @@
 pub mod cl;
 pub mod bls;
+pub mod bn;
 
 use env_logger;
 
