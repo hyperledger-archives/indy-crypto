@@ -296,6 +296,42 @@ impl BigNumber {
         Ok(bn)
     }
 
+    pub fn set_negative(&self, negative: bool) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
+        bn.set_negative(negative);
+        Ok(BigNumber {
+            openssl_bn: bn
+        })
+    }
+
+    pub fn increment(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
+        bn.add_word(1)?;
+        Ok(BigNumber {
+            openssl_bn: bn
+        })
+    }
+
+    pub fn decrement(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
+        bn.sub_word(1)?;
+        Ok(BigNumber {
+            openssl_bn: bn
+        })
+    }
+
+    pub fn lshift1(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        BigNumRef::lshift1(&mut bn.openssl_bn, &self.openssl_bn)?;
+        Ok(bn)
+    }
+
+    pub fn rshift1(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        BigNumRef::rshift1(&mut bn.openssl_bn, &self.openssl_bn)?;
+        Ok(bn)
+    }
+
     pub fn mod_div(&self, b: &BigNumber, p: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
         //(a*  (1/b mod p) mod p)
 

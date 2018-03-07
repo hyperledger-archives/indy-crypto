@@ -570,18 +570,6 @@ macro_rules! hashset {
     };
 }
 
-macro_rules! hashmap {
-    ($( $key: expr => $val: expr ),*) => {
-        {
-            let mut map = ::std::collections::HashMap::new();
-            $(
-                map.insert($key, $val);
-            )*
-            map
-        }
-    }
-}
-
 macro_rules! btreemap {
     ($( $key: expr => $val: expr ),*) => {
         {

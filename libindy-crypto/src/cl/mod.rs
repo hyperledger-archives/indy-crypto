@@ -98,6 +98,10 @@ impl CredentialValues {
             attrs_values: clone_credentialvalue_map(&self.attrs_values)?
         })
     }
+
+    pub fn len(&self) -> usize {
+        self.attrs_values.len()
+    }
 }
 
 /// A Builder of `Claim Values`.
