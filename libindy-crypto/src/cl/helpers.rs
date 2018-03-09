@@ -279,16 +279,6 @@ pub fn transform_u32_to_array_of_u8(x: u32) -> Vec<u8> {
     result
 }
 
-pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoError> {
-    trace!("Helpers::get_hash_as_int: >>> nums: {:?}", nums);
-
-    let hash = BigNumber::from_bytes(&BigNumber::hash_array(&nums)?);
-
-    trace!("Helpers::get_hash_as_int: <<< hash: {:?}", hash);
-
-    hash
-}
-
 pub fn get_mtilde(unrevealed_attrs: &HashSet<String>) -> Result<BTreeMap<String, BigNumber>, IndyCryptoError> {
     trace!("Helpers::get_mtilde: >>> unrevealed_attrs: {:?}", unrevealed_attrs);
 
@@ -556,30 +546,6 @@ pub fn create_tau_list_values(r_pub_key: &CredentialRevocationPublicKey,
     trace!("Helpers::create_tau_list_values: <<< non_revoc_proof_tau_list: {:?}", non_revoc_proof_tau_list);
 
     Ok(non_revoc_proof_tau_list)
-}
-
-macro_rules! hashset {
-    ( $( $x:expr ),* ) => {
-        {
-            let mut temp_set = HashSet::new();
-            $(
-                temp_set.insert($x);
-            )*
-            temp_set
-        }
-    };
-}
-
-macro_rules! btreemap {
-    ($( $key: expr => $val: expr ),*) => {
-        {
-            let mut map = ::std::collections::BTreeMap::new();
-            $(
-                map.insert($key, $val);
-            )*
-            map
-        }
-    }
 }
 
 #[cfg(test)]

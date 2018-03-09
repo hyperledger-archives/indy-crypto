@@ -1097,6 +1097,7 @@ mod test {
     }
 }
 
+#[cfg(test)]
 mod test_helpers {
     use super::*;
     use self::issuer::Issuer;
@@ -1183,6 +1184,8 @@ mod test_helpers {
 
         let proof_request_nonce = new_nonce().unwrap();
         let proof = proof_builder.finalize(&proof_request_nonce).unwrap();
+
+        println!("proof={:?}", proof);
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request("issuer_key_id_1",

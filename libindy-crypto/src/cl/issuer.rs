@@ -5,6 +5,7 @@ use pair::*;
 use cl::constants::*;
 use cl::helpers::*;
 use utils::commitment::*;
+use utils::get_hash_as_int;
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -803,7 +804,7 @@ impl Issuer {
                 .mod_mul(&rx, &p_pub_key.n, Some(&mut context))?;
         }
 
-        let q = p_pub_key.z.mod_div(&rx, &p_pub_key.n)?;
+        let q = p_pub_key.z.mod_div(&rx, &p_pub_key.n, Some(&mut context))?;
 
         let n = p_priv_key.p.mul(&p_priv_key.q, Some(&mut context))?;
         let e_inverse = e.inverse(&n, Some(&mut context))?;
@@ -1077,10 +1078,11 @@ mod tests {
     }
 }
 
+#[cfg(test)]
 pub mod mocks {
     use super::*;
     use amcl::big::BIG;
-    use cl::prover::mocks::*;
+    use self::prover::mocks as prover_mocks;
 
     pub fn context_attribute() -> BigNumber {
         BigNumber::from_dec("31894574610223295263712513093148707509913459424901632064286025736442349335521").unwrap()

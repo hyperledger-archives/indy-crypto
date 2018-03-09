@@ -261,14 +261,23 @@ impl BigNumber {
     }
 
     pub fn mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
-        let mut bn = BigNumber::new()?;
         match ctx {
-            Some(context) => BigNumRef::mod_exp(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &b.openssl_bn, &mut context.openssl_bn_context)?,
+            Some(context) => self._mod_exp(a, b, context),
             None => {
                 let mut ctx = BigNumber::new_context()?;
-                BigNumRef::mod_exp(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &b.openssl_bn, &mut ctx.openssl_bn_context)?;
+                self._mod_exp(a, b, &mut ctx)
             }
         }
+    }
+
+    fn _mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+
+        if a.openssl_bn.is_negative() {
+            BigNumRef::mod_exp(&mut bn.openssl_bn, &self.inverse(b, Some(ctx))?.openssl_bn, &a.set_negative(false)?.openssl_bn, &b.openssl_bn, &mut ctx.openssl_bn_context)?;
+        } else {
+            BigNumRef::mod_exp(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &b.openssl_bn, &mut ctx.openssl_bn_context)?;
+        };
         Ok(bn)
     }
 
@@ -316,6 +325,10 @@ impl BigNumber {
         })
     }
 
+    pub fn is_negative(&self) -> bool {
+        self.openssl_bn.is_negative()
+    }
+
     pub fn increment(&self) -> Result<BigNumber, IndyCryptoError> {
         let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
         bn.add_word(1)?;
@@ -344,16 +357,30 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn mod_div(&self, b: &BigNumber, p: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
-        //(a*  (1/b mod p) mod p)
+    pub fn rshift(&self, n: i32) -> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        BigNumRef::rshift(&mut bn.openssl_bn, &self.openssl_bn, n);
+        Ok(bn)
+    }
 
-        let mut context = BigNumber::new_context()?;
+    pub fn mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+        //(a * (1/b mod p) mod p)
+        match ctx {
+            Some(mut context) => self._mod_div(b, p, &mut context),
+            None => {
+                let mut context = BigNumber::new_context()?;
+                self._mod_div(b, p, &mut context)
+            }
+        }
+    }
 
-        let res = b
-            .inverse(p, Some(&mut context))?
-            .mul(&self, Some(&mut context))?
-            .modulus(&p, Some(&mut context))?;
-        Ok(res)
+    ///(a * (1/b mod p) mod p)
+    fn _mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: &mut BigNumberContext)-> Result<BigNumber, IndyCryptoError> {
+        let mut bn = BigNumber::new()?;
+        BigNumRef::mod_mul(&mut bn.openssl_bn, &self.openssl_bn,
+                           &b.inverse(p, Some(ctx))?.openssl_bn,
+                           &p.openssl_bn, &mut ctx.openssl_bn_context)?;
+        Ok(bn)
     }
 
     pub fn random_QR(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
@@ -383,7 +410,7 @@ impl BigNumber {
 
 impl Ord for BigNumber {
     fn cmp(&self, other: &BigNumber) -> Ordering {
-        self.openssl_bn.ucmp(&other.openssl_bn)
+        self.openssl_bn.cmp(&other.openssl_bn)
     }
 }
 

@@ -6,6 +6,7 @@ use errors::IndyCryptoError;
 
 use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
+use utils::get_hash_as_int;
 
 /// Party that wants to check that prover has some credentials provided by issuer.
 pub struct Verifier {}
@@ -348,7 +349,7 @@ impl ProofVerifier {
         }
 
         let t2: BigNumber = p_pub_key.z
-            .mod_div(&rar, &p_pub_key.n)?
+            .mod_div(&rar, &p_pub_key.n, Some(&mut ctx))?
             .inverse(&p_pub_key.n, Some(&mut ctx))?
             .mod_exp(&c_hash, &p_pub_key.n, Some(&mut ctx))?;
 
