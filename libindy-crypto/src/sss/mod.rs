@@ -54,7 +54,7 @@ mod tests {
 
         // Recover with threshold number of shares
         check_secret(&secret, shares.clone(), 3);
-        
+
         // Recover with more than threshold number of shares
         check_secret(&secret, shares.clone(), 4);
 
