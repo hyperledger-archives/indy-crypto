@@ -12,8 +12,8 @@ impl JsonEncodable for Share {}
 
 impl<'a> JsonDecodable<'a> for Share {}
 
-pub fn shard_secret(m: u8, n: u8, secret: &Vec<u8>, sign_shares: bool) -> Result<Vec<Share>, IndyCryptoError> {
-    match rusty_secrets::sss::split_secret(m, n, &secret.as_slice(), sign_shares) {
+pub fn shard_secret(m: usize, n: usize, secret: &Vec<u8>, sign_shares: bool) -> Result<Vec<Share>, IndyCryptoError> {
+    match rusty_secrets::sss::split_secret(m as u8, n as u8, &secret.as_slice(), sign_shares) {
         Ok(shares) => Ok(shares.into_iter().map(|share| Share { value: share }).collect()),
         Err(msg) => Err(IndyCryptoError::InvalidStructure(format!("Unable to create shares: {:?}", msg)))
     }
@@ -26,6 +26,7 @@ pub fn recover_secret(shares: Vec<Share>, verify_signature: bool) -> Result<Vec<
         Err(msg) => Err(IndyCryptoError::InvalidStructure(format!("Unable to recreate secret: {:?}", msg)))
     }
 }
+
 
 #[cfg(test)]
 mod tests {
