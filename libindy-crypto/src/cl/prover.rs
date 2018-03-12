@@ -6,6 +6,7 @@ use pair::*;
 use super::helpers::*;
 use utils::commitment::{get_pedersen_commitment, get_exponentiated_generators};
 use utils::get_hash_as_int;
+//use authz::{SelectiveDisclosureCLProof, AuthzProofGenerators};
 
 use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
@@ -910,6 +911,11 @@ impl ProofBuilder {
         )?;
 
         let t = calc_teq(&credr_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m2_tilde, &unrevealed_attrs)?;
+
+
+//        let (authz_a_tilde, authz_b_tilde, authz_t3) = SelectiveDisclosureCLProof::commit()?;
+
+        //TODO: Add authz selective disclosure step here
 
         let primary_equal_init_proof = PrimaryEqualInitProof {
             a_prime,

@@ -5,7 +5,7 @@ use pair::GroupOrderElement;
 use super::constants::*;
 
 use std::cmp::max;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[cfg(test)]
 use std::cell::RefCell;

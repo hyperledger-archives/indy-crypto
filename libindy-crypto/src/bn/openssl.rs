@@ -359,7 +359,7 @@ impl BigNumber {
 
     pub fn rshift(&self, n: i32) -> Result<BigNumber, IndyCryptoError> {
         let mut bn = BigNumber::new()?;
-        BigNumRef::rshift(&mut bn.openssl_bn, &self.openssl_bn, n);
+        BigNumRef::rshift(&mut bn.openssl_bn, &self.openssl_bn, n)?;
         Ok(bn)
     }
 

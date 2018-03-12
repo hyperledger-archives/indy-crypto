@@ -807,7 +807,11 @@ pub struct PrimaryEqualInitProof {
     v_prime: BigNumber,
     m_tilde: BTreeMap<String, BigNumber>,
     m2_tilde: BigNumber,
-    m2: BigNumber
+    m2: BigNumber,
+//TODO: Add authz proof
+//    authz_a_tilde: BigNumber,
+//    authz_b_tilde: BigNumber,
+//    authz_t_3: BigNumber
 }
 
 impl PrimaryEqualInitProof {
