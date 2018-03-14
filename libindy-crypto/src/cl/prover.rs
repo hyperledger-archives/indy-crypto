@@ -91,6 +91,7 @@ impl Prover {
         let blinded_credential_secrets = BlindedCredentialSecrets {
             u: primary_blinded_credential_secrets.u,
             ur: blinded_revocation_master_secret.as_ref().map(|d| d.ur),
+            hidden_attributes: primary_blinded_credential_secrets.hidden_attributes,
             committed_attributes: primary_blinded_credential_secrets.committed_attributes
         };
 
@@ -291,29 +292,34 @@ impl Prover {
         let mut ctx = BigNumber::new_context()?;
         let v_prime = bn_rand(LARGE_VPRIME)?;
 
-        let mut u = p_pub_key.s.mod_exp(&v_prime, &p_pub_key.n, Some(&mut ctx))?;
+        //Hidden attributes are combined in this value
+        let hidden_attributes: BTreeSet<String> = credential_values.attrs_values
+                                                                   .iter()
+                                                                   .filter(|&(_, v)| v.is_hidden())
+                                                                   .map(|(attr, _)| attr.clone()).collect();
+        let u = hidden_attributes.iter()
+                                 .fold(p_pub_key.s.mod_exp(&v_prime, &p_pub_key.n, Some(&mut ctx)),
+                                       |acc, attr| {
+                                           let pk_r = p_pub_key.r
+                                                            .get(&attr.clone())
+                                                            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", attr)))?;
+                                           let cred_value = &credential_values.attrs_values[attr];
+                                           acc?.mod_mul(&pk_r.mod_exp(cred_value.value(), &p_pub_key.n, Some(&mut ctx))?,
+                                                        &p_pub_key.n, Some(&mut ctx))
+                                       })?;
+
 
         let mut committed_attributes = BTreeMap::new();
 
-        for (key, value) in credential_values.attrs_values.iter().filter(|&(_, v)| v.blinding_factor.is_some()) {
-            let kc = key.clone();
-            let pk_r = p_pub_key.r
-                .get(key)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
-
-            u = u.mod_mul(&pk_r.mod_exp(&value.value, &p_pub_key.n, Some(&mut ctx))?,
-                          &p_pub_key.n, Some(&mut ctx))?;
-
-            let bf = value.blinding_factor
-                          .as_ref()
-                          .ok_or(IndyCryptoError::InvalidStructure(format!("Blinding Factor by key '{}' does not contain a value in credential_values.attrs_values", key)))?;
-
-            committed_attributes.insert(kc, get_pedersen_commitment(&p_pub_key.s, &bf,
-                                                                    &p_pub_key.z, &value.value,
-                                                                    &p_pub_key.n, &mut ctx)?);
+        for (attr, cv) in credential_values.attrs_values.iter().filter(|&(_, v)| v.is_commitment()) {
+            if let &CredentialValue::Commitment{ref value, ref blinding_factor} = cv {
+                committed_attributes.insert(attr.clone(), get_pedersen_commitment(&p_pub_key.s, blinding_factor,
+                                                                                  &p_pub_key.z, value,
+                                                                                  &p_pub_key.n, &mut ctx)?);
+            }
         }
 
-        let primary_blinded_cred_secrets = PrimaryBlindedCredentialSecretsFactors { u, v_prime, committed_attributes };
+        let primary_blinded_cred_secrets = PrimaryBlindedCredentialSecretsFactors { u, v_prime, hidden_attributes, committed_attributes };
 
         trace!("Prover::_generate_blinded_primary_master_secret: <<< primary_blinded_cred_secrets: {:?}", primary_blinded_cred_secrets);
 
@@ -344,34 +350,44 @@ impl Prover {
 
         let v_dash_tilde = bn_rand(LARGE_VPRIME_TILDE)?;
 
-        let mut u_tilde = p_pub_key.s.mod_exp(&v_dash_tilde, &p_pub_key.n, Some(&mut ctx))?;
         let mut m_tildes = BTreeMap::new();
         let mut r_tildes = BTreeMap::new();
 
         let mut values: Vec<u8> = Vec::new();
+        let mut u_tilde = p_pub_key.s.mod_exp(&v_dash_tilde, &p_pub_key.n, Some(&mut ctx))?;
 
-        for (key, value) in &primary_blinded_cred_secrets.committed_attributes {
+        for (attr, cred_value) in cred_values.attrs_values.iter().filter(|&(_, v)| v.is_hidden() || v.is_commitment()) {
             let m_tilde = bn_rand(LARGE_MTILDE)?;
-            let r_tilde = bn_rand(LARGE_MTILDE)?;
-
             let pk_r = p_pub_key.r
-                .get(key)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
+                .get(attr)
+                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", attr)))?;
 
-            u_tilde = u_tilde.mod_mul(&pk_r.mod_exp(&m_tilde, &p_pub_key.n, Some(&mut ctx))?,
-                                      &p_pub_key.n, Some(&mut ctx))?;
+            match *cred_value {
+                CredentialValue::Hidden { .. } => {
+                    u_tilde = u_tilde.mod_mul(&pk_r.mod_exp(&m_tilde, &p_pub_key.n, Some(&mut ctx))?,
+                                              &p_pub_key.n, Some(&mut ctx))?;
+                    ()
+                },
+                CredentialValue::Commitment { .. } => {
+                    let r_tilde = bn_rand(LARGE_MTILDE)?;
+                    let commitment_tilde = get_pedersen_commitment(&p_pub_key.z,
+                                                                   &m_tilde,
+                                                                   &p_pub_key.s,
+                                                                   &r_tilde,
+                                                                   &p_pub_key.n,
+                                                                   &mut ctx)?;
+                    r_tildes.insert(attr.clone(), r_tilde);
 
-            let commitment_tilde = get_pedersen_commitment(&p_pub_key.z,
-                                                           &m_tilde,
-                                                           &p_pub_key.s,
-                                                           &r_tilde,
-                                                           &p_pub_key.n,
-                                                           &mut ctx)?;
-            m_tildes.insert(key.clone(), m_tilde);
-            r_tildes.insert(key.clone(), r_tilde);
-
-            values.extend_from_slice(&commitment_tilde.to_bytes()?);
-            values.extend_from_slice(&value.to_bytes()?);
+                    values.extend_from_slice(&commitment_tilde.to_bytes()?);
+                    let ca_value = primary_blinded_cred_secrets.committed_attributes
+                                                               .get(attr)
+                                                               .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in primary_blinded_cred_secrets.committed_attributes", attr)))?;
+                    values.extend_from_slice(&ca_value.to_bytes()?);
+                    ()
+                }
+                _ => ()
+            }
+            m_tildes.insert(attr.clone(), m_tilde);
         }
 
         values.extend_from_slice(&primary_blinded_cred_secrets.u.to_bytes()?);
@@ -386,22 +402,28 @@ impl Prover {
         let mut m_caps = BTreeMap::new();
         let mut r_caps = BTreeMap::new();
 
-        for key in m_tildes.keys() {
+        for (attr, m_tilde) in &m_tildes {
             let ca = cred_values.attrs_values
-                      .get(key)
-                      .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in cred_values.committed_attributes", key)))?;
+                      .get(attr)
+                      .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in cred_values.committed_attributes", attr)))?;
 
-            let bf = ca.blinding_factor
-                       .as_ref()
-                       .ok_or(IndyCryptoError::InvalidStructure(format!("Blinding Factor by key '{}' does not contain a value in cred_values.committed_attributes", key)))?;
+            match ca {
+                &CredentialValue::Hidden{ref value} => {
+                    let m_cap = m_tilde.add(&c.mul(value, Some(&mut ctx))?)?;
+                    m_caps.insert(attr.clone(), m_cap);
+                    ()
+                },
+                &CredentialValue::Commitment{ref value, ref blinding_factor} => {
+                    let m_cap = m_tilde.add(&c.mul(value, Some(&mut ctx))?)?;
+                    let r_cap = r_tildes[attr].add(&c.mul(blinding_factor, Some(&mut ctx))?)?;
 
-            let m_cap = m_tildes[key].add(&c.mul(&ca.value, Some(&mut ctx))?)?;
-            let r_cap = r_tildes[key].add(&c.mul(&bf, Some(&mut ctx))?)?;
-
-            m_caps.insert(key.clone(), m_cap);
-            r_caps.insert(key.clone(), r_cap);
+                    m_caps.insert(attr.clone(), m_cap);
+                    r_caps.insert(attr.clone(), r_cap);
+                    ()
+                },
+                _ => ()
+            }
         }
-
 
         let blinded_credential_secrets_correctness_proof = BlindedCredentialSecretsCorrectnessProof { c, v_dash_cap, m_caps, r_caps };
 
@@ -462,17 +484,31 @@ impl Prover {
             return Err(IndyCryptoError::InvalidStructure(format!("Invalid Signature correctness proof")));
         }
 
-        let mut generators_and_exponents = Vec::new();
+        let mut generators_and_exponents: Vec<(&BigNumber, &BigNumber)> = cred_values.attrs_values
+                                                      .iter()
+                                                      .filter(|&(ref key, ref value)| (value.is_known() || value.is_hidden()) && p_pub_key.r.contains_key(key.clone()))
+                                                      .map(|(key, value)| (p_pub_key.r.get(&key.clone()).unwrap(), value.value())).collect();
         generators_and_exponents.push((&p_pub_key.s, &p_cred_sig.v));
         generators_and_exponents.push((&p_pub_key.rctxt, &p_cred_sig.m_2));
 
-        for (key, attr) in cred_values.attrs_values.iter() {
-            let pk_r = p_pub_key.r
-                .get(key)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
-
-            generators_and_exponents.push((&pk_r, &attr.value));
-        }
+//        for (key, attr) in cred_values.attrs_values.iter() {
+//            let pk_r = p_pub_key.r
+//                .get(key)
+//                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
+//            let value = attr.value()?;
+//
+//            match attr {
+//                &CredentialValue::Known{..} => {
+//                    generators_and_exponents.push((&pk_r, value));
+//                    ()
+//                },
+//                &CredentialValue::Hidden{..} => {
+//                    generators_and_exponents.push((&pk_r, value));
+//                    ()
+//                },
+//                _ => ()
+//            };
+//        }
 
         let rx = get_exponentiated_generators(generators_and_exponents, &p_pub_key.n, &mut ctx)?;
 
@@ -946,7 +982,7 @@ impl ProofBuilder {
 
         let attr_value = cred_values.attrs_values.get(k.as_str())
             .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in cred_values", k)))?
-            .value
+            .value()
             .to_dec()?
             .parse::<i32>()
             .map_err(|_| IndyCryptoError::InvalidStructure(format!("Value by key '{}' has invalid format", k)))?;
@@ -1052,7 +1088,7 @@ impl ProofBuilder {
                 .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in attributes_values", k)))?;
 
             let val = challenge
-                .mul(&cur_val.value, Some(&mut ctx))?
+                .mul(&cur_val.value(), Some(&mut ctx))?
                 .add(&cur_mtilde)?;
 
             m.insert(k.clone(), val);
@@ -1070,7 +1106,7 @@ impl ProofBuilder {
                 cred_values.attrs_values
                     .get(attr)
                     .ok_or(IndyCryptoError::InvalidStructure(format!("Encoded value not found")))?
-                    .value
+                    .value()
                     .clone()?,
             );
         }
@@ -1721,12 +1757,12 @@ pub mod mocks {
     pub fn credential_values() -> CredentialValues {
         CredentialValues {
             attrs_values: btreemap![
-                String::from("link_secret") => CredentialValue { value: link_secret(), blinding_factor: Some(link_secret_blinding_factor()) },
-                String::from("policy_address") => CredentialValue { value: policy_address(), blinding_factor: Some(policy_address_blinding_factor()) },
-                String::from("name") => CredentialValue { value: BigNumber::from_dec("71359565546479723151967460283929432570283558415909434050407244812473401631735").unwrap(), blinding_factor: None },
-                String::from("gender") => CredentialValue { value: BigNumber::from_dec("1796449712852417654363673724889734415544693752249017564928908250031932273569").unwrap(), blinding_factor: None },
-                String::from("age") => CredentialValue { value: BigNumber::from_dec("35").unwrap(), blinding_factor: None },
-                String::from("height") => CredentialValue { value: BigNumber::from_dec("175").unwrap(), blinding_factor: None }
+                String::from("link_secret") => CredentialValue::Hidden { value: link_secret() },
+                String::from("policy_address") => CredentialValue::Hidden { value: policy_address() },
+                String::from("name") => CredentialValue::Known { value: BigNumber::from_dec("71359565546479723151967460283929432570283558415909434050407244812473401631735").unwrap() },
+                String::from("gender") => CredentialValue::Known { value: BigNumber::from_dec("1796449712852417654363673724889734415544693752249017564928908250031932273569").unwrap() },
+                String::from("age") => CredentialValue::Known { value: BigNumber::from_dec("35").unwrap() },
+                String::from("height") => CredentialValue::Known { value: BigNumber::from_dec("175").unwrap() }
             ]
         }
     }
@@ -1735,6 +1771,7 @@ pub mod mocks {
         BlindedCredentialSecrets {
             u: primary_blinded_credential_secrets_factors().u,
             ur: Some(revocation_blinded_credential_secrets_factors().ur),
+            hidden_attributes: primary_blinded_credential_secrets_factors().hidden_attributes,
             committed_attributes: primary_blinded_credential_secrets_factors().committed_attributes
         }
     }
@@ -1750,10 +1787,8 @@ pub mod mocks {
         PrimaryBlindedCredentialSecretsFactors {
             u: BigNumber::from_dec("47723789467324780675596875081347747479320627810048281093901400047762979563059906556791220135858818030513899970550825333284342841510800678843474627885555246105908411614394363087122961850889010634506499101410088942045336606938075323428990497144271795963654705507552770440603826268000601604722427749968097516106288723402025571295850992636738524478503550849567356041275809736561947892778594556789352642394950858071131551896302034046337284082758795918249422986376466412526903587523169139938125179844417875931185766113421874861290614367429698444482776956343469971398441588630248177425682784201204788643072267753274494264901").unwrap(),
             v_prime: BigNumber::from_dec("1921424195886158938744777125021406748763985122590553448255822306242766229793715475428833504725487921105078008192433858897449555181018215580757557939320974389877538474522876366787859030586130885280724299566241892352485632499791646228580480458657305087762181033556428779333220803819945703716249441372790689501824842594015722727389764537806761583087605402039968357991056253519683582539703803574767702877615632257021995763302779502949501243649740921598491994352181379637769188829653918416991301420900374928589100515793950374255826572066003334385555085983157359122061582085202490537551988700484875690854200826784921400257387622318582276996322436").unwrap(),
-            committed_attributes: btreemap![
-                String::from("link_secret") => BigNumber::from_dec("49969020507190580496384980443375026645795643078723554989432722612271316286345977131200174869277971717007592597917419990181140557081708512015680125983736005219218528519439235076073937590173905623762709849007022671201338968361615196582852079568408731126336593621645992928388757193176105581015724206714348547852560310565668922932721254044991756946832643303642630843853562068790572869218204826766322905248567100262495545026829880492066755881269864160215522745706175041832277294718289741382425008199559837378764356039293153774252452817588786947643439537318086516103762457197643649364432829542165643202545479218389206706033").unwrap(),
-            	String::from("policy_address") => BigNumber::from_dec("16512991906262704046800797493113836808625024056440541878982888887135377828874513959220693007368983840983821076434876234772902313463147534099460345183575535990533514172142015769098079829268367243455106505017771112504793053822345286075231480355678986100675758337947488471082827474920586939076394805894487683684819392687544307860172436135923585873807385179022376950945069482169498353678436947132938825962017101586551876133429459351856183810153988844462698151736644008416755826793154986810121384261183814355962607395564486323344191001322903290092140473231352138036599231791358927316124031959887532959822363299993578986167").unwrap()
-            ]
+            hidden_attributes: btreeset!["link_secret".to_string(), "policy_address".to_string()],
+            committed_attributes: BTreeMap::new()
         }
     }
 
@@ -1772,10 +1807,7 @@ pub mod mocks {
                 String::from("link_secret") => BigNumber::from_dec("10838856720335086997514320436220050141007701230661779081104856968960237995899875420397944567372033031325529436064663183433074406626856806034411450616724698556099954684967863354423").unwrap(),
                 String::from("policy_address") => BigNumber::from_dec("10838856720335086997514321141799452075820847986207752249555482812708631912670851435083274552034024251776525051133958921295960051019088305245368039883708358320016732424108678519609").unwrap()
             ],
-            r_caps: btreemap![
-                String::from("link_secret") => BigNumber::from_dec("10838856720335086997514320101751818472141253904578162256541111130344841097563151430982692259046551329904608720560865502180754767027256832200288906132220086190905660199234086110003").unwrap(),
-                String::from("policy_address") => BigNumber::from_dec("10838856720335086997514321429923637251009481240166132223510744434756474932726905593474781164587782282964820431454776584307478690721232031349082655900710105805047187974429692929623").unwrap()
-            ]
+            r_caps: BTreeMap::new()
         }
     }
 

@@ -20,13 +20,13 @@ pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoError
 macro_rules! hashset {
     ( $( $x:expr ),* ) => {
         {
-            let mut temp_set = ::std::collections::HashSet::new();
+            let mut set = ::std::collections::HashSet::new();
             $(
-                temp_set.insert($x);
+                set.insert($x);
             )*
-            temp_set
+            set
         }
-    };
+    }
 }
 
 macro_rules! hashmap {
@@ -37,6 +37,18 @@ macro_rules! hashmap {
                 map.insert($key, $val);
             )*
             map
+        }
+    }
+}
+
+macro_rules! btreeset {
+    ( $( $x:expr ),* ) => {
+        {
+            let mut set = ::std::collections::BTreeSet::new();
+            $(
+                set.insert($x);
+            )*
+            set
         }
     }
 }

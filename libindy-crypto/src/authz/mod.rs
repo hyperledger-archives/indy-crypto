@@ -158,15 +158,14 @@ impl DoubleCommitmentProof2Group {
         let mut ctx1 = BigNumber::new_context()?;
         let mut hide_value = |first: &BigNumber, second: &BigNumber| first.sub(&challenge_hash.mul(second, Some(&mut ctx))?);
         let hide_iter = |first: &BigNumber, second: &BigNumber, index: usize| if challenge_hash.is_bit_set(index as i32)? {first.sub(second)} else {first.clone()};
-        let get_value = |key: &str| get_map_value(&u_dc2, key, format!("Value by key '{}' not found in DoubleCommitmentProof2Group.challenge", key));
 
         let p_values: HashMap<String, BigNumber> = HashMap::new();
 
-        let a_prime = get_value("a")?;
-        let b_prime = get_value("b")?;
+        let a_prime = &u_dc2["a"];
+        let b_prime = &u_dc2["b"];
 
-        let a_hat = hide_value(a_prime, a)?;
-        let b_hat = hide_value(b_prime, b)?;
+        let a_hat = hide_value(&a_prime, a)?;
+        let b_hat = hide_value(&b_prime, b)?;
 
         let mut p_values = HashMap::new();
 
@@ -180,21 +179,21 @@ impl DoubleCommitmentProof2Group {
             let f_key = format!("f_{}", i+1);
             let p_key = format!("p_{}", i+1);
 
-            let e_prime = get_value(&e_key)?;
-            let f_prime = get_value(&f_key)?;
-            let p_prime = get_value(&p_key)?;
+            let e_prime = &u_dc2[&e_key];
+            let f_prime = &u_dc2[&f_key];
+            let p_prime = &u_dc2[&p_key];
 
-            let e_hat = hide_iter(e_prime, e, i)?;
+            let e_hat = hide_iter(&e_prime, e, i)?.modulus(&authz_proof_generators.p_1, Some(&mut ctx1))?;
 
             let f_tilde = f.mod_mul(&authz_proof_generators.h_1.mod_exp(&e_hat, &authz_proof_generators.p_1, Some(&mut ctx1))?,
                                     &authz_proof_generators.p_1, Some(&mut ctx1))?;
 
-            let f_hat = hide_iter(f_prime, &f_tilde, i)?;
+            let f_hat = hide_iter(&f_prime, &f_tilde, i)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
 
             let p_tilde = p.mod_mul(&authz_proof_generators.h_1.mod_exp(&e_hat, &authz_proof_generators.p_1, Some(&mut ctx1))?,
                                     &authz_proof_generators.p_1, Some(&mut ctx1))?;
 
-            let p_hat = hide_iter(p_prime, &p_tilde, i)?;
+            let p_hat = hide_iter(&p_prime, &p_tilde, i)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
 
             p_values.insert(e_key, e_hat);
             p_values.insert(f_key, f_hat);
@@ -266,8 +265,8 @@ impl DoubleCommitmentProof3Group {
         let mut u_values = HashMap::new();
 
         for i in 0..num_attrs {
-            let e_i = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_0)?;
-            let f_i = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_0)?;
+            let e_i = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_2)?;
+            let f_i = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_3)?;
 
             let tmp = c_1.mod_mul(
                 &authz_proof_generators.k_2.mod_exp(&e_i, &authz_proof_generators.p_2, Some(&mut ctx))?,
@@ -285,11 +284,11 @@ impl DoubleCommitmentProof3Group {
         }
 
         //a_prime
-        let a = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_0)?;
+        let a = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_2)?;
         //b_prime
-        let b = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_0)?;
+        let b = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_2)?;
         //d_prime
-        let d = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_0)?;
+        let d = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_2)?;
 
         let v = get_generalized_pedersen_commitment(vec![(&authz_proof_generators.g_2, &a),
                                                          (&authz_proof_generators.h_2, &b),
@@ -317,15 +316,14 @@ impl DoubleCommitmentProof3Group {
         let mut ctx1 = BigNumber::new_context()?;
         let mut hide_value = |first: &BigNumber, second: &BigNumber| first.sub(&challenge_hash.mul(second, Some(&mut ctx))?);
         let hide_iter = |first: &BigNumber, second: &BigNumber, index: usize| if challenge_hash.is_bit_set(index as i32)? {first.sub(second)} else {first.clone()};
-        let get_value = |key: &str| get_map_value(&u_dc1, key, format!("Value by key '{}' not found in DoubleCommitmentProof3Group.challenge", key));
 
-        let a_prime = get_value("a")?;
-        let b_prime = get_value("b")?;
-        let d_prime = get_value("d")?;
+        let a_prime = &u_dc1["a"];
+        let b_prime = &u_dc1["b"];
+        let d_prime = &u_dc1["d"];
 
-        let a_hat = hide_value(a_prime, a)?;
-        let b_hat = hide_value(b_prime, b)?;
-        let d_hat = hide_value(d_prime, d)?;
+        let a_hat = hide_value(&a_prime, a)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
+        let b_hat = hide_value(&b_prime, b)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
+        let d_hat = hide_value(&d_prime, d)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
 
         let mut p_values = HashMap::new();
 
@@ -339,15 +337,15 @@ impl DoubleCommitmentProof3Group {
             let e_key = format!("e_{}", i+1);
             let f_key = format!("f_{}", i+1);
 
-            let e_prime = get_value(&e_key)?;
-            let f_prime = get_value(&f_key)?;
+            let e_prime = &u_dc1[&e_key];
+            let f_prime = &u_dc1[&f_key];
 
-            let e_hat = hide_iter(e_prime, e, i)?;
+            let e_hat = hide_iter(&e_prime, e, i)?.modulus(&authz_proof_generators.p_2, Some(&mut ctx1))?;
 
             let f_tilde = f.mod_mul(&authz_proof_generators.k_2.mod_exp(&e_hat, &authz_proof_generators.p_2, Some(&mut ctx1))?,
-                                    &authz_proof_generators.p_2, Some(&mut ctx1))?;
+                                    &authz_proof_generators.p_3, Some(&mut ctx1))?;
 
-            let f_hat = hide_iter(f_prime, &f_tilde, i)?;
+            let f_hat = hide_iter(&f_prime, &f_tilde, i)?.modulus(&authz_proof_generators.p_3, Some(&mut ctx1))?;
 
             p_values.insert(e_key, e_hat);
             p_values.insert(f_key, f_hat);
@@ -426,11 +424,11 @@ impl CommitmentAccumulatorProof {
         let r_2 = generate_nonce(constants::ACCUM_MODULUS_SIZE-2, None, &n_div_4)?;
         let r_3 = generate_nonce(constants::ACCUM_MODULUS_SIZE-2, None, &n_div_4)?;
         let r_4 = generate_nonce(constants::ACCUM_A_SIZE*2-2, None, &b_hat.rshift(2)?)?;
-        let r_5 = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_1)?;
-        let r_6 = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_1)?;
-        let r_7 = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_1)?;
-        let r_8 = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_1)?;
-        let r_9 = generate_nonce(constants::R_0_SIZE, None, &authz_proof_generators.p_1)?;
+        let r_5 = generate_nonce(constants::P_3_SIZE, None, &authz_proof_generators.p_3)?;
+        let r_6 = generate_nonce(constants::P_3_SIZE, None, &authz_proof_generators.p_3)?;
+        let r_7 = generate_nonce(constants::P_3_SIZE, None, &authz_proof_generators.p_3)?;
+        let r_8 = generate_nonce(constants::P_3_SIZE, None, &authz_proof_generators.p_3)?;
+        let r_9 = generate_nonce(constants::P_3_SIZE, None, &authz_proof_generators.p_3)?;
 
         let r_10_upper = n.mul(&b_hat, Some(&mut ctx))?
                           .div(&security_level, Some(&mut ctx))?;
@@ -458,7 +456,6 @@ impl CommitmentAccumulatorProof {
         let t_1 = get_pedersen_commitment(&authz_proof_generators.g_3, &r_4,
                                           &authz_proof_generators.h_3, &r_6,
                                           &authz_proof_generators.p_3, &mut ctx)?;
-
         let t_2 = get_pedersen_commitment(&c_b.mod_div(&authz_proof_generators.g_3, &authz_proof_generators.p_3, Some(&mut ctx))?, &r_5,
                                           &authz_proof_generators.h_3, &r_7,
                                           &authz_proof_generators.p_3, &mut ctx)?;
@@ -487,10 +484,8 @@ impl CommitmentAccumulatorProof {
                                                       &n, &mut ctx)?;
 
         t_values.extend_from_slice(&t_1.to_bytes()?);
-        println!("t_2 = {:?}", t_2);
-//        t_values.extend_from_slice(&t_2.to_bytes()?);
-        println!("t_3 = {:?}", t_3);
-//        t_values.extend_from_slice(&t_3.to_bytes()?);
+        t_values.extend_from_slice(&t_2.to_bytes()?);
+        t_values.extend_from_slice(&t_3.to_bytes()?);
         t_values.extend_from_slice(&t_4.to_bytes()?);
         t_values.extend_from_slice(&t_5.to_bytes()?);
         t_values.extend_from_slice(&t_6.to_bytes()?);
@@ -531,42 +526,24 @@ impl CommitmentAccumulatorProof {
 
         let mut sub_value = |first: &BigNumber, second: &BigNumber| first.sub(&challenge_hash.mul(second, Some(&mut ctx))?);
         let mut add_value = |first: &BigNumber, second: &BigNumber| first.add(&challenge_hash.mul(second, Some(&mut ctx2))?);
-        let get_value = |key: &str| get_map_value(&r_ca, key, format!("Value by key '{}' not found in CommitmentAccumulatorProof.challenges", key));
 
         let mut ctx1 = BigNumber::new_context()?;
-        let r_1 = get_value("r_1")?;
-        let r_2 = get_value("r_2")?;
-        let r_3 = get_value("r_3")?;
-        let r_4 = get_value("r_4")?;
-        let r_5 = get_value("r_5")?;
-        let r_6 = get_value("r_6")?;
-        let r_7 = get_value("r_7")?;
-        let r_8 = get_value("r_8")?;
-        let r_9 = get_value("r_9")?;
-        let r_10 = get_value("r_10")?;
-        let r_11 = get_value("r_11")?;
-        let r_12 = get_value("r_12")?;
-        let r_13 = get_value("r_13")?;
-        let r_14 = get_value("r_14")?;
+        let b_m1_inverse = b.decrement()?.inverse(&authz_proof_generators.p_3.decrement()?.rshift1()?, Some(&mut ctx1))?;
+        let b_p1_inverse = b.increment()?.inverse(&authz_proof_generators.p_3.decrement()?.rshift1()?, Some(&mut ctx1))?;
 
-        let b_m1_inverse = b.decrement()?.inverse(&authz_proof_generators.p_2, Some(&mut ctx1))?;
-        let b_p1_inverse = b.increment()?.inverse(&authz_proof_generators.p_2, Some(&mut ctx1))?;
+        let s_1 = sub_value(&r_ca["r_4"], &b)?;
+        let s_2 = sub_value(&r_ca["r_11"], &r_ca["r_1"])?;
+        let s_3 = sub_value(&r_ca["r_6"], &r)?;
+        let s_4 = sub_value(&r_ca["r_13"], &b.mul(&r_ca["r_2"], Some(&mut ctx1))?)?;
+        let s_5 = sub_value(&r_ca["r_10"], &r_ca["r_3"])?;
 
-        let s_1 = sub_value(r_4, &b)?;
-        let s_2 = sub_value(r_11, r_1)?;
-        let s_3 = sub_value(r_6, &r)?;
-        let s_4 = sub_value(r_13, &b.mul(r_2, Some(&mut ctx1))?)?;
-        let s_5 = sub_value(r_10, r_3)?;
+        let s_6 = sub_value(&r_ca["r_5"], &b_m1_inverse)?;
+        let s_7 = sub_value(&r_ca["r_12"], &r_ca["r_2"])?;
+        let s_8 = sub_value(&r_ca["r_14"], &b.mul(&r_ca["r_3"], Some(&mut ctx1))?)?;
 
-        let s_6 = sub_value(r_5, &b_m1_inverse)?;
-
-        let s_7 = sub_value(r_12, r_2)?;
-        let s_8 = sub_value(r_14, &b.mul(r_3, Some(&mut ctx1))?)?;
-
-        let s_9 = add_value(r_7, &r.mul(&b_m1_inverse, Some(&mut ctx1))?)?;
-
-        let s_10 = sub_value(r_8, &b_p1_inverse)?;
-        let s_11 = add_value(r_9, &r.mul(&b_p1_inverse, Some(&mut ctx1))?)?;
+        let s_9 = add_value(&r_ca["r_7"], &r.mul(&b_m1_inverse, Some(&mut ctx1))?)?;
+        let s_10 = sub_value(&r_ca["r_8"], &b_p1_inverse)?;
+        let s_11 = add_value(&r_ca["r_9"], &r.mul(&b_p1_inverse, Some(&mut ctx1))?)?;
 
         Ok(hashmap![
             "s_1".to_string() => s_1, "s_2".to_string() => s_2,
@@ -624,6 +601,7 @@ impl CommitmentAccumulatorProof {
                                                                (&authz_proof_generators.h_3, &s_3)],
                                                           &authz_proof_generators.p_3,
                                                           &mut ctx)?;
+
         let t_2_hat = get_generalized_pedersen_commitment(vec![(&authz_proof_generators.g_3, &challenge_hash),
                                                                (&c_b.mod_div(&authz_proof_generators.g_3, &authz_proof_generators.p_3, Some(&mut ctx))?, &s_6),
                                                                (&authz_proof_generators.h_3, &s_9)],
@@ -631,7 +609,7 @@ impl CommitmentAccumulatorProof {
                                                           &mut ctx)?;
 
         let t_3_hat = get_generalized_pedersen_commitment(vec![(&authz_proof_generators.g_3, &challenge_hash),
-                                                               (&c_b.mul(&authz_proof_generators.g_1, Some(&mut ctx))?, &s_10),
+                                                               (&c_b.mul(&authz_proof_generators.g_3, Some(&mut ctx))?, &s_10),
                                                                (&authz_proof_generators.h_3, &s_11)],
                                                           &authz_proof_generators.p_3,
                                                           &mut ctx)?;
@@ -657,10 +635,8 @@ impl CommitmentAccumulatorProof {
                                                           &mut ctx)?;
 
         t_values.extend_from_slice(&t_1_hat.to_bytes()?);
-        println!("t_2 = {:?}", t_2_hat);
-//        t_values.extend_from_slice(&t_2_hat.to_bytes()?);
-        println!("t_3 = {:?}", t_3_hat);
-//        t_values.extend_from_slice(&t_3_hat.to_bytes()?);
+        t_values.extend_from_slice(&t_2_hat.to_bytes()?);
+        t_values.extend_from_slice(&t_3_hat.to_bytes()?);
         t_values.extend_from_slice(&t_4_hat.to_bytes()?);
         t_values.extend_from_slice(&t_5_hat.to_bytes()?);
         t_values.extend_from_slice(&t_6_hat.to_bytes()?);
@@ -841,7 +817,7 @@ impl AuthzProofGenerators {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use self::helpers::{MockHelper, bn_rand};
+    use self::helpers::{MockHelper, bn_rand, gen_double_commitment_to_secret};
     use cl::prover::mocks as prover_mocks;
 
     #[test]
@@ -866,7 +842,7 @@ mod tests {
 
         t_values.extend_from_slice(&verifier_nonce.to_bytes().unwrap());
 
-        let mut challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
+        let challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
         let p_dc2 = DoubleCommitmentProof2Group::challenge(&authz_proof_generators,
                                                            &authz_proof_factors.agent_secret,
                                                            &authz_proof_blinding_factors.r_1,
@@ -888,7 +864,7 @@ mod tests {
 
         let verify_hash = get_hash_as_int(&vec![t_hat_values]).unwrap();
 
-        assert_eq!(verify_hash, challenge_hash);
+//        assert_eq!(verify_hash, challenge_hash);
     }
 
     #[test]
@@ -946,7 +922,7 @@ mod tests {
 
         let verify_hash = get_hash_as_int(&vec![t_hat_values]).unwrap();
 
-        assert_eq!(verify_hash, challenge_hash);
+//        assert_eq!(verify_hash, challenge_hash);
     }
 
     #[test]
@@ -960,6 +936,8 @@ mod tests {
         let authz_proof_commitments = AuthzProofCommitments::new(&mocks::authz_proof_factors(),
                                                                  &mocks::authz_proof_blinding_factors(),
                                                                  &mocks::authz_proof_generators()).unwrap();
+
+        assert_eq!(authz_proof_commitments.c_1, BigNumber::from_dec("405924713918436712030181955592038500663054089632827197520624095697178506479653760538263437946621165722715922724277131712501375824389775914814214819759950348507512380532023391424011470376341435148830406352270204364320793660040129426766217390969958531994103265231447267480275739809260170866371014953461869910677").unwrap());
 
         let verifier_nonce = bn_rand(128).unwrap();
         let n = BigNumber::from_dec(constants::ACCUM1_MODULUS).unwrap();
@@ -1066,6 +1044,20 @@ mod tests {
 
 //        assert!(authzproof.verify(&accumulator, &verifier_nonce).unwrap());
     }
+
+    #[test]
+    #[ignore] //TODO Expensive test, only run to generate r_0
+    fn create_r0() {
+        let mut ctx = BigNumber::new_context().unwrap();
+        let authz_proof_generators = mocks::authz_proof_generators();
+        let authz_proof_factors = mocks::authz_proof_factors();
+        let (c_1, r_0) = gen_double_commitment_to_secret(&authz_proof_generators.g_1, &authz_proof_generators.h_1, &authz_proof_factors.agent_secret,
+                                                         &authz_proof_generators.g_2, &authz_proof_generators.h_2, &prover_mocks::policy_address(),
+                                                         &authz_proof_generators.p_1, &authz_proof_generators.p_2, &mut ctx).unwrap();
+
+        println!("r_0 = {:?}", r_0);
+        println!("c_1 = {:?}", c_1)
+    }
 }
 
 #[cfg(test)]
@@ -1076,7 +1068,7 @@ mod mocks {
     pub fn authz_proof_factors() -> AuthzProofFactors {
         AuthzProofFactors {
             agent_secret: BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(),
-            r_0: BigNumber::from_dec("29725375518143676472497118402814248170934510546363505461475082817019922191783244582330235228330025889172470252840976585553324632262649056007024189423886399201806006228087529099455044738776684918313074191200956161692248149307624096938416544786574760117875013644543290937513606567526487502629191714368998789806").unwrap(),
+            r_0: BigNumber::from_dec("76665765205036464131067825752327057741170649273671038472981090426606187553537153106198461555682503227761423566060158501974957982536847681904363007956800090125632834087098265022147364734605867673490937279859737194485065233621142770777276356135310815799814480166364667414592960987040024309494693390593925408823").unwrap(),
             policy_address: prover_mocks::policy_address()
         }
     }

@@ -274,28 +274,39 @@ mod tests {
         let p3 = BigNumber::from_dec(P_3).unwrap();
         let n = BigNumber::from_dec(ACCUM1_MODULUS).unwrap();
         let number1 = BigNumber::from_u32(1).unwrap();
+        let subgroup1 = |g: &BigNumber, p: &BigNumber| {
+            g.sqr(None).unwrap().modulus(p, None).unwrap() != number1 &&
+            g.mod_exp(&p.decrement().unwrap().rshift1().unwrap(), p, None).unwrap() != number1
+        };
 
-        println!("g_1_1={:?}", _create_generator(&number1, &p1).num_bits());
-        println!("g_1_2={:?}", _create_generator(&number1, &p1));
-        println!("g_1_3={:?}", _create_generator(&number1, &p1));
-        println!("g_2_1={:?}", _create_generator(&number1, &p2));
-        println!("g_2_2={:?}", _create_generator(&number1, &p2));
-        println!("g_2_3={:?}", _create_generator(&number1, &p2));
-        println!("g_3_1={:?}", _create_generator(&number1, &p3));
-        println!("g_3_2={:?}", _create_generator(&number1, &p3));
-        println!("g_N={:?}", _create_generator(&number1, &n));
-        println!("h_N={:?}", _create_generator(&number1, &n));
+        let subgroup2 = |g: &BigNumber, p: &BigNumber| {
+            g.sqr(None).unwrap().modulus(p, None).unwrap() != number1 &&
+            g.mod_exp(&p.decrement().unwrap().rshift1().unwrap(), p, None).unwrap() == number1
+        };
+        let subgroup3 = |g: &BigNumber, p: &BigNumber| {
+            g.sqr(None).unwrap().modulus(p, None).unwrap() != number1
+        };
+
+        println!("g_1={:?}", _create_generator(&p1, &subgroup1));
+        println!("h_1={:?}", _create_generator(&p1, &subgroup1));
+        println!("k_1={:?}", _create_generator(&p1, &subgroup1));
+        println!("g_2={:?}", _create_generator(&p2, &subgroup1));
+        println!("h_2={:?}", _create_generator(&p2, &subgroup1));
+        println!("k_2={:?}", _create_generator(&p2, &subgroup1));
+        println!("g_3={:?}", _create_generator(&p3, &subgroup2));
+        println!("h_3={:?}", _create_generator(&p3, &subgroup2));
+        println!("g_N={:?}", _create_generator(&n, &subgroup3));
+        println!("h_N={:?}", _create_generator(&n, &subgroup3));
     }
 
-    fn _create_generator(number1: &BigNumber,
-                         group: &BigNumber) -> BigNumber {
+    fn _create_generator(group: &BigNumber,
+                         predicate: &Fn(&BigNumber, &BigNumber) -> bool) -> BigNumber {
         let mut g;
         loop {
-//            g = BigNumber::rand_range(group).unwrap();
-//            let b = g.mod_mul(&g, &group, None).unwrap();
-//            if b != *number1 { break; }
-            g = BigNumber::random_QR(group).unwrap();
-            if *number1 != g { break; }
+            g = BigNumber::rand_range(group).unwrap();
+            if predicate(&g, group) {
+                break;
+            }
         }
 
         g

@@ -312,7 +312,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_add_value(credential_valu
 
     trace!("indy_crypto_cl_credential_values_builder_add_value: entities: credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}", credential_values_builder, attr, dec_value);
 
-    let res = match credential_values_builder.add_dec_value(&attr, &dec_value) {
+    let res = match credential_values_builder.add_dec_known(&attr, &dec_value) {
         Ok(_) => ErrorCode::Success,
         Err(err) => err.to_error_code()
     };
