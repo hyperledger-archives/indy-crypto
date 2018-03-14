@@ -516,10 +516,15 @@ mod tests {
     fn is_safe_prime_works() {
         let prime1 = BigNumber::generate_safe_prime(256).unwrap();
         let prime2 = BigNumber::generate_safe_prime(1024).unwrap();
-        let prime3 = BigNumber::generate_safe_prime(4096).unwrap();
         assert!(prime1.is_safe_prime(None).unwrap());
         assert!(prime2.is_safe_prime(None).unwrap());
-        assert!(prime3.is_safe_prime(None).unwrap());
+    }
+
+    #[test]
+    #[ignore] //TODO Expensive test, only run to generate public params
+    fn is_safe_prime_works_for_large_prime() {
+        let prime = BigNumber::generate_safe_prime(4096).unwrap();
+        assert!(prime.is_safe_prime(None).unwrap());
     }
 
     #[cfg(feature = "serialization")]
