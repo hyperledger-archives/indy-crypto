@@ -1060,6 +1060,7 @@ mod test {
     use self::issuer::Issuer;
     use self::prover::Prover;
     use self::verifier::Verifier;
+    use cl::helpers::MockHelper;
 
     #[test]
     fn demo() {
@@ -1169,7 +1170,6 @@ mod test {
                                                                  &credential_key_correctness_proof,
                                                                  &credential_values,
                                                                  &credential_nonce).unwrap();
-
         (
             credential_schema,
             credential_values,
