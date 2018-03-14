@@ -1,6 +1,6 @@
-mod constants;
+pub mod constants;
 #[macro_use]
-mod helpers;
+pub mod helpers;
 
 use utils::commitment::{get_pedersen_commitment,get_generalized_pedersen_commitment};
 use utils::json::{JsonEncodable, JsonDecodable};
