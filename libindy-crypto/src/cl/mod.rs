@@ -12,7 +12,7 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::hash::Hash;
 
 /// Creates random nonce
@@ -58,27 +58,52 @@ impl CredentialSchemaBuilder {
     }
 }
 
+/// The m value for attributes,
+/// commitments also store a blinding factor
 #[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
-pub struct CredentialValue {
-    value: BigNumber,
-    blinding_factor: Option<BigNumber>
+pub enum CredentialValue {
+    Known { value: BigNumber },  //Issuer and Prover know these
+    Hidden { value: BigNumber }, //Only known to Prover who binds these into the U factor
+    Commitment { value: BigNumber, blinding_factor: BigNumber } //Only known to Prover, not included in the credential, used for proving knowledge during issuance
 }
 
 impl CredentialValue {
-    fn clone(&self) -> Result<CredentialValue, IndyCryptoError> {
-        Ok(CredentialValue {
-            value: self.value.clone()?,
-            blinding_factor: match &self.blinding_factor {
-                &Some(ref m) => Some(m.clone()?),
-                &None => None
-            }
+    pub fn clone(&self) -> Result<CredentialValue, IndyCryptoError> {
+        Ok(match *self {
+            CredentialValue::Known{ref value} => CredentialValue::Known{ value: value.clone()? },
+            CredentialValue::Hidden{ref value} => CredentialValue::Hidden{ value: value.clone()? },
+            CredentialValue::Commitment{ref value, ref blinding_factor} =>
+                CredentialValue::Commitment { value: value.clone()?, blinding_factor: blinding_factor.clone()? }
         })
     }
-    pub fn new(v: &BigNumber) -> Result<CredentialValue, IndyCryptoError> {
-        Ok(CredentialValue {
-            value: v.clone()?,
-            blinding_factor: None,
-        })
+
+    pub fn is_known(&self) -> bool {
+        match *self {
+            CredentialValue::Known { .. } => true,
+            _ => false
+        }
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        match *self {
+            CredentialValue::Hidden { .. } => true,
+            _ => false
+        }
+    }
+
+    pub fn is_commitment(&self) -> bool {
+        match *self {
+            CredentialValue::Commitment { .. } => true,
+            _ => false
+        }
+    }
+
+    pub fn value(&self) -> &BigNumber {
+        match *self {
+            CredentialValue::Known{ref value} => value,
+            CredentialValue::Hidden{ref value} => value,
+            CredentialValue::Commitment{ref value, ..} => value
+        }
     }
 }
 
@@ -117,18 +142,33 @@ impl CredentialValuesBuilder {
         })
     }
 
-    pub fn add_dec_value(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
-        self.attrs_values.insert(attr.to_owned(), CredentialValue { value: BigNumber::from_dec(value)?, blinding_factor: None });
+    pub fn add_dec_known(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Known { value: BigNumber::from_dec(value)? });
         Ok(())
     }
 
-    pub fn add_value(&mut self, attr: &str, value: &BigNumber) -> Result<(), IndyCryptoError> {
-        self.attrs_values.insert(attr.to_owned(), CredentialValue{value: value.clone()?, blinding_factor: None});
+    pub fn add_dec_hidden(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Hidden { value: BigNumber::from_dec(value)? });
         Ok(())
     }
 
-    pub fn add_credential_value(&mut self, attr: &str, value: &BigNumber, bf: &BigNumber) -> Result<(), IndyCryptoError> {
-        self.attrs_values.insert(attr.to_owned(), CredentialValue { value: value.clone()?, blinding_factor: Some(bf.clone()?) });
+    pub fn add_dec_commitment(&mut self, attr: &str, value: &str, blinding_factor: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Commitment { value: BigNumber::from_dec(value)?, blinding_factor: BigNumber::from_dec(blinding_factor)? });
+        Ok(())
+    }
+
+    pub fn add_value_known(&mut self, attr: &str, value: &BigNumber) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Known {value: value.clone()?});
+        Ok(())
+    }
+
+    pub fn add_value_hidden(&mut self, attr: &str, value: &BigNumber) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Hidden {value: value.clone()?});
+        Ok(())
+    }
+
+    pub fn add_value_commitment(&mut self, attr: &str, value: &BigNumber, blinding_factor: &BigNumber) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(attr.to_owned(), CredentialValue::Commitment {value: value.clone()?, blinding_factor: blinding_factor.clone()?});
         Ok(())
     }
 
@@ -578,6 +618,7 @@ impl<'a> JsonDecodable<'a> for MasterSecret {}
 pub struct BlindedCredentialSecrets {
     u: BigNumber,
     ur: Option<PointG1>,
+    hidden_attributes: BTreeSet<String>,
     committed_attributes: BTreeMap<String, BigNumber>
 }
 
@@ -600,6 +641,7 @@ impl<'a> JsonDecodable<'a> for CredentialSecretsBlindingFactors {}
 pub struct PrimaryBlindedCredentialSecretsFactors {
     u: BigNumber,
     v_prime: BigNumber,
+    hidden_attributes: BTreeSet<String>,
     committed_attributes: BTreeMap<String, BigNumber>
 }
 
@@ -807,7 +849,11 @@ pub struct PrimaryEqualInitProof {
     v_prime: BigNumber,
     m_tilde: BTreeMap<String, BigNumber>,
     m2_tilde: BigNumber,
-    m2: BigNumber
+    m2: BigNumber,
+//TODO: Add authz proof
+//    authz_a_tilde: BigNumber,
+//    authz_b_tilde: BigNumber,
+//    authz_t_3: BigNumber
 }
 
 impl PrimaryEqualInitProof {
@@ -1012,6 +1058,8 @@ fn clone_credentialvalue_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, Credential
 mod test {
     use super::*;
     use self::issuer::Issuer;
+    use self::prover::Prover;
+    use self::verifier::Verifier;
 
     #[test]
     fn demo() {
@@ -1024,7 +1072,7 @@ mod test {
              blinded_credential_secrets,
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof,
-             credential_issuance_nonce) = test_helpers::setup_test();
+             credential_issuance_nonce) = setup_test();
 
         let (mut credential_signature, signature_correctness_proof) =
                     Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
@@ -1036,14 +1084,14 @@ mod test {
                                             &credential_pub_key,
                                             &credential_priv_key).unwrap();
 
-        test_helpers::compute_proof(credential_schema,
-                                    credential_values,
-                                    &mut credential_signature,
-                                    signature_correctness_proof,
-                                    credential_secrets_blinding_factors,
-                                    credential_pub_key,
-                                    credential_issuance_nonce,
-                        None, None, None)
+        compute_proof(credential_schema,
+                    credential_values,
+                    &mut credential_signature,
+                    signature_correctness_proof,
+                    credential_secrets_blinding_factors,
+                    credential_pub_key,
+                    credential_issuance_nonce,
+        None, None, None)
     }
 
     #[test]
@@ -1057,7 +1105,7 @@ mod test {
              blinded_credential_secrets,
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof,
-             credential_issuance_nonce) = test_helpers::setup_test();
+             credential_issuance_nonce) = setup_test();
 
         let issuance_by_default = false;
         let (rev_key_pub, rev_key_priv, mut rev_reg, mut rev_tails_generator) =
@@ -1084,30 +1132,19 @@ mod test {
 
         let witness = Witness::new(rev_idx, issuer::mocks::max_cred_num(), &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
 
-        test_helpers::compute_proof(credential_schema,
-                                    credential_values,
-                                    &mut credential_signature,
-                                    signature_correctness_proof,
-                                    credential_secrets_blinding_factors,
-                                    credential_pub_key,
-                                    credential_issuance_nonce,
-                                    Some(&rev_key_pub),
-                                    Some(&rev_reg),
-                                    Some(&witness));
+        compute_proof(credential_schema,
+                    credential_values,
+                    &mut credential_signature,
+                    signature_correctness_proof,
+                    credential_secrets_blinding_factors,
+                    credential_pub_key,
+                    credential_issuance_nonce,
+                    Some(&rev_key_pub),
+                    Some(&rev_reg),
+                    Some(&witness));
     }
-}
 
-#[cfg(test)]
-mod test_helpers {
-    use super::*;
-    use self::issuer::Issuer;
-    use self::prover::Prover;
-    use self::verifier::Verifier;
-    use self::prover::mocks::*;
-
-    pub const PROVER_ID: &'static str = "CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW";
-
-    pub fn setup_test() -> (CredentialSchema,
+    fn setup_test() -> (CredentialSchema,
                             CredentialValues,
                             Nonce,
                             CredentialPublicKey,
@@ -1147,7 +1184,7 @@ mod test_helpers {
         )
     }
 
-    pub fn compute_proof(credential_schema: CredentialSchema,
+    fn compute_proof(credential_schema: CredentialSchema,
                          credential_values: CredentialValues,
                          credential_signature: &mut CredentialSignature,
                          signature_correctness_proof: SignatureCorrectnessProof,
@@ -1167,6 +1204,8 @@ mod test_helpers {
                                              rev_reg,
                                              witness).unwrap();
 
+//        println!("credential_signature = {:?}", credential_signature);
+
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
@@ -1185,7 +1224,7 @@ mod test_helpers {
         let proof_request_nonce = new_nonce().unwrap();
         let proof = proof_builder.finalize(&proof_request_nonce).unwrap();
 
-        println!("proof={:?}", proof);
+//        println!("proof={:?}", proof);
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request("issuer_key_id_1",
