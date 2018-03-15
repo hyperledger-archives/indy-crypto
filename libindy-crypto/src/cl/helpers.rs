@@ -5,7 +5,7 @@ use pair::GroupOrderElement;
 use super::constants::*;
 
 use std::cmp::max;
-use std::collections::HashSet;
+use std::collections::{HashSet, BTreeSet};
 
 #[cfg(test)]
 use std::cell::RefCell;
@@ -279,12 +279,12 @@ pub fn transform_u32_to_array_of_u8(x: u32) -> Vec<u8> {
     result
 }
 
-pub fn get_mtilde(unrevealed_attrs: &HashSet<String>) -> Result<BTreeMap<String, BigNumber>, IndyCryptoError> {
+pub fn get_mtilde(unrevealed_attrs: &BTreeSet<String>) -> Result<BTreeMap<String, BigNumber>, IndyCryptoError> {
     trace!("Helpers::get_mtilde: >>> unrevealed_attrs: {:?}", unrevealed_attrs);
 
     let mut mtilde: BTreeMap<String, BigNumber> = BTreeMap::new();
 
-    for attr in unrevealed_attrs.iter() {
+    for attr in unrevealed_attrs {
         mtilde.insert(attr.clone(), bn_rand(LARGE_MVECT)?);
     }
 
@@ -299,7 +299,7 @@ pub fn calc_teq(p_pub_key: &CredentialPrimaryPublicKey,
                 v: &BigNumber,
                 m_tilde: &BTreeMap<String, BigNumber>,
                 m2tilde: &BigNumber,
-                unrevealed_attrs: &HashSet<String>) -> Result<BigNumber, IndyCryptoError> {
+                unrevealed_attrs: &BTreeSet<String>) -> Result<BigNumber, IndyCryptoError> {
     trace!("Helpers::calc_teq: >>> p_pub_key: {:?}, p_pub_key: {:?}, e: {:?}, v: {:?}, m_tilde: {:?}, m2tilde: {:?}, \
     unrevealed_attrs: {:?}", p_pub_key, a_prime, e, v, m_tilde, m2tilde, unrevealed_attrs);
 
@@ -311,7 +311,7 @@ pub fn calc_teq(p_pub_key: &CredentialPrimaryPublicKey,
         let cur_r = p_pub_key.r.get(k)
             .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", k)))?;
         let cur_m = m_tilde.get(k)
-            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in mtilde", k)))?;
+            .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in m_tilde", k)))?;
 
         result = cur_r
             .mod_exp(&cur_m, &p_pub_key.n, Some(&mut ctx))?
@@ -370,7 +370,7 @@ pub fn calc_tge(p_pub_key: &CredentialPrimaryPublicKey,
 
     tau_list.push(t_tau);
 
-    let mut q: BigNumber = BigNumber::from_dec("1")?;
+    let mut q: BigNumber = BigNumber::from_u32(1)?;
 
     for i in 0..ITERATION {
         let cur_t = t.get(&i.to_string())

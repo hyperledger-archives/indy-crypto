@@ -44,7 +44,7 @@ impl Verifier {
     /// ```
     pub fn new_proof_verifier() -> Result<ProofVerifier, IndyCryptoError> {
         Ok(ProofVerifier {
-            credentials: HashMap::new(),
+            credentials: BTreeMap::new(),
         })
     }
 }
@@ -52,7 +52,7 @@ impl Verifier {
 
 #[derive(Debug)]
 pub struct ProofVerifier {
-    credentials: HashMap<String, VerifiableCredential>,
+    credentials: BTreeMap<String, VerifiableCredential>,
 }
 
 impl ProofVerifier {
@@ -94,6 +94,7 @@ impl ProofVerifier {
                                  key_id: &str,
                                  sub_proof_request: &SubProofRequest,
                                  credential_schema: &CredentialSchema,
+                                 non_credential_schema_elements: &NonCredentialSchemaElements,
                                  credential_pub_key: &CredentialPublicKey,
                                  rev_key_pub: Option<&RevocationKeyPublic>,
                                  rev_reg: Option<&RevocationRegistry>) -> Result<(), IndyCryptoError> {
@@ -103,6 +104,7 @@ impl ProofVerifier {
             pub_key: credential_pub_key.clone()?,
             sub_proof_request: sub_proof_request.clone(),
             credential_schema: credential_schema.clone(),
+            non_credential_schema_elements: non_credential_schema_elements.clone(),
             rev_key_pub: rev_key_pub.map(Clone::clone),
             rev_reg: rev_reg.map(Clone::clone)
         });
@@ -217,6 +219,7 @@ impl ProofVerifier {
                                                       &proof.aggregated_proof.c_hash,
                                                       &proof_item.primary_proof,
                                                       &credential.credential_schema,
+                                                      &credential.non_credential_schema_elements,
                                                       &credential.sub_proof_request)?
             )?;
         }
@@ -249,7 +252,7 @@ impl ProofVerifier {
         let predicates_attrs =
             sub_proof_request.predicates.iter()
                 .map(|predicate| predicate.attr_name.clone())
-                .collect::<HashSet<String>>();
+                .collect::<BTreeSet<String>>();
 
         if predicates_attrs.difference(&cred_schema.attrs).count() != 0 {
             return Err(IndyCryptoError::InvalidStructure(format!("Claim doesn't contain attribute requested in predicate")));
@@ -260,7 +263,7 @@ impl ProofVerifier {
         Ok(())
     }
 
-    fn _check_verify_params_consistency(credentials: &HashMap<String, VerifiableCredential>,
+    fn _check_verify_params_consistency(credentials: &BTreeMap<String, VerifiableCredential>,
                                         proof: &Proof) -> Result<(), IndyCryptoError> {
         trace!("ProofVerifier::_check_verify_params_consistency: >>> credentials: {:?}, proof: {:?}", credentials, proof);
 
@@ -268,7 +271,7 @@ impl ProofVerifier {
             let proof_for_credential = proof.proofs.get(key_id.as_str()).
                 ok_or(IndyCryptoError::AnoncredsProofRejected(format!("Proof not found")))?;
 
-            let proof_revealed_attrs = HashSet::from_iter(proof_for_credential.primary_proof.eq_proof.revealed_attrs.keys().cloned());
+            let proof_revealed_attrs = BTreeSet::from_iter(proof_for_credential.primary_proof.eq_proof.revealed_attrs.keys().cloned());
 
             if proof_revealed_attrs != credential.sub_proof_request.revealed_attrs {
                 return Err(IndyCryptoError::AnoncredsProofRejected(format!("Proof revealed attributes not correspond to requested attributes")));
@@ -277,7 +280,7 @@ impl ProofVerifier {
             let proof_predicates =
                 proof_for_credential.primary_proof.ge_proofs.iter()
                     .map(|ge_proof| ge_proof.predicate.clone())
-                    .collect::<HashSet<Predicate>>();
+                    .collect::<BTreeSet<Predicate>>();
 
             if proof_predicates != credential.sub_proof_request.predicates {
                 return Err(IndyCryptoError::AnoncredsProofRejected(format!("Proof predicates not correspond to requested predicates")));
@@ -293,6 +296,7 @@ impl ProofVerifier {
                              c_hash: &BigNumber,
                              primary_proof: &PrimaryProof,
                              cred_schema: &CredentialSchema,
+                             non_cred_schema_elements: &NonCredentialSchemaElements,
                              sub_proof_request: &SubProofRequest) -> Result<Vec<BigNumber>, IndyCryptoError> {
         trace!("ProofVerifier::_verify_primary_proof: >>> p_pub_key: {:?}, c_hash: {:?}, primary_proof: {:?}, cred_schema: {:?}, sub_proof_request: {:?}",
                p_pub_key, c_hash, primary_proof, cred_schema, sub_proof_request);
@@ -301,6 +305,7 @@ impl ProofVerifier {
                                                                         &primary_proof.eq_proof,
                                                                         c_hash,
                                                                         cred_schema,
+                                                                        non_cred_schema_elements,
                                                                         sub_proof_request)?;
 
         for ge_proof in primary_proof.ge_proofs.iter() {
@@ -316,22 +321,25 @@ impl ProofVerifier {
                         proof: &PrimaryEqualProof,
                         c_hash: &BigNumber,
                         cred_schema: &CredentialSchema,
+                        non_cred_schema_elements: &NonCredentialSchemaElements,
                         sub_proof_request: &SubProofRequest) -> Result<Vec<BigNumber>, IndyCryptoError> {
         trace!("ProofVerifier::_verify_equality: >>> p_pub_key: {:?}, proof: {:?}, c_hash: {:?}, cred_schema: {:?}, sub_proof_request: {:?}",
                p_pub_key, proof, c_hash, cred_schema, sub_proof_request);
 
-        let unrevealed_attrs: HashSet<String> =
-            cred_schema.attrs
-                .difference(&sub_proof_request.revealed_attrs)
-                .cloned()
-                .collect::<HashSet<String>>();
+        let unrevealed_attrs = cred_schema.attrs
+                                          .union(&non_cred_schema_elements.attrs)
+                                          .cloned()
+                                          .collect::<BTreeSet<String>>()
+                                          .difference(&sub_proof_request.revealed_attrs)
+                                          .cloned()
+                                          .collect::<BTreeSet<String>>();
 
         let t1: BigNumber = calc_teq(&p_pub_key, &proof.a_prime, &proof.e, &proof.v, &proof.m, &proof.m2, &unrevealed_attrs)?;
 
         let mut ctx = BigNumber::new_context()?;
 
         let degree: BigNumber =
-            BigNumber::from_dec("2")?
+            BigNumber::from_u32(2)?
                 .exp(
                     &BigNumber::from_dec(&LARGE_E_START.to_string())?,
                     Some(&mut ctx)
