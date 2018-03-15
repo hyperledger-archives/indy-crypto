@@ -140,6 +140,41 @@ pub fn get_map_value<'a>(map: &'a ::std::collections::HashMap<String, BigNumber>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    #[test]
+    #[ignore]
+    fn test_accumulator_compute() {
+        let n = BigNumber::from_dec(ACCUM1_MODULUS).unwrap();
+        let g_n = BigNumber::from_dec(G_N).unwrap();
+        let total = 2000;
+
+        println!("Generating {} primes", total);
+        print!("Generating 1");
+        let mut stdout = ::std::io::stdout();
+        stdout.flush().unwrap();
+
+        let mut primes = Vec::new();
+        for i in 0..total {
+            primes.push(BigNumber::generate_prime(R_0_SIZE).unwrap());
+            for _ in 0..i.to_string().len() {
+                print!("\x08");
+            }
+            print!("{}", i + 1);
+            stdout.flush().unwrap();
+        }
+        println!();
+
+        println!("Starting timing test to accumulate {} commitments", total);
+
+        let mut ctx = BigNumber::new_context().unwrap();
+        let mut acc = g_n;
+        let now = ::std::time::Instant::now();
+        for prime in primes {
+            acc = acc.mod_exp(&prime, &n, Some(&mut ctx)).unwrap();
+        }
+        println!("Total time {}", now.elapsed().as_secs());
+    }
 
     #[test]
     fn test_double_commitment() {

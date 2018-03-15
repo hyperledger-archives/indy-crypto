@@ -4,7 +4,6 @@ use cl::constants::{LARGE_E_START, ITERATION};
 use cl::helpers::*;
 use errors::IndyCryptoError;
 
-use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 use utils::get_hash_as_int;
 
