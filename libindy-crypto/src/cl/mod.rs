@@ -657,7 +657,7 @@ pub enum PredicateType {
 /// 3) Claim contains attributes with valid predicates that verifier wants the prover to satisfy.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
-    proofs: HashMap<String /* issuer pub key id */, SubProof>,
+    proofs: Vec<SubProof>,
     aggregated_proof: AggregatedProof,
 }
 
@@ -1029,8 +1029,7 @@ mod test {
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
-        proof_builder.add_sub_proof_request("issuer_key_id_1",
-                                            &sub_proof_request,
+        proof_builder.add_sub_proof_request(&sub_proof_request,
                                             &credential_schema,
                                             &cred_signature,
                                             &cred_values,
@@ -1042,8 +1041,7 @@ mod test {
         let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
-        proof_verifier.add_sub_proof_request("issuer_key_id_1",
-                                             &sub_proof_request,
+        proof_verifier.add_sub_proof_request(&sub_proof_request,
                                              &credential_schema,
                                              &cred_pub_key,
                                              None,
@@ -1123,8 +1121,7 @@ mod test {
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
-        proof_builder.add_sub_proof_request("issuer_key_id_1",
-                                            &sub_proof_request,
+        proof_builder.add_sub_proof_request(&sub_proof_request,
                                             &credential_schema,
                                             &cred_signature,
                                             &cred_values,
@@ -1135,8 +1132,7 @@ mod test {
         let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
-        proof_verifier.add_sub_proof_request("issuer_key_id_1",
-                                             &sub_proof_request,
+        proof_verifier.add_sub_proof_request(&sub_proof_request,
                                              &credential_schema,
                                              &cred_pub_key,
                                              Some(&rev_key_pub),
