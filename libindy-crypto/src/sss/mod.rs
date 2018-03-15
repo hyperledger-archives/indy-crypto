@@ -8,6 +8,12 @@ pub struct Share {
     value: String
 }
 
+impl ToString for Share {
+    fn to_string(&self) -> String {
+        format!("{}", self.value)
+    }
+}
+
 impl JsonEncodable for Share {}
 
 impl<'a> JsonDecodable<'a> for Share {}
@@ -27,11 +33,28 @@ pub fn recover_secret(shares: Vec<Share>, verify_signature: bool) -> Result<Vec<
     }
 }
 
+pub fn get_shard_by_no(shares: &Vec<Share>, number: usize) -> Result<Share, IndyCryptoError> {
+    if shares.len() < number {
+        return Err(IndyCryptoError::InvalidParam2(format!("number cannot be greater than count of shares")));
+    }
+    let string_shares = shares.into_iter().map(|share| share.value.clone()).collect::<Vec<String>>();
+
+    for share in &string_shares[..] {
+        let split = share.split("-").collect::<Vec<&str>>();
+        if split[1].parse::<usize>().unwrap() == number {
+            return Ok(Share { value: share.clone() });
+        }
+    }
+    return Err(IndyCryptoError::InvalidStructure(format!("No share found with number {}", number)))
+}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::str;
+
+    pub const SECRET: &'static str = "this is a really big test string";
 
     fn check_secret(secret: &str, mut shares: Vec<Share>, p: usize){
         let recovered_secret = recover_secret(shares.split_at_mut(p).0.to_vec(), false).unwrap();
@@ -41,25 +64,36 @@ mod tests {
     }
 
     #[test]
-    fn test_create_shares() {
-        let secret = "this is a really big test string";
-        let shares = shard_secret(3, 5, &secret.as_bytes().to_vec(), false).unwrap();
+    fn test_create_shards() {
+        let shares = shard_secret(3, 5, &SECRET.as_bytes().to_vec(), false).unwrap();
         println!("shares={:?}", shares);
         assert_eq!(shares.len(), 5);
     }
 
     #[test]
     fn test_recover_secret() {
-        let secret = "this is a really big test string";
-        let mut shares = shard_secret(3, 5, &secret.as_bytes().to_vec(), false).unwrap();
+        let mut shares = shard_secret(3, 5, &SECRET.as_bytes().to_vec(), false).unwrap();
 
         // Recover with threshold number of shares
-        check_secret(&secret, shares.clone(), 3);
+        check_secret(&SECRET, shares.clone(), 3);
 
         // Recover with more than threshold number of shares
-        check_secret(&secret, shares.clone(), 4);
+        check_secret(&SECRET, shares.clone(), 4);
 
         // Recover with less than threshold number of shares
         assert!(recover_secret(shares.split_at_mut(2).0.to_vec(), false).is_err());
+    }
+
+    #[test]
+    fn test_get_shard_by_number() {
+        let shards = shard_secret(3, 5, &SECRET.as_bytes().to_vec(), false).unwrap();
+
+        // Valid shard number
+        let s = get_shard_by_no(&shards, 2).unwrap();
+        println!("{:?}", &s);
+        assert_eq!(&s, &shards[1]);
+
+        // Invalid shard number
+        assert!(get_shard_by_no(&shards, 7).is_err());
     }
 }
