@@ -30,7 +30,7 @@ pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
 /// A list of attributes a Claim is based on.
 #[derive(Debug, Clone)]
 pub struct CredentialSchema {
-    attrs: HashSet<String> /* attr names */
+    pub attrs: HashSet<String> /* attr names */
 }
 
 /// A Builder of `Claim Schema`.
