@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(
-    name='indy_crypto',
+    name='indy_crypto_authz',
     version='0.1.6',
     packages=['indy_crypto'],
     url='https://github.com/hyperledger/indy-crypto',
