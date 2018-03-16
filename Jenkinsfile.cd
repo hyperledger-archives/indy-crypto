@@ -5,12 +5,12 @@
 try {
     testing()
     publishing()
-    if (acceptanceTesting()) {
-        releasing()
-    }
-    notifyingSuccess()
+    //if (acceptanceTesting()) {
+    //    releasing()
+    //}
+    //notifyingSuccess()
 } catch (err) {
-    notifyingFailure()
+    //notifyingFailure()
     throw err
 }
 
@@ -32,9 +32,9 @@ def publishing() {
                 //'windows-files': { windowsPublishing() },
         ])
 
-        if (publishedVersions['windows-files'] != publishedVersions['ubuntu-files']) {
-            error "platforms artifacts have different versions"
-        }
+        //if (publishedVersions['windows-files'] != publishedVersions['ubuntu-files']) {
+        //    error "platforms artifacts have different versions"
+        //}
     }
 }
 
