@@ -513,6 +513,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn is_safe_prime_works() {
         let prime1 = BigNumber::generate_safe_prime(256).unwrap();
         let prime2 = BigNumber::generate_safe_prime(1024).unwrap();

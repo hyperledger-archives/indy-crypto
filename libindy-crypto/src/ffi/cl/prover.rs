@@ -603,32 +603,51 @@ pub extern fn indy_crypto_cl_proof_builder_add_sub_proof_request(proof_builder: 
                                                                  key_id: *const c_char,
                                                                  sub_proof_request: *const c_void,
                                                                  credential_schema: *const c_void,
+                                                                 non_credential_schema_elements: *const c_void,
                                                                  credential_signature: *const c_void,
                                                                  credential_values: *const c_void,
                                                                  credential_pub_key: *const c_void,
                                                                  rev_reg: *const c_void,
                                                                  witness: *const c_void) -> ErrorCode {
-    trace!("indy_crypto_cl_proof_builder_add_sub_proof_request: >>> proof_builder: {:?}, key_id: {:?}, sub_proof_request: {:?}, credential_schema: {:?}, \
-                credential_signature: {:?}, credential_values: {:?}, credential_pub_key: {:?}, rev_reg: {:?}, witness: {:?}",
-           proof_builder, key_id, sub_proof_request, credential_schema, credential_signature, credential_values, credential_pub_key, rev_reg, witness);
+    trace!("indy_crypto_cl_proof_builder_add_sub_proof_request: >>> proof_builder: {:?}\n\
+                                                                    key_id: {:?}\n\
+                                                                    sub_proof_request: {:?}\n\
+                                                                    credential_schema: {:?}\n\
+                                                                    non_credential_schema_elements: {:?}\n\
+                                                                    credential_signature: {:?}\n\
+                                                                    credential_values: {:?}\n\
+                                                                    credential_pub_key: {:?}\n\
+                                                                    rev_reg: {:?}\n\
+                                                                    witness: {:?}",
+           proof_builder, key_id, sub_proof_request, credential_schema, non_credential_schema_elements, credential_signature, credential_values, credential_pub_key, rev_reg, witness);
 
     check_useful_mut_c_reference!(proof_builder, ProofBuilder, ErrorCode::CommonInvalidParam1);
     check_useful_c_str!(key_id, ErrorCode::CommonInvalidParam2);
     check_useful_c_reference!(sub_proof_request, SubProofRequest, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(credential_schema, CredentialSchema, ErrorCode::CommonInvalidParam4);
-    check_useful_c_reference!(credential_signature, CredentialSignature, ErrorCode::CommonInvalidParam5);
-    check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam6);
-    check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam7);
+    check_useful_c_reference!(non_credential_schema_elements, NonCredentialSchemaElements, ErrorCode::CommonInvalidParam5);
+    check_useful_c_reference!(credential_signature, CredentialSignature, ErrorCode::CommonInvalidParam6);
+    check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam7);
+    check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam8);
     check_useful_opt_c_reference!(rev_reg, RevocationRegistry);
     check_useful_opt_c_reference!(witness, Witness);
 
-    trace!("indy_crypto_cl_proof_builder_add_sub_proof_request: entities: proof_builder: {:?}, key_id: {:?}, sub_proof_request: {:?}, credential_schema: {:?}, \
-                credential_signature: {:?}, credential_values: {:?}, credential_pub_key: {:?}, rev_reg: {:?}, witness: {:?}",
-           proof_builder, key_id, sub_proof_request, credential_schema, credential_signature, credential_values, credential_pub_key, rev_reg, witness);
+    trace!("indy_crypto_cl_proof_builder_add_sub_proof_request: entities: proof_builder: {:?}\n\
+                                                                          key_id: {:?}\n\
+                                                                          sub_proof_request: {:?}\n\
+                                                                          credential_schema: {:?}\n\
+                                                                          non_credential_schema_elements: {:?}\n\
+                                                                          credential_signature: {:?}\n\
+                                                                          credential_values: {:?}\n\
+                                                                          credential_pub_key: {:?}\n\
+                                                                          rev_reg: {:?}\n\
+                                                                          witness: {:?}",
+           proof_builder, key_id, sub_proof_request, credential_schema, non_credential_schema_elements, credential_signature, credential_values, credential_pub_key, rev_reg, witness);
 
     let res = match proof_builder.add_sub_proof_request(&key_id,
                                                         sub_proof_request,
                                                         credential_schema,
+                                                        non_credential_schema_elements,
                                                         credential_signature,
                                                         credential_values,
                                                         credential_pub_key,

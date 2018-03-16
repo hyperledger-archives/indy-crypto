@@ -87,7 +87,7 @@ pub struct PointG1 {
 }
 
 impl PointG1 {
-    const BYTES_REPR_SIZE: usize = MODBYTES * 4;
+    pub const BYTES_REPR_SIZE: usize = MODBYTES * 4;
 
     /// Creates new random PointG1
     pub fn new() -> Result<PointG1, IndyCryptoError> {
@@ -236,7 +236,7 @@ pub struct PointG2 {
 }
 
 impl PointG2 {
-    const BYTES_REPR_SIZE: usize = MODBYTES * 4;
+    pub const BYTES_REPR_SIZE: usize = MODBYTES * 4;
 
     /// Creates new random PointG2
     pub fn new() -> Result<PointG2, IndyCryptoError> {
@@ -364,7 +364,7 @@ pub struct GroupOrderElement {
 }
 
 impl GroupOrderElement {
-    const BYTES_REPR_SIZE: usize = MODBYTES;
+    pub const BYTES_REPR_SIZE: usize = MODBYTES;
 
     pub fn new() -> Result<GroupOrderElement, IndyCryptoError> {
         // returns random element in 0, ..., GroupOrder-1
@@ -532,7 +532,7 @@ pub struct Pair {
 }
 
 impl Pair {
-    const BYTES_REPR_SIZE: usize = MODBYTES * 16;
+    pub const BYTES_REPR_SIZE: usize = MODBYTES * 16;
     /// e(PointG1, PointG2)
     pub fn pair(p: &PointG1, q: &PointG2) -> Result<Pair, IndyCryptoError> {
         let mut p_new = *p;

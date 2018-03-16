@@ -293,10 +293,10 @@ impl Prover {
         let v_prime = bn_rand(LARGE_VPRIME)?;
 
         //Hidden attributes are combined in this value
-        let hidden_attributes: BTreeSet<String> = credential_values.attrs_values
-                                                                   .iter()
-                                                                   .filter(|&(_, v)| v.is_hidden())
-                                                                   .map(|(attr, _)| attr.clone()).collect();
+        let hidden_attributes = credential_values.attrs_values
+                                                 .iter()
+                                                 .filter(|&(_, v)| v.is_hidden())
+                                                 .map(|(attr, _)| attr.clone()).collect::<BTreeSet<String>>();
         let u = hidden_attributes.iter()
                                  .fold(p_pub_key.s.mod_exp(&v_prime, &p_pub_key.n, Some(&mut ctx)),
                                        |acc, attr| {
@@ -484,13 +484,21 @@ impl Prover {
             return Err(IndyCryptoError::InvalidStructure(format!("Invalid Signature correctness proof")));
         }
 
-        let mut generators_and_exponents: Vec<(&BigNumber, &BigNumber)> = cred_values.attrs_values
-                                                      .iter()
-                                                      .filter(|&(ref key, ref value)| (value.is_known() || value.is_hidden()) && p_pub_key.r.contains_key(key.clone()))
-                                                      .map(|(key, value)| (p_pub_key.r.get(&key.clone()).unwrap(), value.value())).collect();
-        generators_and_exponents.push((&p_pub_key.s, &p_cred_sig.v));
-        generators_and_exponents.push((&p_pub_key.rctxt, &p_cred_sig.m_2));
+        let rx = cred_values.attrs_values
+            .iter()
+            .filter(|&(ref attr, ref value)| (value.is_known() || value.is_hidden()) && p_pub_key.r.contains_key(attr.clone()))
+            .fold(get_pedersen_commitment(&p_pub_key.s, &p_cred_sig.v, &p_pub_key.rctxt, &p_cred_sig.m_2, &p_pub_key.n, &mut ctx),
+                  |acc, (attr, value)| {
+                      acc?.mod_mul(&p_pub_key.r[&attr.clone()].mod_exp(value.value(), &p_pub_key.n, Some(&mut ctx))?, &p_pub_key.n, Some(&mut ctx))
+                  })?;
 
+//        let mut generators_and_exponents = cred_values.attrs_values
+//                                                      .iter()
+//                                                      .filter(|&(ref key, ref value)| (value.is_known() || value.is_hidden()) && p_pub_key.r.contains_key(key.clone()))
+//                                                      .map(|(key, value)| (p_pub_key.r.get(&key.clone()).unwrap(), value.value())).collect::<Vec<(&BigNumber, &BigNumber)>>();
+//        generators_and_exponents.push((&p_pub_key.s, &p_cred_sig.v));
+//        generators_and_exponents.push((&p_pub_key.rctxt, &p_cred_sig.m_2));
+//
 //        for (key, attr) in cred_values.attrs_values.iter() {
 //            let pk_r = p_pub_key.r
 //                .get(key)
@@ -509,8 +517,8 @@ impl Prover {
 //                _ => ()
 //            };
 //        }
-
-        let rx = get_exponentiated_generators(generators_and_exponents, &p_pub_key.n, &mut ctx)?;
+//
+//        let rx = get_exponentiated_generators(generators_and_exponents, &p_pub_key.n, &mut ctx)?;
 
         let q = p_pub_key.z.mod_div(&rx, &p_pub_key.n, Some(&mut ctx))?;
 
@@ -670,6 +678,7 @@ impl ProofBuilder {
                                  key_id: &str,
                                  sub_proof_request: &SubProofRequest,
                                  credential_schema: &CredentialSchema,
+                                 non_credential_schema_elements: &NonCredentialSchemaElements,
                                  credential_signature: &CredentialSignature,
                                  credential_values: &CredentialValues,
                                  credential_pub_key: &CredentialPublicKey,
@@ -679,7 +688,7 @@ impl ProofBuilder {
         rev_reg: {:?}, sub_proof_request: {:?}, credential_schema: {:?}",
                key_id, credential_signature, credential_values, credential_pub_key, rev_reg, sub_proof_request, credential_schema);
 
-        ProofBuilder::_check_add_sub_proof_request_params_consistency(credential_values, sub_proof_request, credential_schema)?;
+        ProofBuilder::_check_add_sub_proof_request_params_consistency(credential_values, sub_proof_request, credential_schema, non_credential_schema_elements)?;
 
         let mut non_revoc_init_proof = None;
         let mut m2_tilde: Option<BigNumber> = None;
@@ -701,9 +710,10 @@ impl ProofBuilder {
 
         let primary_init_proof = ProofBuilder::_init_primary_proof(&credential_pub_key.p_key,
                                                                    &credential_signature.p_credential,
-                                                                   &credential_values,
-                                                                   &credential_schema,
-                                                                   &sub_proof_request,
+                                                                   credential_values,
+                                                                   credential_schema,
+                                                                   non_credential_schema_elements,
+                                                                   sub_proof_request,
                                                                    m2_tilde)?;
 
         self.c_list.extend_from_slice(&primary_init_proof.as_c_list()?);
@@ -714,7 +724,8 @@ impl ProofBuilder {
             non_revoc_init_proof,
             credential_values: credential_values.clone()?,
             sub_proof_request: sub_proof_request.clone(),
-            credential_schema: credential_schema.clone()
+            credential_schema: credential_schema.clone(),
+            non_credential_schema_elements: non_credential_schema_elements.clone()
         };
         self.init_proofs.insert(key_id.to_owned(), init_proof);
 
@@ -812,6 +823,7 @@ impl ProofBuilder {
             let primary_proof = ProofBuilder::_finalize_primary_proof(&init_proof.primary_init_proof,
                                                                       &challenge,
                                                                       &init_proof.credential_schema,
+                                                                      &init_proof.non_credential_schema_elements,
                                                                       &init_proof.credential_values,
                                                                       &init_proof.sub_proof_request)?;
 
@@ -830,13 +842,17 @@ impl ProofBuilder {
 
     fn _check_add_sub_proof_request_params_consistency(cred_values: &CredentialValues,
                                                        sub_proof_request: &SubProofRequest,
-                                                       cred_schema: &CredentialSchema) -> Result<(), IndyCryptoError> {
+                                                       cred_schema: &CredentialSchema,
+                                                       non_credential_schema_elements: &NonCredentialSchemaElements) -> Result<(), IndyCryptoError> {
         trace!("ProofBuilder::_check_add_sub_proof_request_params_consistency: >>> cred_values: {:?}, sub_proof_request: {:?}, cred_schema: {:?}",
                cred_values, sub_proof_request, cred_schema);
 
-        let cred_attrs = HashSet::from_iter(cred_values.attrs_values.keys().cloned());
+        let schema_attrs = non_credential_schema_elements.attrs.union(
+                           &cred_schema.attrs).cloned().collect::<BTreeSet<String>>();
 
-        if cred_schema.attrs != cred_attrs {
+        let cred_attrs = BTreeSet::from_iter(cred_values.attrs_values.keys().cloned());
+
+        if schema_attrs != cred_attrs {
             return Err(IndyCryptoError::InvalidStructure(format!("Credential doesn't correspond to credential schema")));
         }
 
@@ -847,7 +863,7 @@ impl ProofBuilder {
         let predicates_attrs =
             sub_proof_request.predicates.iter()
                 .map(|predicate| predicate.attr_name.clone())
-                .collect::<HashSet<String>>();
+                .collect::<BTreeSet<String>>();
 
         if predicates_attrs.difference(&cred_attrs).count() != 0 {
             return Err(IndyCryptoError::InvalidStructure(format!("Credential doesn't contain attribute requested in predicate")));
@@ -862,12 +878,13 @@ impl ProofBuilder {
                            c1: &PrimaryCredentialSignature,
                            cred_values: &CredentialValues,
                            cred_schema: &CredentialSchema,
+                           non_cred_schema_elems: &NonCredentialSchemaElements,
                            sub_proof_request: &SubProofRequest,
                            m2_t: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
         trace!("ProofBuilder::_init_primary_proof: >>> issuer_pub_key: {:?}, c1: {:?}, cred_values: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
                issuer_pub_key, c1, cred_values, cred_schema, sub_proof_request, m2_t);
 
-        let eq_proof = ProofBuilder::_init_eq_proof(&issuer_pub_key, c1, cred_schema, sub_proof_request, m2_t)?;
+        let eq_proof = ProofBuilder::_init_eq_proof(&issuer_pub_key, c1, cred_schema, non_cred_schema_elems, sub_proof_request, m2_t)?;
 
         let mut ge_proofs: Vec<PrimaryPredicateGEInitProof> = Vec::new();
         for predicate in sub_proof_request.predicates.iter() {
@@ -913,6 +930,7 @@ impl ProofBuilder {
     fn _init_eq_proof(credr_pub_key: &CredentialPrimaryPublicKey,
                       c1: &PrimaryCredentialSignature,
                       cred_schema: &CredentialSchema,
+                      non_cred_schema_elems: &NonCredentialSchemaElements,
                       sub_proof_request: &SubProofRequest,
                       m2_t: Option<BigNumber>) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
         trace!("ProofBuilder::_init_eq_proof: >>> credr_pub_key: {:?}, c1: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
@@ -926,11 +944,12 @@ impl ProofBuilder {
         let e_tilde = bn_rand(LARGE_ETILDE)?;
         let v_tilde = bn_rand(LARGE_VTILDE)?;
 
-        let unrevealed_attrs: HashSet<String> =
-            cred_schema.attrs
-                .difference(&sub_proof_request.revealed_attrs)
-                .cloned()
-                .collect::<HashSet<String>>();
+        let unrevealed_attrs = non_cred_schema_elems.attrs.union(&cred_schema.attrs)
+                                                    .cloned()
+                                                    .collect::<BTreeSet<String>>()
+                                                    .difference(&sub_proof_request.revealed_attrs)
+                                                    .cloned()
+                                                    .collect::<BTreeSet<String>>();
 
         let m_tilde = get_mtilde(&unrevealed_attrs)?;
 
@@ -943,7 +962,7 @@ impl ProofBuilder {
         )?;
 
         let e_prime = c1.e.sub(
-            &BigNumber::from_dec("2")?.exp(&BigNumber::from_dec(&LARGE_E_START.to_string())?, Some(&mut ctx))?
+            &BigNumber::from_u32(2)?.exp(&BigNumber::from_dec(&LARGE_E_START.to_string())?, Some(&mut ctx))?
         )?;
 
         let t = calc_teq(&credr_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m2_tilde, &unrevealed_attrs)?;
@@ -1057,6 +1076,7 @@ impl ProofBuilder {
     fn _finalize_eq_proof(init_proof: &PrimaryEqualInitProof,
                           challenge: &BigNumber,
                           cred_schema: &CredentialSchema,
+                          non_cred_schema_elems: &NonCredentialSchemaElements,
                           cred_values: &CredentialValues,
                           sub_proof_request: &SubProofRequest) -> Result<PrimaryEqualProof, IndyCryptoError> {
         trace!("ProofBuilder::_finalize_eq_proof: >>> init_proof: {:?}, challenge: {:?}, cred_schema: {:?}, \
@@ -1074,11 +1094,12 @@ impl ProofBuilder {
 
         let mut m: BTreeMap<String, BigNumber> = BTreeMap::new();
 
-        let unrevealed_attrs: HashSet<String> =
-            cred_schema.attrs
-                .difference(&sub_proof_request.revealed_attrs)
-                .cloned()
-                .collect::<HashSet<String>>();
+        let unrevealed_attrs = non_cred_schema_elems.attrs.union(&cred_schema.attrs)
+                                                          .cloned()
+                                                          .collect::<BTreeSet<String>>()
+                                                          .difference(&sub_proof_request.revealed_attrs)
+                                                          .cloned()
+                                                          .collect::<BTreeSet<String>>();
 
         for k in unrevealed_attrs.iter() {
             let cur_mtilde = init_proof.m_tilde.get(k)
@@ -1186,12 +1207,13 @@ impl ProofBuilder {
     fn _finalize_primary_proof(init_proof: &PrimaryInitProof,
                                challenge: &BigNumber,
                                cred_schema: &CredentialSchema,
+                               non_cred_schema_elems: &NonCredentialSchemaElements,
                                cred_values: &CredentialValues,
                                sub_proof_request: &SubProofRequest) -> Result<PrimaryProof, IndyCryptoError> {
         trace!("ProofBuilder::_finalize_primary_proof: >>> init_proof: {:?}, challenge: {:?}, cred_schema: {:?}, \
         cred_values: {:?}, sub_proof_request: {:?}", init_proof, challenge, cred_schema, cred_values, sub_proof_request);
 
-        let eq_proof = ProofBuilder::_finalize_eq_proof(&init_proof.eq_proof, challenge, cred_schema, cred_values, sub_proof_request)?;
+        let eq_proof = ProofBuilder::_finalize_eq_proof(&init_proof.eq_proof, challenge, cred_schema, non_cred_schema_elems, cred_values, sub_proof_request)?;
         let mut ge_proofs: Vec<PrimaryPredicateGEProof> = Vec::new();
 
         for init_ge_proof in init_proof.ge_proofs.iter() {
@@ -1741,11 +1763,15 @@ pub mod mocks {
         BigNumber::from_dec("526193306511429638192053").unwrap()
     }
 
+    pub fn non_credential_schema_elements() -> NonCredentialSchemaElements {
+        NonCredentialSchemaElements {
+            attrs: btreeset![String::from("link_secret"), String::from("policy_address")]
+        }
+    }
+
     pub fn credential_schema() -> CredentialSchema {
         CredentialSchema {
-            attrs: hashset![
-                String::from("link_secret"),
-                String::from("policy_address"),
+            attrs: btreeset![
                 String::from("name"),
                 String::from("gender"),
                 String::from("age"),
@@ -1801,11 +1827,11 @@ pub mod mocks {
 
     pub fn blinded_credential_secrets_correctness_proof() -> BlindedCredentialSecretsCorrectnessProof {
         BlindedCredentialSecretsCorrectnessProof {
-            c: BigNumber::from_dec("14841172341445426371917159789882861318659491120199315124950674390948981175338").unwrap(),
-            v_dash_cap: BigNumber::from_dec("28516187632169681034916317443066293542232820810520653219879290887490340188705207618485009504398168546052096659258653141472769442696152483795243203469420209533179847395689362264834456775325717804994642923912063868921099846607636317863802802672778955777043168774014041446601376892833320977158611770988292609505614913051087602864499964960751982426322040423136416286284406778723768615346312560758665956734914956608857741965214512689579120444173256056732313480878920238915447726647878160372621420916500391951553276433704739590206059846111800044504657850998207290228383614442391753642755750078961882529308856014893150296449437166082320118361075611513317395770555550769579256355761018140448633803961757818524074080896040113").unwrap(),
+            c: BigNumber::from_dec("41363708552899491482967123354025727783041394957801862794507299492642851871869").unwrap(),
+            v_dash_cap: BigNumber::from_dec("79477230445124340412355135331512631332722746549591064544407872397590479611126581579324962195667429483997509492680814561137770781126131148727698769664077589502001894178840666346000194557447457274020154921952336844315124915547239553865426321263250055048331091059913482273602917153430056605520865331593204471731828029863938592478567282943017148677878205165013268924621430967883622879738809927355429095301964044999346168842861746968508978875649044406157345408356119559714870915481102452138933140386757170565744838081204616344798909609569734854156255770552701665904364822629486188028037395295585051594090933096744390540765487864225403679410800306257324133891363581133307141377493126320794077474704040109460337273678709629").unwrap(),
             m_caps: btreemap![
-                String::from("link_secret") => BigNumber::from_dec("10838856720335086997514320436220050141007701230661779081104856968960237995899875420397944567372033031325529436064663183433074406626856806034411450616724698556099954684967863354423").unwrap(),
-                String::from("policy_address") => BigNumber::from_dec("10838856720335086997514321141799452075820847986207752249555482812708631912670851435083274552034024251776525051133958921295960051019088305245368039883708358320016732424108678519609").unwrap()
+                "link_secret".to_string() => BigNumber::from_dec("10838856720335086997514321362930394283556101400008112071495587755466979684093030882847444561579356480922326595489746025886532480780967365202826164327243513358033057767953215523419").unwrap(),
+                "policy_address".to_string() => BigNumber::from_dec("10838856720335086997514323329444903454621130300428677453490176453637285955242357752437452659131210150427095344992567154204158417597801625460210583594876055970065477299634513333412").unwrap()
             ],
             r_caps: BTreeMap::new()
         }

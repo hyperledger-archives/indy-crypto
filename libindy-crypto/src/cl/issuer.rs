@@ -50,13 +50,14 @@ impl Issuer {
     /// let (_cred_pub_key, _cred_priv_key, _cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
     /// ```
     pub fn new_credential_def(credential_schema: &CredentialSchema,
+                              non_credential_schema_elements: &NonCredentialSchemaElements,
                               support_revocation: bool) -> Result<(CredentialPublicKey,
                                                                    CredentialPrivateKey,
                                                                    CredentialKeyCorrectnessProof), IndyCryptoError> {
         trace!("Issuer::new_credential_def: >>> credential_schema: {:?}, support_revocation: {:?}", credential_schema, support_revocation);
 
         let (p_pub_key, p_priv_key, p_key_meta) =
-            Issuer::_new_credential_primary_keys(credential_schema)?;
+            Issuer::_new_credential_primary_keys(credential_schema, non_credential_schema_elements)?;
 
         let (r_pub_key, r_priv_key) = if support_revocation {
             Issuer::_new_credential_revocation_keys()
@@ -203,20 +204,20 @@ impl Issuer {
                            credential_values: &CredentialValues,
                            credential_pub_key: &CredentialPublicKey,
                            credential_priv_key: &CredentialPrivateKey) -> Result<(CredentialSignature, SignatureCorrectnessProof), IndyCryptoError> {
-        trace!("Issuer::sign_credential: >>> prover_id: {:?}, \
-                                             blinded_credential_secrets: {:?}, \
-                                             blinded_credential_secrets_correctness_proof: {:?}, \
-                                             credential_nonce: {:?}, \
-                                             credential_issuance_nonce: {:?}, \
-                                             credential_values: {:?}, \
-                                             credential_pub_key: {:?}, \
+        trace!("Issuer::sign_credential: >>> prover_id: {:?}\n \
+                                             blinded_credential_secrets: {:?}\n \
+                                             blinded_credential_secrets_correctness_proof: {:?}\n \
+                                             credential_nonce: {:?}\n \
+                                             credential_issuance_nonce: {:?}\n \
+                                             credential_values: {:?}\n \
+                                             credential_pub_key: {:?}\n \
                                              credential_priv_key: {:?}",
                                             prover_id,
                                             blinded_credential_secrets,
                                             blinded_credential_secrets_correctness_proof,
                                             credential_nonce,
-                                            credential_values,
                                             credential_issuance_nonce,
+                                            credential_values,
                                             credential_pub_key,
                                             credential_priv_key);
 
@@ -490,9 +491,10 @@ impl Issuer {
         Ok(rev_reg_delta)
     }
 
-    fn _new_credential_primary_keys(credential_schema: &CredentialSchema) -> Result<(CredentialPrimaryPublicKey,
-                                                                                     CredentialPrimaryPrivateKey,
-                                                                                     CredentialPrimaryPublicKeyMetadata), IndyCryptoError> {
+    fn _new_credential_primary_keys(credential_schema: &CredentialSchema,
+                                    non_credential_schema_elements: &NonCredentialSchemaElements) -> Result<(CredentialPrimaryPublicKey,
+                                                                                  CredentialPrimaryPrivateKey,
+                                                                                  CredentialPrimaryPublicKeyMetadata), IndyCryptoError> {
         trace!("Issuer::_new_credential_primary_keys: >>> credential_schema: {:?}", credential_schema);
 
         let mut ctx = BigNumber::new_context()?;
@@ -515,6 +517,10 @@ impl Issuer {
         let xz = gen_x(&p, &q)?;
 
         let mut xr = BTreeMap::new();
+        for non_schema_element in &non_credential_schema_elements.attrs {
+            xr.insert(non_schema_element.to_string(), gen_x(&p, &q)?);
+        }
+
         for attribute in &credential_schema.attrs {
             xr.insert(attribute.to_string(), gen_x(&p, &q)?);
         }
@@ -1000,7 +1006,7 @@ mod tests {
     fn issuer_new_credential_def_works() {
         MockHelper::inject();
 
-        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), true).unwrap();
+        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), &prover::mocks::non_credential_schema_elements(), true).unwrap();
         assert_eq!(pub_key.p_key, mocks::credential_primary_public_key());
         assert_eq!(priv_key.p_key, mocks::credential_primary_private_key());
         assert_eq!(key_correctness_proof, mocks::credential_key_correctness_proof());
@@ -1012,7 +1018,7 @@ mod tests {
     fn issuer_new_credential_def_works_without_revocation_part() {
         MockHelper::inject();
 
-        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), false).unwrap();
+        let (pub_key, priv_key, key_correctness_proof) = Issuer::new_credential_def(&prover::mocks::credential_schema(), &prover::mocks::non_credential_schema_elements(), false).unwrap();
         assert_eq!(pub_key.p_key, mocks::credential_primary_public_key());
         assert_eq!(priv_key.p_key, mocks::credential_primary_private_key());
         assert_eq!(key_correctness_proof, mocks::credential_key_correctness_proof());
@@ -1022,8 +1028,9 @@ mod tests {
 
     #[test]
     fn issuer_new_credential_works_for_empty_attributes() {
-        let cred_attrs = CredentialSchema { attrs: HashSet::new() };
-        let res = Issuer::new_credential_def(&cred_attrs, false);
+        let cred_attrs = CredentialSchema { attrs: BTreeSet::new() };
+        let non_cred_attrs = NonCredentialSchemaElements { attrs: BTreeSet::new() };
+        let res = Issuer::new_credential_def(&cred_attrs, &non_cred_attrs, false);
         assert!(res.is_err())
     }
 
@@ -1031,7 +1038,7 @@ mod tests {
     fn issuer_new_revocation_registry_def_works() {
         MockHelper::inject();
 
-        let (pub_key, _, _) = Issuer::new_credential_def(&prover::mocks::credential_schema(), true).unwrap();
+        let (pub_key, _, _) = Issuer::new_credential_def(&prover::mocks::credential_schema(), &prover::mocks::non_credential_schema_elements(), true).unwrap();
         Issuer::new_revocation_registry_def(&pub_key, 100, false).unwrap();
     }
 

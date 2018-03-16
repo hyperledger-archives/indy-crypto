@@ -12,8 +12,8 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
-use std::hash::Hash;
 
 /// Creates random nonce
 ///
@@ -30,19 +30,19 @@ pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
 /// A list of attributes a Claim is based on.
 #[derive(Debug, Clone)]
 pub struct CredentialSchema {
-    pub attrs: HashSet<String> /* attr names */
+    attrs: BTreeSet<String> /* attr names */
 }
 
 /// A Builder of `Claim Schema`.
 #[derive(Debug)]
 pub struct CredentialSchemaBuilder {
-    attrs: HashSet<String> /* attr names */
+    attrs: BTreeSet<String> /* attr names */
 }
 
 impl CredentialSchemaBuilder {
     pub fn new() -> Result<CredentialSchemaBuilder, IndyCryptoError> {
         Ok(CredentialSchemaBuilder {
-            attrs: HashSet::new()
+            attrs: BTreeSet::new()
         })
     }
 
@@ -53,6 +53,35 @@ impl CredentialSchemaBuilder {
 
     pub fn finalize(self) -> Result<CredentialSchema, IndyCryptoError> {
         Ok(CredentialSchema {
+            attrs: self.attrs
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct NonCredentialSchemaElements {
+    attrs: BTreeSet<String>
+}
+
+#[derive(Debug)]
+pub struct NonCredentialSchemaElementsBuilder {
+    attrs: BTreeSet<String>
+}
+
+impl NonCredentialSchemaElementsBuilder {
+    pub fn new() -> Result<NonCredentialSchemaElementsBuilder, IndyCryptoError> {
+        Ok(NonCredentialSchemaElementsBuilder {
+            attrs: BTreeSet::new()
+        })
+    }
+
+    pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+        self.attrs.insert(attr.to_owned());
+        Ok(())
+    }
+
+    pub fn finalize(self) -> Result<NonCredentialSchemaElements, IndyCryptoError> {
+        Ok(NonCredentialSchemaElements {
             attrs: self.attrs
         })
     }
@@ -308,6 +337,14 @@ pub type Accumulator = PointG2;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RevocationRegistry {
     accum: Accumulator
+}
+
+impl From<RevocationRegistryDelta> for RevocationRegistry {
+    fn from(rev_reg_delta: RevocationRegistryDelta) -> RevocationRegistry {
+        RevocationRegistry {
+            accum: rev_reg_delta.accum
+        }
+    }
 }
 
 impl JsonEncodable for RevocationRegistry {}
@@ -667,8 +704,8 @@ impl<'a> JsonDecodable<'a> for BlindedCredentialSecretsCorrectnessProof {}
 /// Contains attributes to be revealed and predicates.
 #[derive(Debug, Clone)]
 pub struct SubProofRequest {
-    revealed_attrs: HashSet<String>,
-    predicates: HashSet<Predicate>,
+    revealed_attrs: BTreeSet<String>,
+    predicates: BTreeSet<Predicate>,
 }
 
 /// Builder of “Sub Proof Request”.
@@ -681,8 +718,8 @@ impl SubProofRequestBuilder {
     pub fn new() -> Result<SubProofRequestBuilder, IndyCryptoError> {
         Ok(SubProofRequestBuilder {
             value: SubProofRequest {
-                revealed_attrs: HashSet::new(),
-                predicates: HashSet::new()
+                revealed_attrs: BTreeSet::new(),
+                predicates: BTreeSet::new()
             }
         })
     }
@@ -725,6 +762,18 @@ pub struct Predicate {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum PredicateType {
     GE
+}
+
+impl Ord for Predicate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.attr_name.cmp(&other.attr_name)
+    }
+}
+
+impl PartialOrd for Predicate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 /// Proof is complex crypto structure created by prover over multiple credentials that allows to prove that prover:
@@ -791,7 +840,8 @@ pub struct InitProof {
     non_revoc_init_proof: Option<NonRevocInitProof>,
     credential_values: CredentialValues,
     sub_proof_request: SubProofRequest,
-    credential_schema: CredentialSchema
+    credential_schema: CredentialSchema,
+    non_credential_schema_elements: NonCredentialSchemaElements
 }
 
 
@@ -982,6 +1032,7 @@ pub struct VerifiableCredential {
     pub_key: CredentialPublicKey,
     sub_proof_request: SubProofRequest,
     credential_schema: CredentialSchema,
+    non_credential_schema_elements: NonCredentialSchemaElements,
     rev_key_pub: Option<RevocationKeyPublic>,
     rev_reg: Option<RevocationRegistry>
 }
@@ -1060,10 +1111,12 @@ mod test {
     use self::issuer::Issuer;
     use self::prover::Prover;
     use self::verifier::Verifier;
+    use cl::helpers::MockHelper;
 
     #[test]
     fn demo() {
         let (credential_schema,
+             non_credential_schema_elements,
              credential_values,
              credential_nonce,
              credential_pub_key,
@@ -1085,6 +1138,7 @@ mod test {
                                             &credential_priv_key).unwrap();
 
         compute_proof(credential_schema,
+                    non_credential_schema_elements,
                     credential_values,
                     &mut credential_signature,
                     signature_correctness_proof,
@@ -1097,6 +1151,7 @@ mod test {
     #[test]
     fn demo_revocation() {
         let (credential_schema,
+             non_credential_schema_elements,
              credential_values,
              credential_nonce,
              credential_pub_key,
@@ -1133,6 +1188,7 @@ mod test {
         let witness = Witness::new(rev_idx, issuer::mocks::max_cred_num(), &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
 
         compute_proof(credential_schema,
+                    non_credential_schema_elements,
                     credential_values,
                     &mut credential_signature,
                     signature_correctness_proof,
@@ -1145,22 +1201,24 @@ mod test {
     }
 
     fn setup_test() -> (CredentialSchema,
-                            CredentialValues,
-                            Nonce,
-                            CredentialPublicKey,
-                            CredentialPrivateKey,
-                            CredentialKeyCorrectnessProof,
-                            BlindedCredentialSecrets,
-                            CredentialSecretsBlindingFactors,
-                            BlindedCredentialSecretsCorrectnessProof,
-                            Nonce) {
+                        NonCredentialSchemaElements,
+                        CredentialValues,
+                        Nonce,
+                        CredentialPublicKey,
+                        CredentialPrivateKey,
+                        CredentialKeyCorrectnessProof,
+                        BlindedCredentialSecrets,
+                        CredentialSecretsBlindingFactors,
+                        BlindedCredentialSecretsCorrectnessProof,
+                        Nonce) {
 
         let credential_schema = prover::mocks::credential_schema();
+        let non_credential_schema_elements = prover::mocks::non_credential_schema_elements();
         let credential_values = prover::mocks::credential_values();
         let credential_nonce = new_nonce().unwrap();
         let (credential_pub_key,
              credential_priv_key,
-             credential_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+             credential_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, &non_credential_schema_elements, true).unwrap();
 
         let (blinded_credential_secrets,
              credential_secrets_blinding_factors,
@@ -1169,9 +1227,9 @@ mod test {
                                                                  &credential_key_correctness_proof,
                                                                  &credential_values,
                                                                  &credential_nonce).unwrap();
-
         (
             credential_schema,
+            non_credential_schema_elements,
             credential_values,
             credential_nonce,
             credential_pub_key,
@@ -1185,15 +1243,16 @@ mod test {
     }
 
     fn compute_proof(credential_schema: CredentialSchema,
-                         credential_values: CredentialValues,
-                         credential_signature: &mut CredentialSignature,
-                         signature_correctness_proof: SignatureCorrectnessProof,
-                         credential_secrets_blinding_factors: CredentialSecretsBlindingFactors,
-                         credential_pub_key: CredentialPublicKey,
-                         credential_issuance_nonce: Nonce,
-                         rev_key_pub: Option<&RevocationKeyPublic>,
-                         rev_reg: Option<&RevocationRegistry>,
-                         witness: Option<&Witness>) {
+                     non_credential_schema_elements: NonCredentialSchemaElements,
+                     credential_values: CredentialValues,
+                     credential_signature: &mut CredentialSignature,
+                     signature_correctness_proof: SignatureCorrectnessProof,
+                     credential_secrets_blinding_factors: CredentialSecretsBlindingFactors,
+                     credential_pub_key: CredentialPublicKey,
+                     credential_issuance_nonce: Nonce,
+                     rev_key_pub: Option<&RevocationKeyPublic>,
+                     rev_reg: Option<&RevocationRegistry>,
+                     witness: Option<&Witness>) {
         Prover::process_credential_signature(credential_signature,
                                              &credential_values,
                                              &signature_correctness_proof,
@@ -1215,6 +1274,7 @@ mod test {
         proof_builder.add_sub_proof_request("issuer_key_id_1",
                                             &sub_proof_request,
                                             &credential_schema,
+                                            &non_credential_schema_elements,
                                             &credential_signature,
                                             &credential_values,
                                             &credential_pub_key,
@@ -1230,6 +1290,7 @@ mod test {
         proof_verifier.add_sub_proof_request("issuer_key_id_1",
                                              &sub_proof_request,
                                              &credential_schema,
+                                             &non_credential_schema_elements,
                                              &credential_pub_key,
                                              rev_key_pub,
                                              rev_reg).unwrap();

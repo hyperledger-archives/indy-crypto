@@ -7,6 +7,7 @@ use utils::ctypes::CTypesUtils;
 use utils::json::{JsonEncodable, JsonDecodable};
 use libc::c_char;
 
+use std::slice;
 use std::os::raw::c_void;
 use std::ptr::null;
 
@@ -23,27 +24,40 @@ use std::ptr::null;
 ///
 /// # Arguments
 /// * `credential_schema` - Reference that contains credential schema instance pointer.
+/// * `non_schema_elements` - Reference that contains credential non schema names instance pointer.
 /// * `support_revocation` - If true non revocation part of credential keys will be generated.
 /// * `credential_pub_key_p` - Reference that will contain credential public key instance pointer.
 /// * `credential_priv_key_p` - Reference that will contain credential private key instance pointer.
 /// * `credential_key_correctness_proof_p` - Reference that will contain credential keys correctness proof instance pointer.
 #[no_mangle]
 pub extern fn indy_crypto_cl_issuer_new_credential_def(credential_schema: *const c_void,
+                                                       non_schema_elements: *const c_void,
                                                        support_revocation: bool,
                                                        credential_pub_key_p: *mut *const c_void,
                                                        credential_priv_key_p: *mut *const c_void,
                                                        credential_key_correctness_proof_p: *mut *const c_void) -> ErrorCode {
-    trace!("indy_crypto_cl_issuer_new_credential_def: >>> credential_schema: {:?}, support_revocation: {:?}, credential_pub_key_p: {:?}, credential_priv_key_p: {:?},\
-     credential_key_correctness_proof_p: {:?}", credential_schema, support_revocation, credential_pub_key_p, credential_priv_key_p, credential_key_correctness_proof_p);
+    trace!("indy_crypto_cl_issuer_new_credential_def: >>> credential_schema: {:?}\n\
+                                                          non_schema_elements: {:?}\n\
+                                                          support_revocation: {:?}\n\
+                                                          credential_pub_key_p: {:?}\n\
+                                                          credential_priv_key_p: {:?}\n\
+                                                          credential_key_correctness_proof_p: {:?}",
+                credential_schema,
+                non_schema_elements,
+                support_revocation,
+                credential_pub_key_p,
+                credential_priv_key_p,
+                credential_key_correctness_proof_p);
 
     check_useful_c_reference!(credential_schema, CredentialSchema, ErrorCode::CommonInvalidParam1);
-    check_useful_c_ptr!(credential_pub_key_p, ErrorCode::CommonInvalidParam3);
-    check_useful_c_ptr!(credential_priv_key_p, ErrorCode::CommonInvalidParam4);
-    check_useful_c_ptr!(credential_key_correctness_proof_p, ErrorCode::CommonInvalidParam5);
+    check_useful_c_reference!(non_schema_elements, NonCredentialSchemaElements, ErrorCode::CommonInvalidParam2);
+    check_useful_c_ptr!(credential_pub_key_p, ErrorCode::CommonInvalidParam4);
+    check_useful_c_ptr!(credential_priv_key_p, ErrorCode::CommonInvalidParam5);
+    check_useful_c_ptr!(credential_key_correctness_proof_p, ErrorCode::CommonInvalidParam6);
 
     trace!("indy_crypto_cl_issuer_new_credential_def: entities: credential_schema: {:?}, support_revocation: {:?}", support_revocation, credential_schema);
 
-    let res = match Issuer::new_credential_def(credential_schema, support_revocation) {
+    let res = match Issuer::new_credential_def(credential_schema, &non_schema_elements, support_revocation) {
         Ok((credential_pub_key, credential_priv_key, credential_key_correctness_proof)) => {
             trace!("indy_crypto_cl_issuer_new_credential_def: credential_pub_key: {:?}, credential_priv_key: {:?}, credential_key_correctness_proof: {:?}",
                    credential_pub_key, credential_priv_key, credential_key_correctness_proof);
