@@ -5,12 +5,12 @@
 try {
     testing()
     publishing()
-    if (acceptanceTesting()) {
-        releasing()
-    }
-    notifyingSuccess()
+    //if (acceptanceTesting()) {
+    //    releasing()
+    //}
+    //notifyingSuccess()
 } catch (err) {
-    notifyingFailure()
+    //notifyingFailure()
     throw err
 }
 
@@ -18,7 +18,7 @@ def testing() {
     stage('Testing') {
         parallel([
                 'ubuntu-test' : { ubuntuTesting() },
-                'windows-test': { windowsTesting() }
+                //'windows-test': { windowsTesting() }
         ])
     }
 }
@@ -29,12 +29,12 @@ def publishing() {
 
         publishedVersions = parallel([
                 'ubuntu-files' : { ubuntuPublishing() },
-                'windows-files': { windowsPublishing() },
+                //'windows-files': { windowsPublishing() },
         ])
 
-        if (publishedVersions['windows-files'] != publishedVersions['ubuntu-files']) {
-            error "platforms artifacts have different versions"
-        }
+        //if (publishedVersions['windows-files'] != publishedVersions['ubuntu-files']) {
+        //    error "platforms artifacts have different versions"
+        //}
     }
 }
 
@@ -239,6 +239,12 @@ def getSuffix(isRelease, target) {
     def suffix
     if (env.BRANCH_NAME == 'master' && !isRelease) {
         suffix = "-dev-$env.BUILD_NUMBER"
+    } else if (env.BRANCH_NAME == 'authz' && !isRelease) {
+        if (target == 'Cargo') {
+            suffix = "-authz-$env.BUILD_NUMBER"
+        } else {
+            suffix = "-$env.BUILD_NUMBER"
+        }
     } else if (env.BRANCH_NAME == 'rc') {
         if (isRelease) {
             suffix = ""

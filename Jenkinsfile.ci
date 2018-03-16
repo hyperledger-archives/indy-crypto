@@ -6,7 +6,7 @@ def testing() {
     stage('Testing') {
         parallel([
                 'ubuntu-test' : { ubuntuTesting() },
-                'windows-test': { windowsTesting() }
+                //'windows-test': { windowsTesting() }
         ])
     }
 }
