@@ -30,7 +30,7 @@ pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
 /// A list of attributes a Claim is based on.
 #[derive(Debug, Clone)]
 pub struct CredentialSchema {
-    attrs: BTreeSet<String> /* attr names */
+    pub attrs: BTreeSet<String> /* attr names */
 }
 
 /// A Builder of `Claim Schema`.
@@ -60,7 +60,7 @@ impl CredentialSchemaBuilder {
 
 #[derive(Debug, Clone)]
 pub struct NonCredentialSchemaElements {
-    attrs: BTreeSet<String>
+    pub attrs: BTreeSet<String>
 }
 
 #[derive(Debug)]
@@ -254,6 +254,16 @@ pub struct CredentialPrivateKey {
     r_key: Option<CredentialRevocationPrivateKey>,
 }
 
+impl CredentialPrivateKey {
+    pub fn get_primary_key(&self) -> Result<CredentialPrimaryPrivateKey, IndyCryptoError> {
+        Ok(self.p_key.clone()?)
+    }
+
+    pub fn get_revocation_key(&self) -> Result<Option<CredentialRevocationPrivateKey>, IndyCryptoError> {
+        Ok(self.r_key.clone())
+    }
+}
+
 impl JsonEncodable for CredentialPrivateKey {}
 
 impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
@@ -261,11 +271,11 @@ impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 /// Issuer's "Public Key" is used to verify the Issuer's signature over the Claim's attributes' values (primary credential).
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct CredentialPrimaryPublicKey {
-    n: BigNumber,
-    s: BigNumber,
-    r: BTreeMap<String /* attr_name */, BigNumber>,
-    rctxt: BigNumber,
-    z: BigNumber
+    pub n: BigNumber,
+    pub s: BigNumber,
+    pub r: BTreeMap<String /* attr_name */, BigNumber>,
+    pub rctxt: BigNumber,
+    pub z: BigNumber
 }
 
 impl CredentialPrimaryPublicKey {
@@ -283,8 +293,17 @@ impl CredentialPrimaryPublicKey {
 /// Issuer's "Private Key" used for signing Claim's attributes' values (primary credential)
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct CredentialPrimaryPrivateKey {
-    p: BigNumber,
-    q: BigNumber
+    pub p: BigNumber,
+    pub q: BigNumber
+}
+
+impl CredentialPrimaryPrivateKey {
+    pub fn clone(&self) -> Result<CredentialPrimaryPrivateKey, IndyCryptoError> {
+        Ok(CredentialPrimaryPrivateKey {
+            p: self.p.clone()?,
+            q: self.q.clone()?
+        })
+    }
 }
 
 /// `Primary Public Key Metadata` required for building of Proof Correctness of `Issuer Public Key`
@@ -309,24 +328,24 @@ impl<'a> JsonDecodable<'a> for CredentialKeyCorrectnessProof {}
 /// `Revocation Public Key` is used to verify that credential was'nt revoked by Issuer.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct CredentialRevocationPublicKey {
-    g: PointG1,
-    g_dash: PointG2,
-    h: PointG1,
-    h0: PointG1,
-    h1: PointG1,
-    h2: PointG1,
-    htilde: PointG1,
-    h_cap: PointG2,
-    u: PointG2,
-    pk: PointG1,
-    y: PointG2,
+    pub g: PointG1,
+    pub g_dash: PointG2,
+    pub h: PointG1,
+    pub h0: PointG1,
+    pub h1: PointG1,
+    pub h2: PointG1,
+    pub htilde: PointG1,
+    pub h_cap: PointG2,
+    pub u: PointG2,
+    pub pk: PointG1,
+    pub y: PointG2,
 }
 
 /// `Revocation Private Key` is used for signing Claim.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CredentialRevocationPrivateKey {
-    x: GroupOrderElement,
-    sk: GroupOrderElement
+    pub x: GroupOrderElement,
+    pub sk: GroupOrderElement
 }
 
 pub type Accumulator = PointG2;
