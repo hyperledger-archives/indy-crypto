@@ -1149,9 +1149,9 @@ mod test {
         let (mut credential_signature, signature_correctness_proof) =
                     Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
                                             &blinded_credential_secrets,
-                                            &blinded_credential_secrets_correctness_proof,
-                                            &credential_nonce,
-                                            &credential_issuance_nonce,
+                                            blinded_credential_secrets_correctness_proof.as_ref(),
+                                            credential_nonce.as_ref(),
+                                            credential_issuance_nonce.as_ref(),
                                             &credential_values,
                                             &credential_pub_key,
                                             &credential_priv_key).unwrap();
@@ -1191,9 +1191,9 @@ mod test {
         let (mut credential_signature, signature_correctness_proof, rev_reg_delta) =
             Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
                                                &blinded_credential_secrets,
-                                               &blinded_credential_secrets_correctness_proof,
-                                               &credential_nonce,
-                                               &credential_issuance_nonce,
+                                               blinded_credential_secrets_correctness_proof.as_ref(),
+                                               credential_nonce.as_ref(),
+                                               credential_issuance_nonce.as_ref(),
                                                &credential_values,
                                                &credential_pub_key,
                                                &credential_priv_key,
@@ -1222,14 +1222,14 @@ mod test {
     fn setup_test() -> (CredentialSchema,
                         NonCredentialSchemaElements,
                         CredentialValues,
-                        Nonce,
+                        Option<Nonce>,
                         CredentialPublicKey,
                         CredentialPrivateKey,
                         CredentialKeyCorrectnessProof,
                         BlindedCredentialSecrets,
                         CredentialSecretsBlindingFactors,
-                        BlindedCredentialSecretsCorrectnessProof,
-                        Nonce) {
+                        Option<BlindedCredentialSecretsCorrectnessProof>,
+                        Option<Nonce>) {
 
         let credential_schema = prover::mocks::credential_schema();
         let non_credential_schema_elements = prover::mocks::non_credential_schema_elements();
@@ -1250,14 +1250,14 @@ mod test {
             credential_schema,
             non_credential_schema_elements,
             credential_values,
-            credential_nonce,
+            Some(credential_nonce),
             credential_pub_key,
             credential_priv_key,
             credential_key_correctness_proof,
             blinded_credential_secrets,
             credential_secrets_blinding_factors,
-            blinded_credential_secrets_correctness_proof,
-            new_nonce().unwrap()
+            Some(blinded_credential_secrets_correctness_proof),
+            Some(new_nonce().unwrap())
         )
     }
 
@@ -1265,19 +1265,19 @@ mod test {
                      non_credential_schema_elements: NonCredentialSchemaElements,
                      credential_values: CredentialValues,
                      credential_signature: &mut CredentialSignature,
-                     signature_correctness_proof: SignatureCorrectnessProof,
+                     signature_correctness_proof: Option<SignatureCorrectnessProof>,
                      credential_secrets_blinding_factors: CredentialSecretsBlindingFactors,
                      credential_pub_key: CredentialPublicKey,
-                     credential_issuance_nonce: Nonce,
+                     credential_issuance_nonce: Option<Nonce>,
                      rev_key_pub: Option<&RevocationKeyPublic>,
                      rev_reg: Option<&RevocationRegistry>,
                      witness: Option<&Witness>) {
         Prover::process_credential_signature(credential_signature,
                                              &credential_values,
-                                             &signature_correctness_proof,
+                                             signature_correctness_proof.as_ref(),
                                              &credential_secrets_blinding_factors,
                                              &credential_pub_key,
-                                             &credential_issuance_nonce,
+                                             credential_issuance_nonce.as_ref(),
                                              rev_key_pub,
                                              rev_reg,
                                              witness).unwrap();

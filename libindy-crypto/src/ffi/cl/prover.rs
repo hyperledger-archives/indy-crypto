@@ -523,10 +523,10 @@ pub extern fn indy_crypto_cl_prover_process_credential_signature(credential_sign
 
     check_useful_mut_c_reference!(credential_signature, CredentialSignature, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(signature_correctness_proof, SignatureCorrectnessProof, ErrorCode::CommonInvalidParam2);
+    check_useful_opt_c_reference!(signature_correctness_proof, SignatureCorrectnessProof);
     check_useful_c_reference!(credential_secrets_blinding_factors, CredentialSecretsBlindingFactors, ErrorCode::CommonInvalidParam3);
     check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam4);
-    check_useful_c_reference!(credential_issuance_nonce, Nonce, ErrorCode::CommonInvalidParam5);
+    check_useful_opt_c_reference!(credential_issuance_nonce, Nonce);
     check_useful_opt_c_reference!(rev_key_pub, RevocationKeyPublic);
     check_useful_opt_c_reference!(rev_reg, RevocationRegistry);
     check_useful_opt_c_reference!(witness, Witness);

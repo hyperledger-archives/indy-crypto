@@ -109,6 +109,16 @@ macro_rules! check_useful_c_ptr {
     }
 }
 
+macro_rules! check_useful_opt_c_ptr {
+    ($ptr:ident, $err1:expr) => {
+        if $ptr.is_null() {
+            None
+        } else {
+            Some($ptr)
+        }
+    }
+}
+
 macro_rules! check_useful_c_str {
     ($x:ident, $e:expr) => {
         let $x = match CTypesUtils::c_str_to_string($x) {

@@ -168,10 +168,10 @@ impl Prover {
     /// ```
     pub fn process_credential_signature(credential_signature: &mut CredentialSignature,
                                         credential_values: &CredentialValues,
-                                        signature_correctness_proof: &SignatureCorrectnessProof,
+                                        signature_correctness_proof: Option<&SignatureCorrectnessProof>,
                                         credential_secrets_blinding_factors: &CredentialSecretsBlindingFactors,
                                         credential_pub_key: &CredentialPublicKey,
-                                        nonce: &Nonce,
+                                        nonce: Option<&Nonce>,
                                         rev_key_pub: Option<&RevocationKeyPublic>,
                                         rev_reg: Option<&RevocationRegistry>,
                                         witness: Option<&Witness>) -> Result<(), IndyCryptoError> {
@@ -196,11 +196,14 @@ impl Prover {
 
         Prover::_process_primary_credential(&mut credential_signature.p_credential, &credential_secrets_blinding_factors.v_prime)?;
 
-        Prover::_check_signature_correctness_proof(&credential_signature.p_credential,
-                                                   credential_values,
-                                                   signature_correctness_proof,
-                                                   &credential_pub_key.p_key,
-                                                   nonce)?;
+        match (signature_correctness_proof, nonce) {
+            (Some(prf), Some(cred_nonce)) => Prover::_check_signature_correctness_proof(&credential_signature.p_credential,
+                                                                                        credential_values,
+                                                                                        prf,
+                                                                                        &credential_pub_key.p_key,
+                                                                                        cred_nonce)?,
+            _ => ()
+        }
 
         if let (&mut Some(ref mut non_revocation_cred), Some(ref vr_prime), &Some(ref r_key),
             Some(ref r_key_pub), Some(ref r_reg), Some(ref witness)) = (&mut credential_signature.r_credential,
@@ -1447,10 +1450,10 @@ mod tests {
 
         Prover::process_credential_signature(&mut credential_signature,
                                              &mocks::credential_values(),
-                                             &issuer::mocks::signature_correctness_proof(),
+                                             Some(issuer::mocks::signature_correctness_proof()).as_ref(),
                                              &mocks::credential_secrets_blinding_factors(),
                                              &issuer::mocks::credential_public_key(),
-                                             &issuer::mocks::credential_issuance_nonce(),
+                                             Some(issuer::mocks::credential_issuance_nonce()).as_ref(),
                                              None,
                                              None,
                                              None).unwrap();
