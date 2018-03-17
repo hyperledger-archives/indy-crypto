@@ -289,10 +289,12 @@ impl Issuer {
                                          credential_pub_key,
                                          credential_priv_key)?;
 
+        let cred_signature = CredentialSignature { p_credential: p_cred, r_credential: None };
+
         trace!("Issuer::sign_credential: <<< cred_signature: {:?}, signature_correctness_proof: {:?}",
                cred_signature, signature_correctness_proof);
 
-        Ok((CredentialSignature { p_credential: p_cred, r_credential: None }, signature_correctness_proof))
+        Ok((cred_signature, signature_correctness_proof))
     }
 
     /// Signs credential values with both primary and revocation keys.
