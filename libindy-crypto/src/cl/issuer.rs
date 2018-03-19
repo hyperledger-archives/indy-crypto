@@ -151,14 +151,15 @@ impl Issuer {
         Ok(res)
     }
 
-    pub fn _sign_credential_primary(prover_id: &str,
-                                    blinded_credential_secrets: &BlindedCredentialSecrets,
-                                    blinded_credential_secrets_correctness_proof: Option<&BlindedCredentialSecretsCorrectnessProof>,
-                                    credential_nonce: Option<&Nonce>,
-                                    credential_issuance_nonce: Option<&Nonce>,
-                                    credential_values: &CredentialValues,
-                                    credential_pub_key: &CredentialPublicKey,
-                                    credential_priv_key: &CredentialPrivateKey) -> Result<(PrimaryCredentialSignature, Option<SignatureCorrectnessProof>), IndyCryptoError> {
+    // TODO: Fixme; This should ideally be private, but making it public temporarily
+    pub fn _generate_primary_credential(prover_id: &str,
+                                        blinded_credential_secrets: &BlindedCredentialSecrets,
+                                        blinded_credential_secrets_correctness_proof: Option<&BlindedCredentialSecretsCorrectnessProof>,
+                                        credential_nonce: Option<&Nonce>,
+                                        credential_issuance_nonce: Option<&Nonce>,
+                                        credential_values: &CredentialValues,
+                                        credential_pub_key: &CredentialPublicKey,
+                                        credential_priv_key: &CredentialPrivateKey) -> Result<(PrimaryCredentialSignature, Option<SignatureCorrectnessProof>), IndyCryptoError> {
         trace!("Issuer::_sign_credential_primary: >>> prover_id: {:?}\n \
                                              blinded_credential_secrets: {:?}\n \
                                              blinded_credential_secrets_correctness_proof: {:?}\n \
@@ -280,14 +281,14 @@ impl Issuer {
                                             credential_pub_key,
                                             credential_priv_key);
 
-        let (p_cred, signature_correctness_proof) = Issuer::_sign_credential_primary(prover_id,
-                                         blinded_credential_secrets,
-                                         blinded_credential_secrets_correctness_proof,
-                                         credential_nonce,
-                                         credential_issuance_nonce,
-                                         credential_values,
-                                         credential_pub_key,
-                                         credential_priv_key)?;
+        let (p_cred, signature_correctness_proof) = Issuer::_generate_primary_credential(prover_id,
+                                                                                         blinded_credential_secrets,
+                                                                                         blinded_credential_secrets_correctness_proof,
+                                                                                         credential_nonce,
+                                                                                         credential_issuance_nonce,
+                                                                                         credential_values,
+                                                                                         credential_pub_key,
+                                                                                         credential_priv_key)?;
 
         let cred_signature = CredentialSignature { p_credential: p_cred, r_credential: None };
 
@@ -385,14 +386,14 @@ impl Issuer {
         // In the anoncreds whitepaper, `credential context` is denoted by `m2`
         let cred_context = Issuer::_gen_credential_context(prover_id, Some(rev_idx))?;
 
-        let (p_cred, signature_correctness_proof) = Issuer::_sign_credential_primary(prover_id,
-                                                             blinded_credential_secrets,
-                                                             blinded_credential_secrets_correctness_proof,
-                                                             credential_nonce,
-                                                             credential_issuance_nonce,
-                                                             credential_values,
-                                                             credential_pub_key,
-                                                             credential_priv_key)?;
+        let (p_cred, signature_correctness_proof) = Issuer::_generate_primary_credential(prover_id,
+                                                                                         blinded_credential_secrets,
+                                                                                         blinded_credential_secrets_correctness_proof,
+                                                                                         credential_nonce,
+                                                                                         credential_issuance_nonce,
+                                                                                         credential_values,
+                                                                                         credential_pub_key,
+                                                                                         credential_priv_key)?;
 
         let (r_cred, rev_reg_delta) = Issuer::_new_non_revocation_credential(rev_idx,
                                                                              &cred_context,
@@ -770,7 +771,8 @@ impl Issuer {
     }
 
     // In the anoncreds whitepaper, `credential context` is denoted by `m2`
-    fn _gen_credential_context(prover_id: &str, rev_idx: Option<u32>) -> Result<BigNumber, IndyCryptoError> {
+    // TODO: Fixme; This should ideally be private, but making it public temporarily
+    pub fn _gen_credential_context(prover_id: &str, rev_idx: Option<u32>) -> Result<BigNumber, IndyCryptoError> {
         trace!("Issuer::_calc_m2: >>> prover_id: {:?}, rev_idx: {:?}", prover_id, rev_idx);
 
         let rev_idx = rev_idx.map(|i| i as i32).unwrap_or(-1);
@@ -1107,7 +1109,7 @@ mod tests {
     }
 
     #[test]
-    fn sign_credential_signature_works() {
+    fn credential_signature_proof_works() {
         MockHelper::inject();
 
         let (credential_signature_signature, signature_correctness_proof) = Issuer::sign_credential(&prover::mocks::PROVER_DID,

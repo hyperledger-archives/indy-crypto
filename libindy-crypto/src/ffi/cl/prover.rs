@@ -166,9 +166,9 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
                                                                 blinded_credential_secrets_correctness_proof_p);
 
     check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam1);
-    check_useful_c_reference!(credential_key_correctness_proof, CredentialKeyCorrectnessProof, ErrorCode::CommonInvalidParam2);
+    check_useful_opt_c_reference!(credential_key_correctness_proof, CredentialKeyCorrectnessProof);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(credential_nonce, Nonce, ErrorCode::CommonInvalidParam4);
+    check_useful_opt_c_reference!(credential_nonce, Nonce);
     check_useful_c_ptr!(blinded_credential_secrets_p, ErrorCode::CommonInvalidParam5);
     check_useful_c_ptr!(credential_secrets_blinding_factors_p, ErrorCode::CommonInvalidParam6);
     check_useful_c_ptr!(blinded_credential_secrets_correctness_proof_p, ErrorCode::CommonInvalidParam7);
@@ -196,7 +196,9 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
             unsafe {
                 *blinded_credential_secrets_p = Box::into_raw(Box::new(blinded_credential_secrets)) as *const c_void;
                 *credential_secrets_blinding_factors_p = Box::into_raw(Box::new(credential_secrets_blinding_factors)) as *const c_void;
-                *blinded_credential_secrets_correctness_proof_p = Box::into_raw(Box::new(blinded_credential_secrets_correctness_proof)) as *const c_void;
+                if blinded_credential_secrets_correctness_proof.is_some() {
+                    *blinded_credential_secrets_correctness_proof_p = Box::into_raw(Box::new(blinded_credential_secrets_correctness_proof)) as *const c_void;
+                }
                 trace!("indy_crypto_cl_prover_blind_credential_secrets: *blinded_credential_secrets_p: {:?}, \
                                                                         *credential_secrets_blinding_factors_p: {:?}, \
                                                                         *blinded_credential_secrets_correctness_proof_p: {:?}",

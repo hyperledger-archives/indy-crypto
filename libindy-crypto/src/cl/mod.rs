@@ -143,7 +143,7 @@ impl<'a> JsonDecodable<'a> for CredentialValue {}
 /// Values of attributes from `Claim Schema` (must be integers).
 #[derive(Debug)]
 pub struct CredentialValues {
-    attrs_values: BTreeMap<String, CredentialValue>
+    pub attrs_values: BTreeMap<String, CredentialValue>
 }
 
 impl CredentialValues {
@@ -214,8 +214,8 @@ impl CredentialValuesBuilder {
 /// Issuer keys have global identifier that must be known to all parties.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct CredentialPublicKey {
-    p_key: CredentialPrimaryPublicKey,
-    r_key: Option<CredentialRevocationPublicKey>,
+    pub p_key: CredentialPrimaryPublicKey,
+    pub r_key: Option<CredentialRevocationPublicKey>,
 }
 
 impl CredentialPublicKey {
@@ -250,8 +250,8 @@ impl<'a> JsonDecodable<'a> for CredentialPublicKey {}
 /// One for signing primary credentials and second for signing non-revocation credentials.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CredentialPrivateKey {
-    p_key: CredentialPrimaryPrivateKey,
-    r_key: Option<CredentialRevocationPrivateKey>,
+    pub p_key: CredentialPrimaryPrivateKey,
+    pub r_key: Option<CredentialRevocationPrivateKey>,
 }
 
 impl CredentialPrivateKey {
@@ -538,10 +538,10 @@ impl<'a> JsonDecodable<'a> for CredentialSignature {}
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PrimaryCredentialSignature {
-    m_2: BigNumber,
-    a: BigNumber,
-    e: BigNumber,
-    v: BigNumber
+    pub m_2: BigNumber,
+    pub a: BigNumber,
+    pub e: BigNumber,
+    pub v: BigNumber
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -672,10 +672,10 @@ impl<'a> JsonDecodable<'a> for MasterSecret {}
 /// Blinded Master Secret uses by Issuer in credential creation.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlindedCredentialSecrets {
-    u: BigNumber,
-    ur: Option<PointG1>,
-    hidden_attributes: BTreeSet<String>,
-    committed_attributes: BTreeMap<String, BigNumber>
+    pub u: BigNumber,
+    pub ur: Option<PointG1>,
+    pub hidden_attributes: BTreeSet<String>,
+    pub committed_attributes: BTreeMap<String, BigNumber>
 }
 
 impl JsonEncodable for BlindedCredentialSecrets {}
@@ -695,8 +695,8 @@ impl<'a> JsonDecodable<'a> for CredentialSecretsBlindingFactors {}
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct PrimaryBlindedCredentialSecretsFactors {
-    u: BigNumber,
-    v_prime: BigNumber,
+    pub u: BigNumber,
+    pub v_prime: BigNumber,
     hidden_attributes: BTreeSet<String>,
     committed_attributes: BTreeMap<String, BigNumber>
 }
@@ -1243,9 +1243,9 @@ mod test {
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof) =
                                 Prover::blind_credential_secrets(&credential_pub_key,
-                                                                 &credential_key_correctness_proof,
+                                                                 Some(&credential_key_correctness_proof),
                                                                  &credential_values,
-                                                                 &credential_nonce).unwrap();
+                                                                 Some(&credential_nonce)).unwrap();
         (
             credential_schema,
             non_credential_schema_elements,
@@ -1256,7 +1256,7 @@ mod test {
             credential_key_correctness_proof,
             blinded_credential_secrets,
             credential_secrets_blinding_factors,
-            Some(blinded_credential_secrets_correctness_proof),
+            blinded_credential_secrets_correctness_proof,
             Some(new_nonce().unwrap())
         )
     }

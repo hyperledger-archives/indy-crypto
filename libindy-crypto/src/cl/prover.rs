@@ -58,11 +58,11 @@ impl Prover {
     ///                                 &master_secret_blinding_nonce).unwrap();
     /// ```
     pub fn blind_credential_secrets(credential_pub_key: &CredentialPublicKey,
-                                    credential_key_correctness_proof: &CredentialKeyCorrectnessProof,
+                                    credential_key_correctness_proof: Option<&CredentialKeyCorrectnessProof>,
                                     credential_values: &CredentialValues,
-                                    credential_nonce: &Nonce) -> Result<(BlindedCredentialSecrets,
+                                    credential_nonce: Option<&Nonce>) -> Result<(BlindedCredentialSecrets,
                                                                          CredentialSecretsBlindingFactors,
-                                                                         BlindedCredentialSecretsCorrectnessProof), IndyCryptoError> {
+                                                                                 Option<BlindedCredentialSecretsCorrectnessProof>), IndyCryptoError> {
         trace!("Prover::blind_credential_secrets: >>> credential_pub_key: {:?}, \
                                                       credential_key_correctness_proof: {:?}, \
                                                       credential_values: {:?}, \
@@ -72,7 +72,9 @@ impl Prover {
                                                       credential_values,
                                                       credential_nonce);
 
-        Prover::_check_credential_key_correctness_proof(&credential_pub_key.p_key, credential_key_correctness_proof)?;
+        if credential_key_correctness_proof.is_some() {
+            Prover::_check_credential_key_correctness_proof(&credential_pub_key.p_key, credential_key_correctness_proof.unwrap())?;
+        }
 
         let primary_blinded_credential_secrets =
             Prover::_generate_primary_blinded_credential_secrets(&credential_pub_key.p_key, &credential_values)?;
@@ -82,11 +84,13 @@ impl Prover {
             _ => None
         };
 
-        let blinded_credential_secrets_correctness_proof =
-            Prover::_new_blinded_credential_secrets_correctness_proof(&credential_pub_key.p_key,
-                                                                      &primary_blinded_credential_secrets,
-                                                                      &credential_nonce,
-                                                                      &credential_values)?;
+        let blinded_credential_secrets_correctness_proof = match credential_nonce {
+            Some(nonce) => Some(Prover::_new_blinded_credential_secrets_correctness_proof(&credential_pub_key.p_key,
+                                                                                          &primary_blinded_credential_secrets,
+                                                                                          &nonce,
+                                                                                          &credential_values)?),
+            None => None
+        };
 
         let blinded_credential_secrets = BlindedCredentialSecrets {
             u: primary_blinded_credential_secrets.u,
@@ -288,7 +292,8 @@ impl Prover {
         Ok(())
     }
 
-    fn _generate_primary_blinded_credential_secrets(p_pub_key: &CredentialPrimaryPublicKey,
+    // TODO: Fixme; This should be private, making it public temporarily
+    pub fn _generate_primary_blinded_credential_secrets(p_pub_key: &CredentialPrimaryPublicKey,
                                                     credential_values: &CredentialValues) -> Result<PrimaryBlindedCredentialSecretsFactors, IndyCryptoError> {
         trace!("Prover::_generate_blinded_primary_master_secret: >>> p_pub_key: {:?}, credential_values: {:?}", p_pub_key, credential_values);
 
@@ -1417,16 +1422,16 @@ mod tests {
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof) =
                 Prover::blind_credential_secrets(&issuer::mocks::credential_public_key(),
-                                                 &issuer::mocks::credential_key_correctness_proof(),
+                                                 Some(&issuer::mocks::credential_key_correctness_proof()),
                                                  &mocks::credential_values(),
-                                                 &mocks::credential_nonce()).unwrap();
+                                                 Some(&mocks::credential_nonce())).unwrap();
 
         assert_eq!(blinded_credential_secrets.u, mocks::primary_blinded_credential_secrets_factors().u);
         assert_eq!(credential_secrets_blinding_factors.v_prime, mocks::primary_blinded_credential_secrets_factors().v_prime);
         assert_eq!(blinded_credential_secrets.committed_attributes, mocks::primary_blinded_credential_secrets_factors().committed_attributes);
         assert!(blinded_credential_secrets.ur.is_some());
         assert!(credential_secrets_blinding_factors.vr_prime.is_some());
-        assert_eq!(blinded_credential_secrets_correctness_proof, mocks::blinded_credential_secrets_correctness_proof())
+        assert_eq!(blinded_credential_secrets_correctness_proof, Some(mocks::blinded_credential_secrets_correctness_proof()))
     }
 
     #[test]
