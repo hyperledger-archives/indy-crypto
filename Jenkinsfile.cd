@@ -240,7 +240,7 @@ def getSuffix(isRelease, target) {
     if (env.BRANCH_NAME == 'master' && !isRelease) {
         suffix = "-dev-$env.BUILD_NUMBER"
     } else if (env.BRANCH_NAME == 'authz' && !isRelease) {
-        if (target == 'Cargo') {
+        if (target == "Cargo") {
             suffix = "-authz-$env.BUILD_NUMBER"
         } else {
             suffix = "-$env.BUILD_NUMBER"
