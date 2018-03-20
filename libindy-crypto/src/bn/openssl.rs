@@ -86,14 +86,24 @@ impl BigNumber {
     }
 
     pub fn is_safe_prime(&self, ctx: Option<&mut BigNumberContext>) -> Result<bool, IndyCryptoError> {
-        let c1 = self.is_prime(ctx)?;
-        if c1 {
-            Ok(
-                self.sub(&BigNumber::from_u32(1)?)?
-                    .div(&BigNumber::from_u32(2)?, None)?.is_prime(None)?
-            )
-        } else {
-            Ok(false)
+
+        match ctx {
+            Some(c) => {
+                // according to https://eprint.iacr.org/2003/186.pdf
+                // a safe prime is congruent to 2 mod 3
+
+                // a safe prime satisfies (p-1)/2 is prime. Since a
+                // prime is odd, We just need to divide by 2
+                Ok(
+                    self.modulus(&BigNumber::from_u32(3)?, Some(c))? == BigNumber::from_u32(2)? &&
+                    self.is_prime(Some(c))? &&
+                    self.rshift1()?.is_prime(Some(c))?
+                )
+            },
+            None => {
+                let mut context = BigNumber::new_context()?;
+                self.is_safe_prime(Some(&mut context))
+            }
         }
     }
 
