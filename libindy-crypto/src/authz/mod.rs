@@ -146,8 +146,8 @@ impl DoubleCommitmentProof2 {
         let a_prime = &u_dc2["a"];
         let b_prime = &u_dc2["b"];
 
-        let a_hat = hide_value(&a_prime, a)?;
-        let b_hat = hide_value(&b_prime, b)?;
+        let a_hat = hide_value(&a_prime, a)?.modulus(&gen.p_0, Some(&mut ctx1))?;
+        let b_hat = hide_value(&b_prime, b)?.modulus(&gen.p_0, Some(&mut ctx1))?;
 
         let mut p_values = HashMap::new();
 
@@ -165,15 +165,15 @@ impl DoubleCommitmentProof2 {
             let f_prime = &u_dc2[&f_key];
             let p_prime = &u_dc2[&p_key];
 
-            let e_hat = hide_iter(&e_prime, e, i)?;
+            let e_hat = hide_iter(&e_prime, e, i)?.modulus(&gen.p_0, Some(&mut ctx1))?;
 
             let f_tilde = f.mul(&gen.h_1.mod_exp(&e_hat, &gen.p_1, Some(&mut ctx1))?, Some(&mut ctx1))?;
 
-            let f_hat = hide_iter(&f_prime, &f_tilde, i)?;
+            let f_hat = hide_iter(&f_prime, &f_tilde, i)?.modulus(&gen.p_1, Some(&mut ctx1))?;
 
             let p_tilde = p.mul(&gen.h_1.mod_exp(&e_hat, &gen.p_1, Some(&mut ctx1))?, Some(&mut ctx1))?;
 
-            let p_hat = hide_iter(&p_prime, &p_tilde, i)?;
+            let p_hat = hide_iter(&p_prime, &p_tilde, i)?.modulus(&gen.p_1, Some(&mut ctx1))?;
 
             p_values.insert(e_key, e_hat);
             p_values.insert(f_key, f_hat);
@@ -301,9 +301,9 @@ impl DoubleCommitmentProof1 {
         let b_prime = &u_dc1["b"];
         let d_prime = &u_dc1["d"];
 
-        let a_hat = hide_value(&a_prime, a)?;
-        let b_hat = hide_value(&b_prime, b)?;
-        let d_hat = hide_value(&d_prime, d)?;
+        let a_hat = hide_value(&a_prime, a)?.modulus(&gen.p_1, Some(&mut ctx1))?;
+        let b_hat = hide_value(&b_prime, b)?.modulus(&gen.p_1, Some(&mut ctx1))?;
+        let d_hat = hide_value(&d_prime, d)?.modulus(&gen.p_1, Some(&mut ctx1))?;
 
         let mut p_values = HashMap::new();
 
@@ -320,12 +320,12 @@ impl DoubleCommitmentProof1 {
             let e_prime = &u_dc1[&e_key];
             let f_prime = &u_dc1[&f_key];
 
-            let e_hat = hide_iter(&e_prime, e, i)?;
+            let e_hat = hide_iter(&e_prime, e, i)?.modulus(&gen.p_1, Some(&mut ctx1))?;
 
             let f_tilde = f.mul(&gen.k_2.mod_exp(&e_hat, &gen.p_2, Some(&mut ctx1))?,
                                 Some(&mut ctx1))?;
 
-            let f_hat = hide_iter(&f_prime, &f_tilde, i)?;
+            let f_hat = hide_iter(&f_prime, &f_tilde, i)?.modulus(&gen.p_2, Some(&mut ctx1))?;
 
             p_values.insert(e_key, e_hat);
             p_values.insert(f_key, f_hat);
