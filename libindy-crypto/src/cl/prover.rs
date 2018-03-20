@@ -705,28 +705,21 @@ impl ProofBuilder {
                                                                                                   &rev_reg,
                                                                                                   &credential_pub_key.r_key,
                                                                                                   &witness) {
-            let proof = ProofBuilder::_init_non_revocation_proof(&r_cred,
+            let (m, p) = self.add_sub_proof_request_revocation(&r_cred,
                                                                  &r_reg,
                                                                  &r_pub_key,
                                                                  &witness)?;
-
-            self.c_list.extend_from_slice(&proof.as_c_list()?);
-            self.tau_list.extend_from_slice(&proof.as_tau_list()?);
-            m2_tilde = Some(group_element_to_bignum(&proof.tau_list_params.m2)?);
-            non_revoc_init_proof = Some(proof);
+            m2_tilde = Some(m);
+            non_revoc_init_proof = Some(p);  
         }
 
-        let primary_init_proof = ProofBuilder::_init_primary_proof(&credential_pub_key.p_key,
+        let primary_init_proof = self.add_sub_proof_request_primary(&credential_pub_key.p_key,
                                                                    &credential_signature.p_credential,
                                                                    credential_values,
                                                                    credential_schema,
                                                                    non_credential_schema_elements,
                                                                    sub_proof_request,
                                                                    m2_tilde)?;
-
-        self.c_list.extend_from_slice(&primary_init_proof.as_c_list()?);
-        self.tau_list.extend_from_slice(&primary_init_proof.as_tau_list()?);
-
         let init_proof = InitProof {
             primary_init_proof,
             non_revoc_init_proof,
@@ -846,6 +839,40 @@ impl ProofBuilder {
         trace!("ProofBuilder::finalize: <<< proof: {:?}", proof);
 
         Ok(proof)
+    }
+
+    // TODO: Fixme; This method should be private
+    pub fn add_sub_proof_request_primary(&mut self, primary_public_key: &CredentialPrimaryPublicKey, 
+        primary_credential: &PrimaryCredentialSignature, credential_values: &CredentialValues, 
+        credential_schema: &CredentialSchema, non_credential_schema_elements: &NonCredentialSchemaElements,
+        sub_proof_request: &SubProofRequest, m2_tilde: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
+        let primary_init_proof = ProofBuilder::_init_primary_proof(&primary_public_key,
+                                                                   &primary_credential,
+                                                                   credential_values,
+                                                                   credential_schema,
+                                                                   non_credential_schema_elements,
+                                                                   sub_proof_request,
+                                                                   m2_tilde)?;
+        self.c_list.extend_from_slice(&primary_init_proof.as_c_list()?);
+        self.tau_list.extend_from_slice(&primary_init_proof.as_tau_list()?);
+        Ok(primary_init_proof)
+    }
+
+    // TODO: Fixme; This method should be private
+    pub fn add_sub_proof_request_revocation(&mut self, revocation_credential: &NonRevocationCredentialSignature, 
+                                rev_reg: &RevocationRegistry,
+                                cred_rev_pub_key: &CredentialRevocationPublicKey,
+                                witness: &Witness) -> Result<(BigNumber, NonRevocInitProof), IndyCryptoError> {
+        let proof = ProofBuilder::_init_non_revocation_proof(&revocation_credential,
+                                                                 &rev_reg,
+                                                                 &cred_rev_pub_key,
+                                                                 &witness)?;
+
+        self.c_list.extend_from_slice(&proof.as_c_list()?);
+        self.tau_list.extend_from_slice(&proof.as_tau_list()?);
+        let m2_tilde = group_element_to_bignum(&proof.tau_list_params.m2)?;
+        let non_revoc_init_proof = proof;
+        Ok((m2_tilde, non_revoc_init_proof))
     }
 
     fn _check_add_sub_proof_request_params_consistency(cred_values: &CredentialValues,

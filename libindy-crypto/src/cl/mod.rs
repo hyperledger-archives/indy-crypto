@@ -520,8 +520,8 @@ impl SimpleTailsAccessor {
 /// Issuer's signature over Claim attribute values.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CredentialSignature {
-    p_credential: PrimaryCredentialSignature,
-    r_credential: Option<NonRevocationCredentialSignature> /* will be used to proof is credential revoked preparation */,
+    pub p_credential: PrimaryCredentialSignature,
+    pub r_credential: Option<NonRevocationCredentialSignature> /* will be used to proof is credential revoked preparation */,
 }
 
 impl CredentialSignature {
