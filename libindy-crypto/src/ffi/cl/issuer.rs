@@ -782,14 +782,14 @@ pub extern fn indy_crypto_cl_issuer_sign_credential(prover_id: *const c_char,
 
     check_useful_c_str!(prover_id, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(blinded_master_secret, BlindedCredentialSecrets, ErrorCode::CommonInvalidParam2);
-    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(master_secret_blinding_nonce, Nonce, ErrorCode::CommonInvalidParam4);
-    check_useful_c_reference!(credential_issuance_nonce, Nonce, ErrorCode::CommonInvalidParam5);
+    check_useful_opt_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof);
+    check_useful_opt_c_reference!(master_secret_blinding_nonce, Nonce);
+    check_useful_opt_c_reference!(credential_issuance_nonce, Nonce);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam6);
     check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam7);
     check_useful_c_reference!(credential_priv_key, CredentialPrivateKey, ErrorCode::CommonInvalidParam8);
     check_useful_c_ptr!(credential_signature_p, ErrorCode::CommonInvalidParam10);
-    check_useful_c_ptr!(credential_signature_correctness_proof_p, ErrorCode::CommonInvalidParam11);
+    check_useful_opt_c_ptr!(credential_signature_correctness_proof_p, ErrorCode::CommonInvalidParam11);
 
     trace!("indy_crypto_cl_issuer_sign_credential: >>> prover_id: {:?}, blinded_master_secret: {:?}, blinded_master_secret_correctness_proof: {:?},\
      master_secret_blinding_nonce: {:?}, credential_issuance_nonce: {:?}, credential_values: {:?}, credential_pub_key: {:?}, credential_priv_key: {:?}",
@@ -798,9 +798,9 @@ pub extern fn indy_crypto_cl_issuer_sign_credential(prover_id: *const c_char,
 
     let res = match Issuer::sign_credential(&prover_id,
                                             &blinded_master_secret,
-                                            &blinded_master_secret_correctness_proof,
-                                            &master_secret_blinding_nonce,
-                                            &credential_issuance_nonce,
+                                            blinded_master_secret_correctness_proof,
+                                            master_secret_blinding_nonce,
+                                            credential_issuance_nonce,
                                             &credential_values,
                                             &credential_pub_key,
                                             &credential_priv_key) {
@@ -879,16 +879,16 @@ pub extern fn indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id: *const
 
     check_useful_c_str!(prover_id, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(blinded_master_secret, BlindedCredentialSecrets, ErrorCode::CommonInvalidParam2);
-    check_useful_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof, ErrorCode::CommonInvalidParam3);
-    check_useful_c_reference!(master_secret_blinding_nonce, Nonce, ErrorCode::CommonInvalidParam4);
-    check_useful_c_reference!(credential_issuance_nonce, Nonce, ErrorCode::CommonInvalidParam5);
+    check_useful_opt_c_reference!(blinded_master_secret_correctness_proof, BlindedCredentialSecretsCorrectnessProof);
+    check_useful_opt_c_reference!(master_secret_blinding_nonce, Nonce);
+    check_useful_opt_c_reference!(credential_issuance_nonce, Nonce);
     check_useful_c_reference!(credential_values, CredentialValues, ErrorCode::CommonInvalidParam6);
     check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam7);
     check_useful_c_reference!(credential_priv_key, CredentialPrivateKey, ErrorCode::CommonInvalidParam8);
     check_useful_mut_c_reference!(rev_reg, RevocationRegistry, ErrorCode::CommonInvalidParam12);
     check_useful_c_reference!(rev_key_priv, RevocationKeyPrivate, ErrorCode::CommonInvalidState); //TODO invalid param
     check_useful_c_ptr!(credential_signature_p, ErrorCode::CommonInvalidState); //TODO invalid param
-    check_useful_c_ptr!(credential_signature_correctness_proof_p, ErrorCode::CommonInvalidState); //TODO invalid param
+    check_useful_opt_c_ptr!(credential_signature_correctness_proof_p, ErrorCode::CommonInvalidState); //TODO invalid param
     check_useful_c_ptr!(revocation_registry_delta_p, ErrorCode::CommonInvalidState); //TODO invalid param
 
     trace!("indy_crypto_cl_issuer_sign_credential: >>> prover_id: {:?}, blinded_master_secret: {:?}, blinded_master_secret_correctness_proof: {:?}, \
@@ -899,9 +899,9 @@ pub extern fn indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id: *const
     let rta = FFITailsAccessor::new(ctx_tails, take_tail, put_tail);
     let res = match Issuer::sign_credential_with_revoc(&prover_id,
                                                        &blinded_master_secret,
-                                                       &blinded_master_secret_correctness_proof,
-                                                       &master_secret_blinding_nonce,
-                                                       &credential_issuance_nonce,
+                                                       blinded_master_secret_correctness_proof,
+                                                       master_secret_blinding_nonce,
+                                                       credential_issuance_nonce,
                                                        &credential_values,
                                                        &credential_pub_key,
                                                        &credential_priv_key,

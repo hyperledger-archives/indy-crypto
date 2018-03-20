@@ -30,7 +30,7 @@ pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
 /// A list of attributes a Claim is based on.
 #[derive(Debug, Clone)]
 pub struct CredentialSchema {
-    attrs: BTreeSet<String> /* attr names */
+    pub attrs: BTreeSet<String> /* attr names */
 }
 
 /// A Builder of `Claim Schema`.
@@ -60,7 +60,7 @@ impl CredentialSchemaBuilder {
 
 #[derive(Debug, Clone)]
 pub struct NonCredentialSchemaElements {
-    attrs: BTreeSet<String>
+    pub attrs: BTreeSet<String>
 }
 
 #[derive(Debug)]
@@ -143,7 +143,7 @@ impl<'a> JsonDecodable<'a> for CredentialValue {}
 /// Values of attributes from `Claim Schema` (must be integers).
 #[derive(Debug)]
 pub struct CredentialValues {
-    attrs_values: BTreeMap<String, CredentialValue>
+    pub attrs_values: BTreeMap<String, CredentialValue>
 }
 
 impl CredentialValues {
@@ -214,8 +214,8 @@ impl CredentialValuesBuilder {
 /// Issuer keys have global identifier that must be known to all parties.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub struct CredentialPublicKey {
-    p_key: CredentialPrimaryPublicKey,
-    r_key: Option<CredentialRevocationPublicKey>,
+    pub p_key: CredentialPrimaryPublicKey,
+    pub r_key: Option<CredentialRevocationPublicKey>,
 }
 
 impl CredentialPublicKey {
@@ -250,8 +250,18 @@ impl<'a> JsonDecodable<'a> for CredentialPublicKey {}
 /// One for signing primary credentials and second for signing non-revocation credentials.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CredentialPrivateKey {
-    p_key: CredentialPrimaryPrivateKey,
-    r_key: Option<CredentialRevocationPrivateKey>,
+    pub p_key: CredentialPrimaryPrivateKey,
+    pub r_key: Option<CredentialRevocationPrivateKey>,
+}
+
+impl CredentialPrivateKey {
+    pub fn get_primary_key(&self) -> Result<CredentialPrimaryPrivateKey, IndyCryptoError> {
+        Ok(self.p_key.clone()?)
+    }
+
+    pub fn get_revocation_key(&self) -> Result<Option<CredentialRevocationPrivateKey>, IndyCryptoError> {
+        Ok(self.r_key.clone())
+    }
 }
 
 impl JsonEncodable for CredentialPrivateKey {}
@@ -261,11 +271,11 @@ impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 /// Issuer's "Public Key" is used to verify the Issuer's signature over the Claim's attributes' values (primary credential).
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct CredentialPrimaryPublicKey {
-    n: BigNumber,
-    s: BigNumber,
-    r: BTreeMap<String /* attr_name */, BigNumber>,
-    rctxt: BigNumber,
-    z: BigNumber
+    pub n: BigNumber,
+    pub s: BigNumber,
+    pub r: BTreeMap<String /* attr_name */, BigNumber>,
+    pub rctxt: BigNumber,
+    pub z: BigNumber
 }
 
 impl CredentialPrimaryPublicKey {
@@ -283,8 +293,17 @@ impl CredentialPrimaryPublicKey {
 /// Issuer's "Private Key" used for signing Claim's attributes' values (primary credential)
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct CredentialPrimaryPrivateKey {
-    p: BigNumber,
-    q: BigNumber
+    pub p: BigNumber,
+    pub q: BigNumber
+}
+
+impl CredentialPrimaryPrivateKey {
+    pub fn clone(&self) -> Result<CredentialPrimaryPrivateKey, IndyCryptoError> {
+        Ok(CredentialPrimaryPrivateKey {
+            p: self.p.clone()?,
+            q: self.q.clone()?
+        })
+    }
 }
 
 /// `Primary Public Key Metadata` required for building of Proof Correctness of `Issuer Public Key`
@@ -309,24 +328,24 @@ impl<'a> JsonDecodable<'a> for CredentialKeyCorrectnessProof {}
 /// `Revocation Public Key` is used to verify that credential was'nt revoked by Issuer.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct CredentialRevocationPublicKey {
-    g: PointG1,
-    g_dash: PointG2,
-    h: PointG1,
-    h0: PointG1,
-    h1: PointG1,
-    h2: PointG1,
-    htilde: PointG1,
-    h_cap: PointG2,
-    u: PointG2,
-    pk: PointG1,
-    y: PointG2,
+    pub g: PointG1,
+    pub g_dash: PointG2,
+    pub h: PointG1,
+    pub h0: PointG1,
+    pub h1: PointG1,
+    pub h2: PointG1,
+    pub htilde: PointG1,
+    pub h_cap: PointG2,
+    pub u: PointG2,
+    pub pk: PointG1,
+    pub y: PointG2,
 }
 
 /// `Revocation Private Key` is used for signing Claim.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CredentialRevocationPrivateKey {
-    x: GroupOrderElement,
-    sk: GroupOrderElement
+    pub x: GroupOrderElement,
+    pub sk: GroupOrderElement
 }
 
 pub type Accumulator = PointG2;
@@ -501,8 +520,8 @@ impl SimpleTailsAccessor {
 /// Issuer's signature over Claim attribute values.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CredentialSignature {
-    p_credential: PrimaryCredentialSignature,
-    r_credential: Option<NonRevocationCredentialSignature> /* will be used to proof is credential revoked preparation */,
+    pub p_credential: PrimaryCredentialSignature,
+    pub r_credential: Option<NonRevocationCredentialSignature> /* will be used to proof is credential revoked preparation */,
 }
 
 impl CredentialSignature {
@@ -519,10 +538,10 @@ impl<'a> JsonDecodable<'a> for CredentialSignature {}
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PrimaryCredentialSignature {
-    m_2: BigNumber,
-    a: BigNumber,
-    e: BigNumber,
-    v: BigNumber
+    pub m_2: BigNumber,
+    pub a: BigNumber,
+    pub e: BigNumber,
+    pub v: BigNumber
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -653,10 +672,10 @@ impl<'a> JsonDecodable<'a> for MasterSecret {}
 /// Blinded Master Secret uses by Issuer in credential creation.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlindedCredentialSecrets {
-    u: BigNumber,
-    ur: Option<PointG1>,
-    hidden_attributes: BTreeSet<String>,
-    committed_attributes: BTreeMap<String, BigNumber>
+    pub u: BigNumber,
+    pub ur: Option<PointG1>,
+    pub hidden_attributes: BTreeSet<String>,
+    pub committed_attributes: BTreeMap<String, BigNumber>
 }
 
 impl JsonEncodable for BlindedCredentialSecrets {}
@@ -676,8 +695,8 @@ impl<'a> JsonDecodable<'a> for CredentialSecretsBlindingFactors {}
 
 #[derive(Eq, PartialEq, Debug)]
 pub struct PrimaryBlindedCredentialSecretsFactors {
-    u: BigNumber,
-    v_prime: BigNumber,
+    pub u: BigNumber,
+    pub v_prime: BigNumber,
     hidden_attributes: BTreeSet<String>,
     committed_attributes: BTreeMap<String, BigNumber>
 }
@@ -1130,9 +1149,9 @@ mod test {
         let (mut credential_signature, signature_correctness_proof) =
                     Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
                                             &blinded_credential_secrets,
-                                            &blinded_credential_secrets_correctness_proof,
-                                            &credential_nonce,
-                                            &credential_issuance_nonce,
+                                            blinded_credential_secrets_correctness_proof.as_ref(),
+                                            credential_nonce.as_ref(),
+                                            credential_issuance_nonce.as_ref(),
                                             &credential_values,
                                             &credential_pub_key,
                                             &credential_priv_key).unwrap();
@@ -1172,9 +1191,9 @@ mod test {
         let (mut credential_signature, signature_correctness_proof, rev_reg_delta) =
             Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
                                                &blinded_credential_secrets,
-                                               &blinded_credential_secrets_correctness_proof,
-                                               &credential_nonce,
-                                               &credential_issuance_nonce,
+                                               blinded_credential_secrets_correctness_proof.as_ref(),
+                                               credential_nonce.as_ref(),
+                                               credential_issuance_nonce.as_ref(),
                                                &credential_values,
                                                &credential_pub_key,
                                                &credential_priv_key,
@@ -1203,14 +1222,14 @@ mod test {
     fn setup_test() -> (CredentialSchema,
                         NonCredentialSchemaElements,
                         CredentialValues,
-                        Nonce,
+                        Option<Nonce>,
                         CredentialPublicKey,
                         CredentialPrivateKey,
                         CredentialKeyCorrectnessProof,
                         BlindedCredentialSecrets,
                         CredentialSecretsBlindingFactors,
-                        BlindedCredentialSecretsCorrectnessProof,
-                        Nonce) {
+                        Option<BlindedCredentialSecretsCorrectnessProof>,
+                        Option<Nonce>) {
 
         let credential_schema = prover::mocks::credential_schema();
         let non_credential_schema_elements = prover::mocks::non_credential_schema_elements();
@@ -1224,21 +1243,21 @@ mod test {
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof) =
                                 Prover::blind_credential_secrets(&credential_pub_key,
-                                                                 &credential_key_correctness_proof,
+                                                                 Some(&credential_key_correctness_proof),
                                                                  &credential_values,
-                                                                 &credential_nonce).unwrap();
+                                                                 Some(&credential_nonce)).unwrap();
         (
             credential_schema,
             non_credential_schema_elements,
             credential_values,
-            credential_nonce,
+            Some(credential_nonce),
             credential_pub_key,
             credential_priv_key,
             credential_key_correctness_proof,
             blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof,
-            new_nonce().unwrap()
+            Some(new_nonce().unwrap())
         )
     }
 
@@ -1246,19 +1265,19 @@ mod test {
                      non_credential_schema_elements: NonCredentialSchemaElements,
                      credential_values: CredentialValues,
                      credential_signature: &mut CredentialSignature,
-                     signature_correctness_proof: SignatureCorrectnessProof,
+                     signature_correctness_proof: Option<SignatureCorrectnessProof>,
                      credential_secrets_blinding_factors: CredentialSecretsBlindingFactors,
                      credential_pub_key: CredentialPublicKey,
-                     credential_issuance_nonce: Nonce,
+                     credential_issuance_nonce: Option<Nonce>,
                      rev_key_pub: Option<&RevocationKeyPublic>,
                      rev_reg: Option<&RevocationRegistry>,
                      witness: Option<&Witness>) {
         Prover::process_credential_signature(credential_signature,
                                              &credential_values,
-                                             &signature_correctness_proof,
+                                             signature_correctness_proof.as_ref(),
                                              &credential_secrets_blinding_factors,
                                              &credential_pub_key,
-                                             &credential_issuance_nonce,
+                                             credential_issuance_nonce.as_ref(),
                                              rev_key_pub,
                                              rev_reg,
                                              witness).unwrap();

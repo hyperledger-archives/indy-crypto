@@ -58,11 +58,11 @@ impl Prover {
     ///                                 &master_secret_blinding_nonce).unwrap();
     /// ```
     pub fn blind_credential_secrets(credential_pub_key: &CredentialPublicKey,
-                                    credential_key_correctness_proof: &CredentialKeyCorrectnessProof,
+                                    credential_key_correctness_proof: Option<&CredentialKeyCorrectnessProof>,
                                     credential_values: &CredentialValues,
-                                    credential_nonce: &Nonce) -> Result<(BlindedCredentialSecrets,
+                                    credential_nonce: Option<&Nonce>) -> Result<(BlindedCredentialSecrets,
                                                                          CredentialSecretsBlindingFactors,
-                                                                         BlindedCredentialSecretsCorrectnessProof), IndyCryptoError> {
+                                                                                 Option<BlindedCredentialSecretsCorrectnessProof>), IndyCryptoError> {
         trace!("Prover::blind_credential_secrets: >>> credential_pub_key: {:?}, \
                                                       credential_key_correctness_proof: {:?}, \
                                                       credential_values: {:?}, \
@@ -72,7 +72,9 @@ impl Prover {
                                                       credential_values,
                                                       credential_nonce);
 
-        Prover::_check_credential_key_correctness_proof(&credential_pub_key.p_key, credential_key_correctness_proof)?;
+        if credential_key_correctness_proof.is_some() {
+            Prover::_check_credential_key_correctness_proof(&credential_pub_key.p_key, credential_key_correctness_proof.unwrap())?;
+        }
 
         let primary_blinded_credential_secrets =
             Prover::_generate_primary_blinded_credential_secrets(&credential_pub_key.p_key, &credential_values)?;
@@ -82,11 +84,13 @@ impl Prover {
             _ => None
         };
 
-        let blinded_credential_secrets_correctness_proof =
-            Prover::_new_blinded_credential_secrets_correctness_proof(&credential_pub_key.p_key,
-                                                                      &primary_blinded_credential_secrets,
-                                                                      &credential_nonce,
-                                                                      &credential_values)?;
+        let blinded_credential_secrets_correctness_proof = match credential_nonce {
+            Some(nonce) => Some(Prover::_new_blinded_credential_secrets_correctness_proof(&credential_pub_key.p_key,
+                                                                                          &primary_blinded_credential_secrets,
+                                                                                          &nonce,
+                                                                                          &credential_values)?),
+            None => None
+        };
 
         let blinded_credential_secrets = BlindedCredentialSecrets {
             u: primary_blinded_credential_secrets.u,
@@ -168,10 +172,10 @@ impl Prover {
     /// ```
     pub fn process_credential_signature(credential_signature: &mut CredentialSignature,
                                         credential_values: &CredentialValues,
-                                        signature_correctness_proof: &SignatureCorrectnessProof,
+                                        signature_correctness_proof: Option<&SignatureCorrectnessProof>,
                                         credential_secrets_blinding_factors: &CredentialSecretsBlindingFactors,
                                         credential_pub_key: &CredentialPublicKey,
-                                        nonce: &Nonce,
+                                        nonce: Option<&Nonce>,
                                         rev_key_pub: Option<&RevocationKeyPublic>,
                                         rev_reg: Option<&RevocationRegistry>,
                                         witness: Option<&Witness>) -> Result<(), IndyCryptoError> {
@@ -196,11 +200,14 @@ impl Prover {
 
         Prover::_process_primary_credential(&mut credential_signature.p_credential, &credential_secrets_blinding_factors.v_prime)?;
 
-        Prover::_check_signature_correctness_proof(&credential_signature.p_credential,
-                                                   credential_values,
-                                                   signature_correctness_proof,
-                                                   &credential_pub_key.p_key,
-                                                   nonce)?;
+        match (signature_correctness_proof, nonce) {
+            (Some(prf), Some(cred_nonce)) => Prover::_check_signature_correctness_proof(&credential_signature.p_credential,
+                                                                                        credential_values,
+                                                                                        prf,
+                                                                                        &credential_pub_key.p_key,
+                                                                                        cred_nonce)?,
+            _ => ()
+        }
 
         if let (&mut Some(ref mut non_revocation_cred), Some(ref vr_prime), &Some(ref r_key),
             Some(ref r_key_pub), Some(ref r_reg), Some(ref witness)) = (&mut credential_signature.r_credential,
@@ -285,7 +292,8 @@ impl Prover {
         Ok(())
     }
 
-    fn _generate_primary_blinded_credential_secrets(p_pub_key: &CredentialPrimaryPublicKey,
+    // TODO: Fixme; This should be private, making it public temporarily
+    pub fn _generate_primary_blinded_credential_secrets(p_pub_key: &CredentialPrimaryPublicKey,
                                                     credential_values: &CredentialValues) -> Result<PrimaryBlindedCredentialSecretsFactors, IndyCryptoError> {
         trace!("Prover::_generate_blinded_primary_master_secret: >>> p_pub_key: {:?}, credential_values: {:?}", p_pub_key, credential_values);
 
@@ -697,28 +705,21 @@ impl ProofBuilder {
                                                                                                   &rev_reg,
                                                                                                   &credential_pub_key.r_key,
                                                                                                   &witness) {
-            let proof = ProofBuilder::_init_non_revocation_proof(&r_cred,
+            let (m, p) = self.add_sub_proof_request_revocation(&r_cred,
                                                                  &r_reg,
                                                                  &r_pub_key,
                                                                  &witness)?;
-
-            self.c_list.extend_from_slice(&proof.as_c_list()?);
-            self.tau_list.extend_from_slice(&proof.as_tau_list()?);
-            m2_tilde = Some(group_element_to_bignum(&proof.tau_list_params.m2)?);
-            non_revoc_init_proof = Some(proof);
+            m2_tilde = Some(m);
+            non_revoc_init_proof = Some(p);  
         }
 
-        let primary_init_proof = ProofBuilder::_init_primary_proof(&credential_pub_key.p_key,
+        let primary_init_proof = self.add_sub_proof_request_primary(&credential_pub_key.p_key,
                                                                    &credential_signature.p_credential,
                                                                    credential_values,
                                                                    credential_schema,
                                                                    non_credential_schema_elements,
                                                                    sub_proof_request,
                                                                    m2_tilde)?;
-
-        self.c_list.extend_from_slice(&primary_init_proof.as_c_list()?);
-        self.tau_list.extend_from_slice(&primary_init_proof.as_tau_list()?);
-
         let init_proof = InitProof {
             primary_init_proof,
             non_revoc_init_proof,
@@ -838,6 +839,40 @@ impl ProofBuilder {
         trace!("ProofBuilder::finalize: <<< proof: {:?}", proof);
 
         Ok(proof)
+    }
+
+    // TODO: Fixme; This method should be private
+    pub fn add_sub_proof_request_primary(&mut self, primary_public_key: &CredentialPrimaryPublicKey, 
+        primary_credential: &PrimaryCredentialSignature, credential_values: &CredentialValues, 
+        credential_schema: &CredentialSchema, non_credential_schema_elements: &NonCredentialSchemaElements,
+        sub_proof_request: &SubProofRequest, m2_tilde: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
+        let primary_init_proof = ProofBuilder::_init_primary_proof(&primary_public_key,
+                                                                   &primary_credential,
+                                                                   credential_values,
+                                                                   credential_schema,
+                                                                   non_credential_schema_elements,
+                                                                   sub_proof_request,
+                                                                   m2_tilde)?;
+        self.c_list.extend_from_slice(&primary_init_proof.as_c_list()?);
+        self.tau_list.extend_from_slice(&primary_init_proof.as_tau_list()?);
+        Ok(primary_init_proof)
+    }
+
+    // TODO: Fixme; This method should be private
+    pub fn add_sub_proof_request_revocation(&mut self, revocation_credential: &NonRevocationCredentialSignature, 
+                                rev_reg: &RevocationRegistry,
+                                cred_rev_pub_key: &CredentialRevocationPublicKey,
+                                witness: &Witness) -> Result<(BigNumber, NonRevocInitProof), IndyCryptoError> {
+        let proof = ProofBuilder::_init_non_revocation_proof(&revocation_credential,
+                                                                 &rev_reg,
+                                                                 &cred_rev_pub_key,
+                                                                 &witness)?;
+
+        self.c_list.extend_from_slice(&proof.as_c_list()?);
+        self.tau_list.extend_from_slice(&proof.as_tau_list()?);
+        let m2_tilde = group_element_to_bignum(&proof.tau_list_params.m2)?;
+        let non_revoc_init_proof = proof;
+        Ok((m2_tilde, non_revoc_init_proof))
     }
 
     fn _check_add_sub_proof_request_params_consistency(cred_values: &CredentialValues,
@@ -1414,16 +1449,16 @@ mod tests {
              credential_secrets_blinding_factors,
              blinded_credential_secrets_correctness_proof) =
                 Prover::blind_credential_secrets(&issuer::mocks::credential_public_key(),
-                                                 &issuer::mocks::credential_key_correctness_proof(),
+                                                 Some(&issuer::mocks::credential_key_correctness_proof()),
                                                  &mocks::credential_values(),
-                                                 &mocks::credential_nonce()).unwrap();
+                                                 Some(&mocks::credential_nonce())).unwrap();
 
         assert_eq!(blinded_credential_secrets.u, mocks::primary_blinded_credential_secrets_factors().u);
         assert_eq!(credential_secrets_blinding_factors.v_prime, mocks::primary_blinded_credential_secrets_factors().v_prime);
         assert_eq!(blinded_credential_secrets.committed_attributes, mocks::primary_blinded_credential_secrets_factors().committed_attributes);
         assert!(blinded_credential_secrets.ur.is_some());
         assert!(credential_secrets_blinding_factors.vr_prime.is_some());
-        assert_eq!(blinded_credential_secrets_correctness_proof, mocks::blinded_credential_secrets_correctness_proof())
+        assert_eq!(blinded_credential_secrets_correctness_proof, Some(mocks::blinded_credential_secrets_correctness_proof()))
     }
 
     #[test]
@@ -1447,10 +1482,10 @@ mod tests {
 
         Prover::process_credential_signature(&mut credential_signature,
                                              &mocks::credential_values(),
-                                             &issuer::mocks::signature_correctness_proof(),
+                                             Some(issuer::mocks::signature_correctness_proof()).as_ref(),
                                              &mocks::credential_secrets_blinding_factors(),
                                              &issuer::mocks::credential_public_key(),
-                                             &issuer::mocks::credential_issuance_nonce(),
+                                             Some(issuer::mocks::credential_issuance_nonce()).as_ref(),
                                              None,
                                              None,
                                              None).unwrap();
