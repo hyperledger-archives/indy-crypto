@@ -1,5 +1,6 @@
 use cl::prover::*;
 use cl::*;
+use authz::AuthzProofFactors;
 use errors::ToErrorCode;
 use ffi::ErrorCode;
 use utils::ctypes::CTypesUtils;

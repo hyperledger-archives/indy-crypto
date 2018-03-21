@@ -6,7 +6,7 @@ use pair::*;
 use super::helpers::*;
 use utils::commitment::{get_pedersen_commitment, get_exponentiated_generators};
 use utils::get_hash_as_int;
-//use authz::{SelectiveDisclosureCLProof, AuthzProofGenerators};
+use authz::{AuthzProofFactors, AuthzProofInit};
 
 use std::collections::{BTreeMap, HashSet};
 use std::iter::FromIterator;
@@ -238,7 +238,10 @@ impl Prover {
     ///
     /// let _proof_builder = Prover::new_proof_builder();
     pub fn new_proof_builder() -> Result<ProofBuilder, IndyCryptoError> {
+
         Ok(ProofBuilder {
+            authz_proof_init: None,
+            common_attributes: BTreeMap::new(),
             init_proofs: BTreeMap::new(),
             c_list: Vec::new(),
             tau_list: Vec::new()
@@ -606,12 +609,33 @@ impl Prover {
 
 #[derive(Debug)]
 pub struct ProofBuilder {
-    pub init_proofs: BTreeMap<String, InitProof>,
-    pub c_list: Vec<Vec<u8>>,
-    pub tau_list: Vec<Vec<u8>>,
+    authz_proof_init: Option<AuthzProofInit>,
+    common_attributes: BTreeMap<String, BigNumber>,
+    init_proofs: BTreeMap<String, InitProof>,
+    c_list: Vec<Vec<u8>>,
+    tau_list: Vec<Vec<u8>>,
 }
 
 impl ProofBuilder {
+    /// Creates m_tildes for attributes that will be the same across all subproofs
+    pub fn add_common_attribute(&mut self, attr_name: &str) -> Result<(), IndyCryptoError> {
+        self.common_attributes.insert(attr_name.to_owned(), bn_rand(LARGE_MVECT)?);
+        Ok(())
+    }
+
+    pub fn add_authz_proof_request(&mut self, authz_proof_factors: &AuthzProofFactors) -> Result<(), IndyCryptoError> {
+        trace!("ProofBuilder::add_authz_proof_request: >>> authz_proof_factors: {:?}", authz_proof_factors);
+        if !self.common_attributes.contains_key(&authz_proof_factors.policy_address_attr_name) {
+            return Err(IndyCryptoError::InvalidStructure(format!("{0} is marked as a common attribute. Please call ProofBuilder.add_common_attribute({0})", authz_proof_factors.policy_address_attr_name)));
+        }
+
+        let policy_address_m_tilde = &self.common_attributes[&authz_proof_factors.policy_address_attr_name];
+
+        self.authz_proof_init = Some(AuthzProofInit::init(authz_proof_factors, &policy_address_m_tilde)?);
+
+        Ok(())
+    }
+
     /// Adds sub proof request to proof builder which will be used fo building of proof.
     /// Part of proof request related to a particular schema-key.
     ///
@@ -692,8 +716,13 @@ impl ProofBuilder {
                                  credential_pub_key: &CredentialPublicKey,
                                  rev_reg: Option<&RevocationRegistry>,
                                  witness: Option<&Witness>) -> Result<(), IndyCryptoError> {
-        trace!("ProofBuilder::add_sub_proof_request: >>> key_id: {:?}, credential_signature: {:?}, credential_values: {:?}, credential_pub_key: {:?}, \
-        rev_reg: {:?}, sub_proof_request: {:?}, credential_schema: {:?}",
+        trace!("ProofBuilder::add_sub_proof_request: >>> key_id: {:?}\n\
+                                                         credential_signature: {:?}\n\
+                                                         credential_values: {:?}\n\
+                                                         credential_pub_key: {:?}\n\
+                                                         rev_reg: {:?}\n\
+                                                         sub_proof_request: {:?}\n\
+                                                         credential_schema: {:?}",
                key_id, credential_signature, credential_values, credential_pub_key, rev_reg, sub_proof_request, credential_schema);
 
         ProofBuilder::_check_add_sub_proof_request_params_consistency(credential_values, sub_proof_request, credential_schema, non_credential_schema_elements)?;
@@ -808,12 +837,19 @@ impl ProofBuilder {
         let mut values: Vec<Vec<u8>> = Vec::new();
         values.extend_from_slice(&self.tau_list);
         values.extend_from_slice(&self.c_list);
+
+        if let Some(ref authz_proof_init) = self.authz_proof_init {
+            authz_proof_init.add_t_list(&mut values);
+        }
+
         values.push(nonce.to_bytes()?);
 
         // In the anoncreds whitepaper, `challenge` is denoted by `c_h`
-        let challenge = get_hash_as_int(&mut values)?;
+        let challenge = get_hash_as_int(&values)?;
 
         let mut proofs: BTreeMap<String, SubProof> = BTreeMap::new();
+
+        let mut policy_address_m_hat = None;
 
         for (proof_cred_uuid, init_proof) in self.init_proofs.iter() {
             let mut non_revoc_proof: Option<NonRevocProof> = None;
@@ -828,13 +864,27 @@ impl ProofBuilder {
                                                                       &init_proof.credential_values,
                                                                       &init_proof.sub_proof_request)?;
 
+            if policy_address_m_hat == None {
+                if let Some(ref authz_proof_init) = self.authz_proof_init {
+                    let m_hat = primary_proof.eq_proof.m[authz_proof_init.get_policy_address_attr_name()].clone()?;
+                    policy_address_m_hat = Some(m_hat);
+                }
+            }
+
             let proof = SubProof { primary_proof, non_revoc_proof };
             proofs.insert(proof_cred_uuid.to_owned(), proof);
         }
 
+        let authz_proof =
+                if let Some(ref authz_proof_init) = self.authz_proof_init {
+                    Some(authz_proof_init.finalize(&challenge, &policy_address_m_hat.unwrap())?)
+                } else {
+                    None
+                };
+
         let aggregated_proof = AggregatedProof { c_hash: challenge, c_list: self.c_list.clone() };
 
-        let proof = Proof { proofs, aggregated_proof };
+        let proof = Proof { proofs, aggregated_proof, authz_proof };
 
         trace!("ProofBuilder::finalize: <<< proof: {:?}", proof);
 
@@ -846,7 +896,7 @@ impl ProofBuilder {
         primary_credential: &PrimaryCredentialSignature, credential_values: &CredentialValues, 
         credential_schema: &CredentialSchema, non_credential_schema_elements: &NonCredentialSchemaElements,
         sub_proof_request: &SubProofRequest, m2_tilde: Option<BigNumber>) -> Result<PrimaryInitProof, IndyCryptoError> {
-        let primary_init_proof = ProofBuilder::_init_primary_proof(&primary_public_key,
+        let primary_init_proof = self._init_primary_proof(&primary_public_key,
                                                                    &primary_credential,
                                                                    credential_values,
                                                                    credential_schema,
@@ -909,7 +959,8 @@ impl ProofBuilder {
         Ok(())
     }
 
-    fn _init_primary_proof(issuer_pub_key: &CredentialPrimaryPublicKey,
+    fn _init_primary_proof(&mut self,
+                           issuer_pub_key: &CredentialPrimaryPublicKey,
                            c1: &PrimaryCredentialSignature,
                            cred_values: &CredentialValues,
                            cred_schema: &CredentialSchema,
@@ -919,7 +970,7 @@ impl ProofBuilder {
         trace!("ProofBuilder::_init_primary_proof: >>> issuer_pub_key: {:?}, c1: {:?}, cred_values: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
                issuer_pub_key, c1, cred_values, cred_schema, sub_proof_request, m2_t);
 
-        let eq_proof = ProofBuilder::_init_eq_proof(&issuer_pub_key, c1, cred_schema, non_cred_schema_elems, sub_proof_request, m2_t)?;
+        let eq_proof = self._init_eq_proof(&issuer_pub_key, c1, cred_schema, non_cred_schema_elems, sub_proof_request, m2_t)?;
 
         let mut ge_proofs: Vec<PrimaryPredicateGEInitProof> = Vec::new();
         for predicate in sub_proof_request.predicates.iter() {
@@ -962,14 +1013,15 @@ impl ProofBuilder {
         Ok(r_init_proof)
     }
 
-    fn _init_eq_proof(credr_pub_key: &CredentialPrimaryPublicKey,
+    fn _init_eq_proof(&mut self,
+                      cred_pub_key: &CredentialPrimaryPublicKey,
                       c1: &PrimaryCredentialSignature,
                       cred_schema: &CredentialSchema,
                       non_cred_schema_elems: &NonCredentialSchemaElements,
                       sub_proof_request: &SubProofRequest,
                       m2_t: Option<BigNumber>) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
         trace!("ProofBuilder::_init_eq_proof: >>> credr_pub_key: {:?}, c1: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
-               credr_pub_key, c1, cred_schema, sub_proof_request, m2_t);
+               cred_pub_key, c1, cred_schema, sub_proof_request, m2_t);
 
         let mut ctx = BigNumber::new_context()?;
 
@@ -979,18 +1031,22 @@ impl ProofBuilder {
         let e_tilde = bn_rand(LARGE_ETILDE)?;
         let v_tilde = bn_rand(LARGE_VTILDE)?;
 
-        let unrevealed_attrs = non_cred_schema_elems.attrs.union(&cred_schema.attrs)
-                                                    .cloned()
-                                                    .collect::<BTreeSet<String>>()
-                                                    .difference(&sub_proof_request.revealed_attrs)
-                                                    .cloned()
-                                                    .collect::<BTreeSet<String>>();
+        let mut unrevealed_attrs = non_cred_schema_elems.attrs.union(&cred_schema.attrs)
+                                                              .cloned()
+                                                              .collect::<BTreeSet<String>>()
+                                                              .difference(&sub_proof_request.revealed_attrs)
+                                                              .cloned()
+                                                              .collect::<BTreeSet<String>>();
+        for (key, value) in &self.common_attributes {
+            unrevealed_attrs.remove(key);
+        }
 
-        let m_tilde = get_mtilde(&unrevealed_attrs)?;
+        let mut m_tilde = get_mtilde(&unrevealed_attrs)?;
+        m_tilde.extend(clone_bignum_map(&self.common_attributes)?);
 
-        let a_prime = credr_pub_key.s
-            .mod_exp(&r, &credr_pub_key.n, Some(&mut ctx))?
-            .mod_mul(&c1.a, &credr_pub_key.n, Some(&mut ctx))?;
+        let a_prime = cred_pub_key.s
+            .mod_exp(&r, &cred_pub_key.n, Some(&mut ctx))?
+            .mod_mul(&c1.a, &cred_pub_key.n, Some(&mut ctx))?;
 
         let v_prime = c1.v.sub(
             &c1.e.mul(&r, Some(&mut ctx))?
@@ -1000,12 +1056,7 @@ impl ProofBuilder {
             &BigNumber::from_u32(2)?.exp(&BigNumber::from_dec(&LARGE_E_START.to_string())?, Some(&mut ctx))?
         )?;
 
-        let t = calc_teq(&credr_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m2_tilde, &unrevealed_attrs)?;
-
-
-//        let (authz_a_tilde, authz_b_tilde, authz_t3) = SelectiveDisclosureCLProof::commit()?;
-
-        //TODO: Add authz selective disclosure step here
+        let t = calc_teq(&cred_pub_key, &a_prime, &e_tilde, &v_tilde, &m_tilde, &m2_tilde, &unrevealed_attrs)?;
 
         let primary_equal_init_proof = PrimaryEqualInitProof {
             a_prime,

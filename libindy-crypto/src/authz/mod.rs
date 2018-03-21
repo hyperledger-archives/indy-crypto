@@ -11,10 +11,222 @@ use self::helpers::{generate_nonce, get_map_value};
 use bn::BigNumber;
 
 use std::vec::Vec;
+use std::hash::Hash;
 use std::collections::{BTreeMap, HashMap};
 use cl::{CredentialValues,
          Nonce,
          PrimaryCredentialSignature};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AuthzProof {
+    commitments: AuthzProofCommitments,
+    p_ca_p: HashMap<String, BigNumber>,  //P values commitment accumulator provisioned
+    u_ca_p: HashMap<String, BigNumber>,  //U values commitment accumulator provisioned
+    p_ca_r: HashMap<String, BigNumber>,  //P values commitment accumulator revoked
+    u_ca_r: HashMap<String, BigNumber>,  //U values commitment accumulator revoked
+    p_dc1:  HashMap<String, BigNumber>,  //P values double commitment 1
+    p_dc2:  HashMap<String, BigNumber>,  //P values double commitment 2
+    p_sd:   HashMap<String, BigNumber>,  //P values selective disclosure
+    p_se:   HashMap<String, BigNumber>,  //P values secret equality
+    policy_address_m_hat: BigNumber,
+}
+
+impl AuthzProof {
+    pub fn verify(&self, challenge_hash: &BigNumber, nonce: &Nonce, accumulators: &AuthzAccumulators) -> Result<Vec<u8>, IndyCryptoError> {
+        let generators = AuthzProofGenerators::new()?;
+
+        let mut t_hat_values = Vec::new();
+
+        CommitmentAccumulatorProof::verify(&generators.g_4,
+                                           &generators.h_4,
+                                           &generators.p_5,
+                                           &generators.g_n_1,
+                                           &generators.h_n_1,
+                                           &generators.n_1,
+                                           challenge_hash,
+                                           &self.commitments.c_4,
+                                           &self.u_ca_p,
+                                           &self.p_ca_p,
+                                           &accumulators.provisioned,
+                                           &mut t_hat_values)?;
+//        CommitmentAccumulatorProof::verify(&generators.g_4,
+//                                           &generators.h_4,
+//                                           &generators.p_5,
+//                                           &generators.g_n_2,
+//                                           &generators.h_n_2,
+//                                           &generators.n_2,
+//                                           challenge_hash,
+//                                           &self.commitments.c_4,
+//                                           &self.u_ca_r,
+//                                           &self.p_ca_r,
+//                                           &accumulators.revoked,
+//                                           &mut t_hat_values)?;
+        DoubleCommitmentProof1::verify(&challenge_hash,
+                                       &generators,
+                                       &self.commitments.c_2,
+                                       &self.commitments.c_3,
+                                       &self.p_dc1,
+                                       &mut t_hat_values)?;
+        DoubleCommitmentProof2::verify(&challenge_hash,
+                                       &generators,
+                                       &self.commitments.c_1,
+                                       &self.commitments.c_2,
+                                       &self.p_dc2,
+                                       &mut t_hat_values)?;
+        SelectiveDisclosureCLProof::verify(&challenge_hash,
+                                           &self.commitments.c_2,
+                                           &self.p_sd, &self.policy_address_m_hat, &mut t_hat_values).unwrap();
+        SecretEqualityProof::verify(&generators,
+                                    &challenge_hash,
+                                    &self.commitments.c_3,
+                                    &self.commitments.c_4,
+                                    &self.p_se,
+                                    &mut t_hat_values).unwrap();
+        Ok(t_hat_values)
+    }
+}
+
+impl JsonEncodable for AuthzProof {}
+
+impl<'a> JsonDecodable<'a> for AuthzProof {}
+
+#[derive(Debug)]
+pub struct AuthzProofInit {
+    factors: AuthzProofFactors,
+    generators: AuthzProofGenerators,
+    commitments: AuthzProofCommitments,
+    blinding_factors: AuthzProofBlindingFactors,
+    r_ca_p: HashMap<String, BigNumber>,  //R values commitment accumulator provisioned
+    u_ca_p: HashMap<String, BigNumber>,  //U values commitment accumulator provisioned
+    r_ca_r: HashMap<String, BigNumber>,  //R values commitment accumulator revoked
+    u_ca_r: HashMap<String, BigNumber>,  //U values commitment accumulator revoked
+    r_dc1: HashMap<String, BigNumber>,   //R values double commitment 1
+    r_dc2: HashMap<String, BigNumber>,   //R values double commitment 2
+    r_sd: HashMap<String, BigNumber>,    //R values selective disclosure
+    r_se: HashMap<String, BigNumber>,    //R values secret equality
+    t_list: Vec<u8>,
+}
+
+impl AuthzProofInit {
+    pub fn init(factors: &AuthzProofFactors,
+                policy_address_m_tilde: &BigNumber) -> Result<AuthzProofInit, IndyCryptoError> {
+        let generators = AuthzProofGenerators::new()?;
+        let blinding_factors = AuthzProofBlindingFactors::new(&generators)?;
+        let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &generators)?;
+        let mut t_list = Vec::new();
+
+        let (u_ca_p, r_ca_p) = CommitmentAccumulatorProof::commit(&generators.g_4,
+                                                        &generators.h_4,
+                                                        &generators.p_5,
+                                                   &generators.g_n_1,
+                                                        &generators.h_n_1,
+                                                         &generators.n_1,
+                                                        &factors.P,
+                                                         &factors.provisioned_witness,
+                                                        &commitments.c_4,
+                                                        &mut t_list)?;
+        //TODO: Get a proof of absence
+//        let (u_ca_r, r_ca_r) = CommitmentAccumulatorProof::commit(&generators.g_4,
+//                                                        &generators.h_4,
+//                                                        &generators.p_5,
+//                                                   &generators.g_n_2,
+//                                                        &generators.h_n_2,
+//                                                         &generators.n_2,
+//                                                        &factors.P,
+//                                                         &factors.revocation_witness,
+//                                                        &commitments.c_4,
+//                                                        &mut t_list)?;
+        let u_ca_r = HashMap::new();
+        let r_ca_r = HashMap::new();
+        let r_dc1 = DoubleCommitmentProof1::commit(&commitments.c_2,
+                                                   &generators,
+                                                   &mut t_list)?;
+        let r_dc2 = DoubleCommitmentProof2::commit(&commitments.c_1,
+                                                   &generators,
+                                                   &mut t_list)?;
+        let r_sd = SelectiveDisclosureCLProof::commit(policy_address_m_tilde, &mut t_list)?;
+
+        let r_se = SecretEqualityProof::commit(&generators, &mut t_list)?;
+
+        Ok(AuthzProofInit {
+            //TODO: shouldn't need to clone this, implement with lifetime parameter
+            factors: factors.clone()?,
+            generators,
+            commitments,
+            blinding_factors,
+            r_ca_p,
+            u_ca_p,
+            r_ca_r,
+            u_ca_r,
+            r_dc1,
+            r_dc2,
+            r_sd,
+            r_se,
+            t_list
+        })
+    }
+
+    pub fn add_t_list(&self, t_list: &mut Vec<Vec<u8>>) {
+        t_list.push(self.t_list.to_vec())
+    }
+
+    pub fn get_policy_address_attr_name(&self) -> &String {
+        &self.factors.policy_address_attr_name
+    }
+
+    pub fn finalize(&self, challenge_hash: &BigNumber, policy_address_m_hat: &BigNumber) -> Result<AuthzProof, IndyCryptoError> {
+        let p_ca_p = CommitmentAccumulatorProof::challenge(&challenge_hash,
+                                                         &self.factors.P,
+                                                         &self.blinding_factors.r_4,
+                                                           &self.generators.p_4,
+                                                           &self.r_ca_p)?;
+        //TODO: Get a proof of absence
+//        let p_ca_r = CommitmentAccumulatorProof::challenge(&challenge_hash,
+//                                                         &self.factors.P,
+//                                                         &self.blinding_factors.r_4,
+//                                                           &self.generators.p_4,
+//                                                           &self.r_ca_r)?;
+        let p_ca_r = HashMap::new();
+        let p_dc1 = DoubleCommitmentProof1::challenge(&challenge_hash,
+                                                      &self.generators,
+                                                      &self.factors.K,
+                                                      &self.factors.policy_address,
+                                                      &self.blinding_factors.r_2,
+                                                      &self.factors.r_prime.sub(&self.blinding_factors.r_2)?,
+                                                      &self.blinding_factors.r_3,
+
+                                                      &self.r_dc1)?;
+        let p_dc2 = DoubleCommitmentProof2::challenge(&challenge_hash,
+                                                      &self.generators,
+                                                      &self.factors.agent_secret,
+                                                      &self.blinding_factors.r_1,
+                                                      &self.factors.r.sub(&self.blinding_factors.r_1)?,
+                                                      &self.factors.policy_address,
+                                                      &self.blinding_factors.r_2,
+                                                      &self.r_dc2)?;
+        let p_sd = SelectiveDisclosureCLProof::challenge(&challenge_hash,
+                                                         &self.r_sd,
+                                                       &self.factors.K,
+                                                       &self.blinding_factors.r_2)?;
+        let p_se = SecretEqualityProof::challenge(&challenge_hash,
+                                                  &self.factors.P,
+                                                  &self.blinding_factors.r_3,
+                                                  &self.blinding_factors.r_4,
+                                                  &self.r_se)?;
+        Ok(AuthzProof {
+            commitments: self.commitments.clone()?,
+            u_ca_p: clone_bignum_hashmap(&self.u_ca_p)?,
+            u_ca_r: clone_bignum_hashmap(&self.u_ca_r)?,
+            p_ca_p,
+            p_ca_r,
+            p_dc1,
+            p_dc2,
+            p_sd,
+            p_se,
+            policy_address_m_hat: policy_address_m_hat.clone()?,
+        })
+    }
+}
 
 struct SecretEqualityProof {}
 
@@ -82,7 +294,6 @@ struct DoubleCommitmentProof2 {}
 
 impl DoubleCommitmentProof2 {
     pub fn commit(c_1: &BigNumber,
-                  num_attrs: usize,
                   gen: &AuthzProofGenerators,
                   t_values: &mut Vec<u8>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
@@ -92,7 +303,7 @@ impl DoubleCommitmentProof2 {
         let p_0_size = gen.p_0.num_bits()? as usize;
         let p_1_size = gen.p_1.num_bits()? as usize;
 
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_i = generate_nonce(p_0_size, None, &gen.p_0)?;
             let f_i = generate_nonce(p_1_size, None, &gen.p_1)?;
             let p_i = generate_nonce(p_1_size, None, &gen.p_1)?;
@@ -127,13 +338,13 @@ impl DoubleCommitmentProof2 {
         Ok(u_values)
     }
 
-    pub fn challenge(gen: &AuthzProofGenerators,
+    pub fn challenge(challenge_hash: &BigNumber,
+                     gen: &AuthzProofGenerators,
                      a: &BigNumber,
                      b: &BigNumber,
                      e: &BigNumber,
                      f: &BigNumber,
                      p: &BigNumber,
-                     challenge_hash: &BigNumber,
                      u_dc2: &HashMap<String, BigNumber>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
 
         let mut ctx = BigNumber::new_context()?;
@@ -154,9 +365,7 @@ impl DoubleCommitmentProof2 {
         p_values.insert("a".to_string(), a_hat);
         p_values.insert("b".to_string(), b_hat);
 
-        let num_attrs = (u_dc2.len() - 2) / 3;
-
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_key = format!("e_{}", i+1);
             let f_key = format!("f_{}", i+1);
             let p_key = format!("p_{}", i+1);
@@ -194,9 +403,7 @@ impl DoubleCommitmentProof2 {
 
         let get_value = |key: &str| get_map_value(&p_dc2, key, format!("Value by key '{}' not found in DoubleCommitmentProof2.verify", key));
 
-        let num_attrs = (p_dc2.len() - 2) / 3;
-
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_hat = get_value(&format!("e_{}", i + 1))?;
             let f_hat = get_value(&format!("f_{}", i + 1))?;
             let p_hat = get_value(&format!("p_{}", i + 1))?;
@@ -238,7 +445,6 @@ struct DoubleCommitmentProof1 {}
 
 impl DoubleCommitmentProof1 {
     pub fn commit(c_1: &BigNumber,
-                  num_attrs: usize,
                   gen: &AuthzProofGenerators,
                   t_values: &mut Vec<u8>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
@@ -248,7 +454,7 @@ impl DoubleCommitmentProof1 {
         let p_1_size = gen.p_1.num_bits()? as usize;
         let p_2_size = gen.p_2.num_bits()? as usize;
 
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_i = generate_nonce(p_1_size, None, &gen.p_1)?;
             let f_i = generate_nonce(p_2_size, None, &gen.p_2)?;
 
@@ -283,13 +489,13 @@ impl DoubleCommitmentProof1 {
         Ok(u_values)
     }
 
-    pub fn challenge(gen: &AuthzProofGenerators,
+    pub fn challenge(challenge_hash: &BigNumber,
+                     gen: &AuthzProofGenerators,
                      a: &BigNumber,
                      b: &BigNumber,
                      d: &BigNumber,
                      e: &BigNumber,
                      f: &BigNumber,
-                     challenge_hash: &BigNumber,
                      u_dc1: &HashMap<String, BigNumber>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
 
         let mut ctx = BigNumber::new_context()?;
@@ -311,9 +517,7 @@ impl DoubleCommitmentProof1 {
         p_values.insert("b".to_string(), b_hat);
         p_values.insert("d".to_string(), d_hat);
 
-        let num_attrs = (u_dc1.len() - 3) / 2;
-
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_key = format!("e_{}", i+1);
             let f_key = format!("f_{}", i+1);
 
@@ -345,9 +549,7 @@ impl DoubleCommitmentProof1 {
 
         let get_value = |key: &str| get_map_value(&p_dc1, key, format!("Value by key '{}' not found in DoubleCommitmentProof1.verify", key));
 
-        let num_attrs = (p_dc1.len() - 3) / 2;
-
-        for i in 0..num_attrs {
+        for i in 0..constants::SECURITY_FACTOR {
             let e_hat = get_value(&format!("e_{}", i + 1))?;
             let f_hat = get_value(&format!("f_{}", i + 1))?;
 
@@ -632,7 +834,7 @@ impl CommitmentAccumulatorProof {
 struct SelectiveDisclosureCLProof {}
 
 impl SelectiveDisclosureCLProof {
-    pub fn commit(policy_address_m_tilde: &BigNumber) -> Result<(BigNumber, BigNumber, BigNumber), IndyCryptoError> {
+    pub fn commit(policy_address_m_tilde: &BigNumber, t_values: &mut Vec<u8>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
 
         let gen = AuthzProofGenerators::new()?;
 
@@ -645,28 +847,34 @@ impl SelectiveDisclosureCLProof {
                                                            (&gen.h_2, policy_address_m_tilde),
                                                            (&gen.k_2, &b_tilde)],
                                                       &gen.p_2, &mut ctx)?;
+        t_values.extend_from_slice(&t_3.to_bytes()?);
 
-        Ok((a_tilde, b_tilde, t_3))
+        Ok(hashmap!["a".to_string() => a_tilde, "b".to_string() => b_tilde])
     }
 
     pub fn challenge(challenge_hash: &BigNumber,
-                     a_tilde: &BigNumber,
-                     b_tilde: &BigNumber,
+                     r_sd: &HashMap<String, BigNumber>,
                      a: &BigNumber,
-                     b: &BigNumber) -> Result<(BigNumber, BigNumber), IndyCryptoError> {
+                     b: &BigNumber) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
 
+        let a_tilde = &r_sd["a"];
+        let b_tilde = &r_sd["b"];
         let mut ctx = BigNumber::new_context()?;
         let a_hat = a_tilde.sub(&challenge_hash.mul(a, Some(&mut ctx))?)?;
         let b_hat = b_tilde.sub(&challenge_hash.mul(b, Some(&mut ctx))?)?;
 
-        return Ok((a_hat, b_hat))
+        Ok(hashmap!["a".to_string() => a_hat, "b".to_string() => b_hat])
     }
     pub fn verify(challenge_hash: &BigNumber,
                   c_2: &BigNumber,
-                  a_hat: &BigNumber,
-                  b_hat: &BigNumber,
-                  policy_address_m_hat: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+                  p_sd: &HashMap<String, BigNumber>,
+                  policy_address_m_hat: &BigNumber,
+                  t_values: &mut Vec<u8>) -> Result<(), IndyCryptoError> {
 
+        let pget_value = |key: &str| get_map_value(&p_sd, key, format!("Value by key '{}' not found in SelectiveDisclosureCLProof.verify", key));
+
+        let a_hat = pget_value("a")?;
+        let b_hat = pget_value("b")?;
         let mut ctx = BigNumber::new_context()?;
         let gen = AuthzProofGenerators::new()?;
         let t_3_hat = get_generalized_pedersen_commitment(vec![(c_2, challenge_hash),
@@ -674,7 +882,8 @@ impl SelectiveDisclosureCLProof {
                                                                (&gen.h_2, policy_address_m_hat),
                                                                (&gen.k_2, b_hat)],
                                                           &gen.p_2, &mut ctx)?;
-        Ok(t_3_hat)
+        t_values.extend_from_slice(&t_3_hat.to_bytes()?);
+        Ok(())
     }
 }
 
@@ -712,6 +921,15 @@ impl AuthzProofCommitments {
 
         Ok(AuthzProofCommitments { c_1, c_2, c_3, c_4 })
     }
+
+    pub fn clone(&self) -> Result<AuthzProofCommitments, IndyCryptoError> {
+        Ok(AuthzProofCommitments {
+            c_1: self.c_1.clone()?,
+            c_2: self.c_2.clone()?,
+            c_3: self.c_3.clone()?,
+            c_4: self.c_4.clone()?
+        })
+    }
 }
 
 impl JsonEncodable for AuthzProofCommitments {}
@@ -720,16 +938,24 @@ impl<'a> JsonDecodable<'a> for AuthzProofCommitments {}
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct AuthzProofFactors {
-    agent_secret: BigNumber,
-    policy_address: BigNumber,
-    r: BigNumber,
-    r_prime: BigNumber,
-    K: BigNumber,               //Commitment_p1(g1^agent_secret, h1^r)
-    P: BigNumber                //Commitment_p2(g2^K, h2^policy_address, k2^r_prime)
+    pub agent_secret: BigNumber,
+    pub policy_address: BigNumber,
+    pub r: BigNumber,
+    pub r_prime: BigNumber,
+    pub K: BigNumber,               //Commitment_p1(g1^agent_secret, h1^r)
+    pub P: BigNumber,               //Commitment_p2(g2^K, h2^policy_address, k2^r_prime)
+    pub policy_address_attr_name: String,
+    pub provisioned_witness: BigNumber,
+    pub revocation_witness: BigNumber,
 }
 
 impl AuthzProofFactors {
-    pub fn new(gen: &AuthzProofGenerators, agent_secret: &BigNumber, policy_address: &BigNumber) -> Result<AuthzProofFactors, IndyCryptoError> {
+    pub fn new(gen: &AuthzProofGenerators,
+               agent_secret: &BigNumber,
+               policy_address: &BigNumber,
+               policy_address_attr_name: &str,
+               provisioned_witness: &BigNumber,
+               revocation_witness: &BigNumber) -> Result<AuthzProofFactors, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
 
         let r = generate_nonce(constants::R_0_SIZE, None, &gen.p_0)?;
@@ -749,7 +975,27 @@ impl AuthzProofFactors {
             if P.is_prime(Some(&mut ctx))? { break; }
         }
 
-        Ok(AuthzProofFactors { agent_secret: agent_secret.clone()?, policy_address: policy_address.clone()?, r, r_prime, K, P })
+        Ok(AuthzProofFactors { agent_secret: agent_secret.clone()?,
+                               policy_address: policy_address.clone()?,
+                               provisioned_witness: provisioned_witness.clone()?,
+                               revocation_witness: revocation_witness.clone()?,
+                               policy_address_attr_name: policy_address_attr_name.to_string(),
+                               r, r_prime, K, P,
+        })
+    }
+
+    pub fn clone(&self) -> Result<AuthzProofFactors, IndyCryptoError> {
+        Ok(AuthzProofFactors {
+            agent_secret: self.agent_secret.clone()?,
+            policy_address: self.policy_address.clone()?,
+            r: self.r.clone()?,
+            r_prime: self.r_prime.clone()?,
+            policy_address_attr_name: self.policy_address_attr_name.to_string(),
+            K: self.K.clone()?,
+            P: self.P.clone()?,
+            provisioned_witness: self.provisioned_witness.clone()?,
+            revocation_witness: self.revocation_witness.clone()?
+        })
     }
 }
 
@@ -846,6 +1092,21 @@ impl AuthzProofGenerators {
     }
 }
 
+#[derive(Debug)]
+pub struct AuthzAccumulators {
+    provisioned: BigNumber,
+    revoked: BigNumber
+}
+
+fn clone_bignum_hashmap<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>)
+                                          -> Result<HashMap<K, BigNumber>, IndyCryptoError> {
+    let mut res: HashMap<K, BigNumber> = HashMap::new();
+    for (k, v) in other {
+        res.insert(k.clone(), v.clone()?);
+    }
+    Ok(res)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -892,7 +1153,6 @@ mod tests {
         let generators = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
         let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &generators).unwrap();
-        let num_attrs = mocks::dummy_num_attrs();
 
         let mut ctx = BigNumber::new_context().unwrap();
 
@@ -900,20 +1160,19 @@ mod tests {
         let mut t_values = Vec::new();
 
         let u_dc2 = DoubleCommitmentProof2::commit(&commitments.c_1,
-                                                   num_attrs,
                                                    &generators,
                                                    &mut t_values).unwrap();
 
         t_values.extend_from_slice(&verifier_nonce.to_bytes().unwrap());
 
         let challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
-        let p_dc2 = DoubleCommitmentProof2::challenge(&generators,
+        let p_dc2 = DoubleCommitmentProof2::challenge(&challenge_hash,
+                                                      &generators,
                                                       &factors.agent_secret,
                                                       &blinding_factors.r_1,
                                                       &factors.r.sub(&blinding_factors.r_1).unwrap(),
                                                       &factors.policy_address,
                                                       &blinding_factors.r_2,
-                                                      &challenge_hash,
                                                       &u_dc2).unwrap();
         let mut t_hat_values = Vec::new();
 
@@ -937,14 +1196,12 @@ mod tests {
         let generators = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
         let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &generators).unwrap();
-        let num_attrs = mocks::dummy_num_attrs();
 
         let mut ctx = BigNumber::new_context().unwrap();
 
         let verifier_nonce = bn_rand(128).unwrap();
         let mut t_values = Vec::new();
         let u_dc1 = DoubleCommitmentProof1::commit(&commitments.c_2,
-                                                   num_attrs,
                                                    &generators,
                                                    &mut t_values).unwrap();
 
@@ -952,13 +1209,13 @@ mod tests {
 
         let challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
 
-        let p_dc1 = DoubleCommitmentProof1::challenge(&generators,
+        let p_dc1 = DoubleCommitmentProof1::challenge(&challenge_hash,
+                                                      &generators,
                                                       &factors.K,
                                                       &factors.policy_address,
                                                       &blinding_factors.r_2,
                                                       &factors.r_prime.sub(&blinding_factors.r_2).unwrap(),
                                                       &blinding_factors.r_3,
-                                                      &challenge_hash,
                                                       &u_dc1).unwrap();
         let mut t_hat_values = Vec::new();
 
@@ -1045,22 +1302,25 @@ mod tests {
         let m_tildes = mocks::m_tildes();
         let m_tilde = m_tildes.get("policy_address").unwrap();
 
-        let (a_tilde, b_tilde, t_3) = SelectiveDisclosureCLProof::commit(&m_tilde).unwrap();
+        let mut t_values = Vec::new();
 
-        let challenge_hash = get_hash_as_int(&vec![t_3.to_bytes().unwrap()]).unwrap();
+        let r_sd = SelectiveDisclosureCLProof::commit(&m_tilde, &mut t_values).unwrap();
 
-        let (a_hat, b_hat) = SelectiveDisclosureCLProof::challenge(&challenge_hash,
-                                                                   &a_tilde, &b_tilde,
+        let challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
+
+        let p_sd = SelectiveDisclosureCLProof::challenge(&challenge_hash,
+                                                                   &r_sd,
                                                                    &factors.K,
                                                                    &blinding_factors.r_2).unwrap();
 
         let m_hat = m_tilde.sub(&challenge_hash.mul(&factors.policy_address, None).unwrap()).unwrap();
 
-        let t_3_hat = SelectiveDisclosureCLProof::verify(&challenge_hash,
-                                                         &commitments.c_2,
-                                                         &a_hat, &b_hat, &m_hat).unwrap();
+        let mut t_hat_values = Vec::new();
+        SelectiveDisclosureCLProof::verify(&challenge_hash,
+                                           &commitments.c_2,
+                                           &p_sd, &m_hat, &mut t_hat_values).unwrap();
 
-        let verify_hash = get_hash_as_int(&vec![t_3_hat.to_bytes().unwrap()]).unwrap();
+        let verify_hash = get_hash_as_int(&vec![t_hat_values]).unwrap();
 
         assert_eq!(challenge_hash, verify_hash);
     }
@@ -1126,7 +1386,7 @@ mod tests {
 }
 
 #[cfg(test)]
-mod mocks {
+pub mod mocks {
     use super::*;
     use cl::prover::mocks as prover_mocks;
 
@@ -1137,7 +1397,10 @@ mod mocks {
             r: BigNumber::from_u32(2).unwrap(),
             r_prime: BigNumber::from_u32(5).unwrap(),
             K: BigNumber::from_u32(172).unwrap(),
-            P: BigNumber::from_u32(193).unwrap()
+            P: BigNumber::from_u32(193).unwrap(),
+            policy_address_attr_name: "policy_address".to_string(),
+            provisioned_witness: BigNumber::from_u32(8917538).unwrap(),
+            revocation_witness: BigNumber::from_u32(8917538).unwrap(),
         }
     }
 
@@ -1185,10 +1448,6 @@ mod mocks {
         }
     }
 
-    pub fn dummy_num_attrs() -> usize {
-        5
-    }
-
     pub fn authz_proof_factors() -> AuthzProofFactors {
         AuthzProofFactors {
             agent_secret: BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(),
@@ -1196,7 +1455,10 @@ mod mocks {
             r: BigNumber::from_dec("373444499435622973298120774765644881530061950099441311686212507378365323396832957807277718321730882745388197842273738442078548394397370359563018795728458638144442479896198137150388200112065672398518558284220177381071088569286401838").unwrap(),
             r_prime: BigNumber::from_dec("907587248344987532621760705590319645589225452345736905831961251252706433531501632567778084937083295085731780227145189350928250532127936426120838942949748192065894619150630831984039393134488948797558783391080380475775385474968663537").unwrap(),
             K: BigNumber::from_dec("1567730211124226934595886878953317251990337439723327855719339400121568240657401972636562612767421619497944853573124317651438443951049003075097489617220862842193521919486318064069497834525392511901493827566389924927370527412378291840").unwrap(),
-            P: BigNumber::from_dec("1854766729919658859329031426948455698710224539700418666233056341411942283682652953555950690726373814627113748721241326318927206421862799458962389249514456142398382186866591365421111152297685303084514560652643576538426116604250179827").unwrap()
+            P: BigNumber::from_dec("1854766729919658859329031426948455698710224539700418666233056341411942283682652953555950690726373814627113748721241326318927206421862799458962389249514456142398382186866591365421111152297685303084514560652643576538426116604250179827").unwrap(),
+            policy_address_attr_name: "policy_address".to_string(),
+            provisioned_witness: BigNumber::from_dec(constants::G_N_1).unwrap(),
+            revocation_witness: BigNumber::from_dec(constants::G_N_2).unwrap(),
         }
     }
 
@@ -1215,6 +1477,15 @@ mod mocks {
             c_2: BigNumber::from_dec("3633710581229959010173629794835933967003424651356029895506030137354190078557221129160855403879534195091373926176560513029413251517672734056564495071463932862778561397043668412068430893598580832422967153362257052195811063548753703428").unwrap(),
             c_3: BigNumber::from_dec("5247580181400880015489246887155088447104882484140483747572941799081450646357693220308757837591373601700150061754734228089996841896637997893495020560477480003008582233729074032680048869571759633693615375673419405511207631477262341641").unwrap(),
             c_4: BigNumber::from_dec("3249183533908630114267097883310529979840035631571024018841933947336242323760498253700251806050923350698547533674468221833272674206753236371458116349404333600692856723754492926682408034487693019398748794127946693792829298590861749761354313458374886175625656674595087229069206093453014693731574954408635807971226368194112265828540613080627541404820601549354533901376968368888280390654838377396096002342422762802610553991429292070851012115401122504414251949554391227").unwrap(),
+        }
+    }
+
+    pub fn authz_accumulators() -> AuthzAccumulators {
+        let gen = AuthzProofGenerators::new().unwrap();
+        let factors = mocks::authz_proof_factors();
+        AuthzAccumulators {
+            provisioned: gen.g_n_1.mod_exp(&factors.P, &gen.n_1, None).unwrap(),
+            revoked: gen.g_n_2.clone().unwrap()
         }
     }
 
