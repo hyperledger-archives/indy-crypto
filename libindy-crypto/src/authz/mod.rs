@@ -722,10 +722,10 @@ impl<'a> JsonDecodable<'a> for AuthzProofCommitments {}
 pub struct AuthzProofFactors {
     agent_secret: BigNumber,
     policy_address: BigNumber,
-    r: BigNumber,
-    r_prime: BigNumber,
+    pub r: BigNumber,
+    pub r_prime: BigNumber,
     K: BigNumber,               //Commitment_p1(g1^agent_secret, h1^r)
-    P: BigNumber                //Commitment_p2(g2^K, h2^policy_address, k2^r_prime)
+    pub P: BigNumber                //Commitment_p2(g2^K, h2^policy_address, k2^r_prime)
 }
 
 impl AuthzProofFactors {
