@@ -4,7 +4,7 @@ use cl::constants::{LARGE_E_START, ITERATION};
 use cl::helpers::*;
 use errors::IndyCryptoError;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::iter::FromIterator;
 
 /// Party that wants to check that prover has some credentials provided by issuer.
@@ -43,7 +43,7 @@ impl Verifier {
     /// ```
     pub fn new_proof_verifier() -> Result<ProofVerifier, IndyCryptoError> {
         Ok(ProofVerifier {
-            credentials: HashMap::new(),
+            credentials: Vec::new(),
         })
     }
 }
@@ -51,15 +51,15 @@ impl Verifier {
 
 #[derive(Debug)]
 pub struct ProofVerifier {
-    credentials: HashMap<String, VerifiableCredential>,
+    credentials: Vec<VerifiableCredential>,
 }
 
 impl ProofVerifier {
     /// Add sub proof request to proof verifier.
+    /// The order of sub-proofs is important: both Prover and Verifier should use the same order.
     ///
     /// # Arguments
     /// * `proof_verifier` - Proof verifier.
-    /// * `key_id` - unique credential identifier.
     /// * `credential_schema` - Credential schema.
     /// * `credential_pub_key` - Credential public key.
     /// * `rev_reg_pub` - Revocation registry public key.
@@ -82,15 +82,13 @@ impl ProofVerifier {
     ///
     /// let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
     ///
-    /// proof_verifier.add_sub_proof_request("issuer_key_id_1",
-    ///                                      &sub_proof_request,
+    /// proof_verifier.add_sub_proof_request(&sub_proof_request,
     ///                                      &credential_schema,
     ///                                      &credential_pub_key,
     ///                                      None,
     ///                                      None).unwrap();
     /// ```
     pub fn add_sub_proof_request(&mut self,
-                                 key_id: &str,
                                  sub_proof_request: &SubProofRequest,
                                  credential_schema: &CredentialSchema,
                                  credential_pub_key: &CredentialPublicKey,
@@ -98,7 +96,7 @@ impl ProofVerifier {
                                  rev_reg: Option<&RevocationRegistry>) -> Result<(), IndyCryptoError> {
         ProofVerifier::_check_add_sub_proof_request_params_consistency(sub_proof_request, credential_schema)?;
 
-        self.credentials.insert(key_id.to_string(), VerifiableCredential {
+        self.credentials.push(VerifiableCredential {
             pub_key: credential_pub_key.clone()?,
             sub_proof_request: sub_proof_request.clone(),
             credential_schema: credential_schema.clone(),
@@ -164,8 +162,7 @@ impl ProofVerifier {
     /// let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
     ///
     /// let mut proof_builder = Prover::new_proof_builder().unwrap();
-    /// proof_builder.add_sub_proof_request("issuer_key_id_1",
-    ///                                     &sub_proof_request,
+    /// proof_builder.add_sub_proof_request(&sub_proof_request,
     ///                                     &credential_schema,
     ///                                     &credential_signature,
     ///                                     &credential_values,
@@ -178,8 +175,7 @@ impl ProofVerifier {
     ///
     /// let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
     ///
-    /// proof_verifier.add_sub_proof_request("issuer_key_id_1",
-    ///                                      &sub_proof_request,
+    /// proof_verifier.add_sub_proof_request(&sub_proof_request,
     ///                                      &credential_schema,
     ///                                      &credential_pub_key,
     ///                                      None,
@@ -195,9 +191,10 @@ impl ProofVerifier {
 
         let mut tau_list: Vec<Vec<u8>> = Vec::new();
 
-        for (issuer_key_id, proof_item) in &proof.proofs {
-            let credential: &VerifiableCredential = &self.credentials[issuer_key_id];
-
+        assert_eq!(proof.proofs.len(), self.credentials.len()); //FIXME return error
+        for idx in 0..proof.proofs.len() {
+            let proof_item = &proof.proofs[idx];
+            let credential = &self.credentials[idx];
             if let (Some(non_revocation_proof), Some(cred_rev_pub_key), Some(rev_reg), Some(rev_key_pub)) = (proof_item.non_revoc_proof.as_ref(),
                                                                                                              credential.pub_key.r_key.as_ref(),
                                                                                                              credential.rev_reg.as_ref(),
@@ -221,12 +218,11 @@ impl ProofVerifier {
         }
 
         let mut values: Vec<Vec<u8>> = Vec::new();
-
         values.extend_from_slice(&tau_list);
         values.extend_from_slice(&proof.aggregated_proof.c_list);
         values.push(nonce.to_bytes()?);
 
-        let c_hver = get_hash_as_int(&mut values)?;
+        let c_hver = get_hash_as_int(&values)?;
 
         info!(target: "anoncreds_service", "Verifier verify proof -> done");
 
@@ -259,13 +255,14 @@ impl ProofVerifier {
         Ok(())
     }
 
-    fn _check_verify_params_consistency(credentials: &HashMap<String, VerifiableCredential>,
+    fn _check_verify_params_consistency(credentials: &Vec<VerifiableCredential>,
                                         proof: &Proof) -> Result<(), IndyCryptoError> {
         trace!("ProofVerifier::_check_verify_params_consistency: >>> credentials: {:?}, proof: {:?}", credentials, proof);
 
-        for (key_id, credential) in credentials {
-            let proof_for_credential = proof.proofs.get(key_id.as_str()).
-                ok_or(IndyCryptoError::AnoncredsProofRejected(format!("Proof not found")))?;
+        assert_eq!(proof.proofs.len(), credentials.len()); //FIXME return error
+        for idx in 0..proof.proofs.len() {
+            let proof_for_credential = &proof.proofs[idx];
+            let credential = &credentials[idx];
 
             let proof_revealed_attrs = HashSet::from_iter(proof_for_credential.primary_proof.eq_proof.revealed_attrs.keys().cloned());
 
@@ -468,10 +465,11 @@ mod tests {
                                                                   &credential_schema,
                                                                   &sub_proof_request).unwrap();
 
-        assert_eq!("610975387630659407528754382495278179998808865971820131961970280432712404447935555966102422857540446384019466488097120691857122006661002884192894827783\
-        537628810814237471341853389958293838330181411498429774548172099395542732810100523926895325520183827300354633217286905484099241454433444099585177676377082808935109\
-        645554031301352772410507039140551301821108049643467491205117450921306244364744842209513914969770361271623495760542698907267864169959905991105301599435946991866298\
-        98076989149707097243891475590010318619321486317753732474556827534548728195746464383092266373610988867273305094014679195413025534317874787564263", res[0].to_dec().unwrap());
+        assert_eq!("470277798936647794194137508650027054807831276239220146191458949121351184311969639631580559702933970552912303095727375950265654923875623180594\
+        558665299892048138982396859640029658129512030388704439167478475160221494455551953673063030258718822817279006735194293497773060067370281511840103396353767\
+        808614044637705536967856221460875980417091400088977261162548054308147891873470252909728127624040095798124308872126348111952360683970039064279610528839497\
+        341870538378087520077094824293591595512332618492288609809662046470201539906503906862206952553561077690711950698394752353796436977670202082695314607303658\
+        48679702777436593", res[0].to_dec().unwrap());
     }
 
     #[test]
