@@ -1159,6 +1159,7 @@ impl ProofBuilder {
         m2_tilde: Option<BigNumber>,
     ) -> Result<PrimaryInitProof, IndyCryptoError> {
         let primary_init_proof = ProofBuilder::_init_primary_proof(
+            &self.common_attributes,
             &primary_public_key,
             &primary_credential,
             credential_values,
@@ -1253,6 +1254,7 @@ impl ProofBuilder {
     }
 
     fn _init_primary_proof(
+        common_attributes: &BTreeMap<String, BigNumber>,
         issuer_pub_key: &CredentialPrimaryPublicKey,
         c1: &PrimaryCredentialSignature,
         cred_values: &CredentialValues,
@@ -1272,6 +1274,7 @@ impl ProofBuilder {
         );
 
         let eq_proof = ProofBuilder::_init_eq_proof(
+            common_attributes,
             &issuer_pub_key,
             c1,
             cred_schema,
@@ -1346,7 +1349,8 @@ impl ProofBuilder {
     }
 
     fn _init_eq_proof(
-        credr_pub_key: &CredentialPrimaryPublicKey,
+        common_attributes: &BTreeMap<String, BigNumber>,
+        cred_pub_key: &CredentialPrimaryPublicKey,
         c1: &PrimaryCredentialSignature,
         cred_schema: &CredentialSchema,
         non_cred_schema_elems: &NonCredentialSchemaElements,
@@ -1354,8 +1358,8 @@ impl ProofBuilder {
         m2_t: Option<BigNumber>,
     ) -> Result<PrimaryEqualInitProof, IndyCryptoError> {
         trace!(
-            "ProofBuilder::_init_eq_proof: >>> credr_pub_key: {:?}, c1: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
-            credr_pub_key,
+            "ProofBuilder::_init_eq_proof: >>> cred_pub_key: {:?}, c1: {:?}, cred_schema: {:?}, sub_proof_request: {:?}, m2_t: {:?}",
+            cred_pub_key,
             c1,
             cred_schema,
             sub_proof_request,
@@ -1376,12 +1380,12 @@ impl ProofBuilder {
                                                               .difference(&sub_proof_request.revealed_attrs)
                                                               .cloned()
                                                               .collect::<BTreeSet<String>>();
-        for (key, value) in &self.common_attributes {
+        for (key, value) in common_attributes.iter() {
             unrevealed_attrs.remove(key);
         }
 
         let mut m_tilde = get_mtilde(&unrevealed_attrs)?;
-        m_tilde.extend(clone_bignum_map(&self.common_attributes)?);
+        m_tilde.extend(clone_bignum_map(&common_attributes)?);
 
         let a_prime = cred_pub_key.s
             .mod_exp(&r, &cred_pub_key.n, Some(&mut ctx))?
@@ -1397,7 +1401,7 @@ impl ProofBuilder {
         )?)?;
 
         let t = calc_teq(
-            &credr_pub_key,
+            &cred_pub_key,
             &a_prime,
             &e_tilde,
             &v_tilde,
