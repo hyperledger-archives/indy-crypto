@@ -32,7 +32,7 @@ pub struct AuthzProof {
 }
 
 impl AuthzProof {
-    pub fn verify(&self, challenge_hash: &BigNumber, nonce: &Nonce, accumulators: &AuthzAccumulators) -> Result<Vec<u8>, IndyCryptoError> {
+    pub fn verify(&self, challenge_hash: &BigNumber, accumulators: &AuthzAccumulators) -> Result<Vec<u8>, IndyCryptoError> {
         let generators = AuthzProofGenerators::new()?;
 
         let mut t_hat_values = Vec::new();
@@ -91,8 +91,8 @@ impl JsonEncodable for AuthzProof {}
 impl<'a> JsonDecodable<'a> for AuthzProof {}
 
 #[derive(Debug)]
-pub struct AuthzProofInit {
-    factors: AuthzProofFactors,
+pub struct AuthzProofInit<'a> {
+    factors: &'a AuthzProofFactors,
     generators: AuthzProofGenerators,
     commitments: AuthzProofCommitments,
     blinding_factors: AuthzProofBlindingFactors,
@@ -107,9 +107,9 @@ pub struct AuthzProofInit {
     t_list: Vec<u8>,
 }
 
-impl AuthzProofInit {
-    pub fn init(factors: &AuthzProofFactors,
-                policy_address_m_tilde: &BigNumber) -> Result<AuthzProofInit, IndyCryptoError> {
+impl<'a> AuthzProofInit<'a> {
+    pub fn init(factors: &'a AuthzProofFactors,
+                policy_address_m_tilde: &BigNumber) -> Result<AuthzProofInit<'a>, IndyCryptoError> {
         let generators = AuthzProofGenerators::new()?;
         let blinding_factors = AuthzProofBlindingFactors::new(&generators)?;
         let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &generators)?;
@@ -125,6 +125,7 @@ impl AuthzProofInit {
                                                          &factors.provisioned_witness,
                                                         &commitments.c_4,
                                                         &mut t_list)?;
+        let (u_ca_r, r_ca_r) = (HashMap::new(), HashMap::new());
         //TODO: Get a proof of absence
 //        let (u_ca_r, r_ca_r) = CommitmentAccumulatorProof::commit(&generators.g_4,
 //                                                        &generators.h_4,
@@ -136,21 +137,19 @@ impl AuthzProofInit {
 //                                                         &factors.revocation_witness,
 //                                                        &commitments.c_4,
 //                                                        &mut t_list)?;
-        let u_ca_r = HashMap::new();
-        let r_ca_r = HashMap::new();
         let r_dc1 = DoubleCommitmentProof1::commit(&commitments.c_2,
                                                    &generators,
                                                    &mut t_list)?;
         let r_dc2 = DoubleCommitmentProof2::commit(&commitments.c_1,
                                                    &generators,
                                                    &mut t_list)?;
-        let r_sd = SelectiveDisclosureCLProof::commit(policy_address_m_tilde, &mut t_list)?;
+
+        let r_sd = SelectiveDisclosureCLProof::commit(&generators, policy_address_m_tilde, &mut t_list)?;
 
         let r_se = SecretEqualityProof::commit(&generators, &mut t_list)?;
 
         Ok(AuthzProofInit {
-            //TODO: shouldn't need to clone this, implement with lifetime parameter
-            factors: factors.clone()?,
+            factors,
             generators,
             commitments,
             blinding_factors,
@@ -180,13 +179,13 @@ impl AuthzProofInit {
                                                          &self.blinding_factors.r_4,
                                                            &self.generators.p_4,
                                                            &self.r_ca_p)?;
+        let p_ca_r = HashMap::new();
         //TODO: Get a proof of absence
 //        let p_ca_r = CommitmentAccumulatorProof::challenge(&challenge_hash,
 //                                                         &self.factors.P,
 //                                                         &self.blinding_factors.r_4,
 //                                                           &self.generators.p_4,
 //                                                           &self.r_ca_r)?;
-        let p_ca_r = HashMap::new();
         let p_dc1 = DoubleCommitmentProof1::challenge(&challenge_hash,
                                                       &self.generators,
                                                       &self.factors.K,
@@ -194,7 +193,6 @@ impl AuthzProofInit {
                                                       &self.blinding_factors.r_2,
                                                       &self.factors.r_prime.sub(&self.blinding_factors.r_2)?,
                                                       &self.blinding_factors.r_3,
-
                                                       &self.r_dc1)?;
         let p_dc2 = DoubleCommitmentProof2::challenge(&challenge_hash,
                                                       &self.generators,
@@ -213,6 +211,7 @@ impl AuthzProofInit {
                                                   &self.blinding_factors.r_3,
                                                   &self.blinding_factors.r_4,
                                                   &self.r_se)?;
+
         Ok(AuthzProof {
             commitments: self.commitments.clone()?,
             u_ca_p: clone_bignum_hashmap(&self.u_ca_p)?,
@@ -834,10 +833,7 @@ impl CommitmentAccumulatorProof {
 struct SelectiveDisclosureCLProof {}
 
 impl SelectiveDisclosureCLProof {
-    pub fn commit(policy_address_m_tilde: &BigNumber, t_values: &mut Vec<u8>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
-
-        let gen = AuthzProofGenerators::new()?;
-
+    pub fn commit(gen: &AuthzProofGenerators, policy_address_m_tilde: &BigNumber, t_values: &mut Vec<u8>) -> Result<HashMap<String, BigNumber>, IndyCryptoError> {
         let mut ctx = BigNumber::new_context()?;
 
         let a_tilde = generate_nonce(constants::P_0_SIZE, None, &gen.p_2)?;
@@ -860,8 +856,8 @@ impl SelectiveDisclosureCLProof {
         let a_tilde = &r_sd["a"];
         let b_tilde = &r_sd["b"];
         let mut ctx = BigNumber::new_context()?;
-        let a_hat = a_tilde.sub(&challenge_hash.mul(a, Some(&mut ctx))?)?;
-        let b_hat = b_tilde.sub(&challenge_hash.mul(b, Some(&mut ctx))?)?;
+        let a_hat = a_tilde.add(&challenge_hash.mul(a, Some(&mut ctx))?)?;
+        let b_hat = b_tilde.add(&challenge_hash.mul(b, Some(&mut ctx))?)?;
 
         Ok(hashmap!["a".to_string() => a_hat, "b".to_string() => b_hat])
     }
@@ -877,11 +873,12 @@ impl SelectiveDisclosureCLProof {
         let b_hat = pget_value("b")?;
         let mut ctx = BigNumber::new_context()?;
         let gen = AuthzProofGenerators::new()?;
-        let t_3_hat = get_generalized_pedersen_commitment(vec![(c_2, challenge_hash),
+        let t_3_hat = get_generalized_pedersen_commitment(vec![(&c_2.inverse(&gen.p_2, Some(&mut ctx))?, challenge_hash),
                                                                (&gen.g_2, a_hat),
                                                                (&gen.h_2, policy_address_m_hat),
                                                                (&gen.k_2, b_hat)],
                                                           &gen.p_2, &mut ctx)?;
+
         t_values.extend_from_slice(&t_3_hat.to_bytes()?);
         Ok(())
     }
@@ -1123,7 +1120,7 @@ mod tests {
     use cl::prover::mocks as prover_mocks;
 
     #[test]
-    fn secret_equality_proof() {
+    fn authz_secret_equality_proof() {
         let factors = mocks::authz_proof_factors();
         let generators = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
@@ -1157,7 +1154,7 @@ mod tests {
     }
 
     #[test]
-    fn double_comm_proof_2_works() {
+    fn authz_double_comm_proof_2_works() {
         let factors = mocks::authz_proof_factors();
         let generators = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
@@ -1200,7 +1197,7 @@ mod tests {
     }
 
     #[test]
-    fn double_comm_proof_1_works() {
+    fn authz_double_comm_proof_1_works() {
         let factors = mocks::authz_proof_factors();
         let generators = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
@@ -1243,7 +1240,7 @@ mod tests {
     }
 
     #[test]
-    fn commitment_accum_proof_works() {
+    fn authz_commitment_accum_proof_works() {
         let factors = mocks::authz_proof_factors();
         let blinding_factors = mocks::authz_proof_blinding_factors();
         let generators = AuthzProofGenerators::new().unwrap();
@@ -1301,7 +1298,7 @@ mod tests {
     }
 
     #[test]
-    fn selective_disclosure_cl_proof_works() {
+    fn authz_selective_disclosure_cl_proof_works() {
         let factors = mocks::authz_proof_factors();
         let gen = AuthzProofGenerators::new().unwrap();
         let blinding_factors = mocks::authz_proof_blinding_factors();
@@ -1313,7 +1310,7 @@ mod tests {
 
         let mut t_values = Vec::new();
 
-        let r_sd = SelectiveDisclosureCLProof::commit(&m_tilde, &mut t_values).unwrap();
+        let r_sd = SelectiveDisclosureCLProof::commit(&gen, &m_tilde, &mut t_values).unwrap();
 
         let challenge_hash = get_hash_as_int(&vec![t_values]).unwrap();
 
@@ -1322,7 +1319,7 @@ mod tests {
                                                                    &factors.K,
                                                                    &blinding_factors.r_2).unwrap();
 
-        let m_hat = m_tilde.sub(&challenge_hash.mul(&factors.policy_address, None).unwrap()).unwrap();
+        let m_hat = m_tilde.add(&challenge_hash.mul(&factors.policy_address, None).unwrap()).unwrap();
 
         let mut t_hat_values = Vec::new();
         SelectiveDisclosureCLProof::verify(&challenge_hash,
@@ -1336,56 +1333,62 @@ mod tests {
 
     #[test]
     fn authz_proof_works() {
-        MockHelper::inject();
+        let generators = AuthzProofGenerators::new().unwrap();
+        let factors = mocks::authz_proof_factors();
+        let blinding_factors = mocks::authz_proof_blinding_factors();
+        let commitments = mocks::authz_proof_commitments();
+        let accumulators = mocks::authz_accumulators();
+        let m_tildes = mocks::m_tildes();
+        let m = prover_mocks::credential_values();
 
-//        let cred_values = prover_mocks::credential_values();
-//        let cred_signature = prover_mocks::primary_credential();
-//        let authz_proof_factors = mocks::authz_proof_factors();
-//        let authz_proof_generators = mocks::authz_proof_generators();
-//        let authz_proof_commitments = mocks::authz_proof_commitments();
-//
-//        let verifier_nonce = bn_rand(128).unwrap();
-//        let mut ctx = BigNumber::new_context().unwrap();
-//
-//        let n = BigNumber::from_dec(constants::ACCUM1_MODULUS).unwrap();
-//
-//        let witness = BigNumber::from_u32(1).unwrap();
-//        let accumulator = authz_proof_generators.g_n.mod_exp(&authz_proof_commitments.c_1, &n, Some(&mut ctx)).unwrap();
-//
-//        let authzproof = AuthzProof::new(&cred_values,
-//                                         &cred_signature,
-//                                         &mocks::revealed_attrs(),
-//                                         "policy_address",
-//                                         &mocks::m_tildes(),
-//                                         &authz_proof_factors,
-//                                         &witness,
-//                                         &verifier_nonce).unwrap();
+        let authz_init = AuthzProofInit::init(&factors, &m_tildes["policy_address"]).unwrap();
 
-//        assert!(authzproof.verify(&accumulator, &verifier_nonce).unwrap());
+        let mut t_values = Vec::new();
+        authz_init.add_t_list(&mut t_values);
+        let challenge_hash = get_hash_as_int(&t_values).unwrap();
+
+        let policy_address_m_hat = m_tildes["policy_address"].add(&challenge_hash.mul(&m.attrs_values["policy_address"].value(), None).unwrap()).unwrap();
+
+        let authz_proof = authz_init.finalize(&challenge_hash, &policy_address_m_hat).unwrap();
+
+        let t_hat_values = authz_proof.verify(&challenge_hash, &accumulators).unwrap();
+
+        let final_hash = get_hash_as_int(&vec![t_hat_values]).unwrap();
+
+        assert_eq!(challenge_hash, final_hash);
     }
 
     #[test]
     #[ignore] //TODO Expensive test
-    fn test_authz_mocks() {
-//        let mut ctx = BigNumber::new_context().unwrap();
-//        let gen = AuthzProofGenerators::new().unwrap();
-//
-//        let factors = AuthzProofFactors::new(&gen, &BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(), &BigNumber::from_dec("82482513509927463198200988655461469819592280137503867166383914706498311851913").unwrap()).unwrap();
-//
-//        println!("factors = {:?}", factors);
-//
-//        let blinding_factors = AuthzProofBlindingFactors::new(&gen).unwrap();
-//
-//        println!("blinding_factors = {:?}", blinding_factors);
+    fn test_generate_authz_mocks() {
+        let mut ctx = BigNumber::new_context().unwrap();
+        let gen = AuthzProofGenerators::new().unwrap();
 
-//        let factors = mocks::authz_proof_factors(); //AuthzProofFactors::new(&gen, &BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(), &BigNumber::from_dec("82482513509927463198200988655461469819592280137503867166383914706498311851913").unwrap()).unwrap();
-//        let blinding_factors = mocks::authz_proof_blinding_factors();
+        let factors = AuthzProofFactors::new(&gen,
+                                             &BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(),
+                                             &BigNumber::from_dec("82482513509927463198200988655461469819592280137503867166383914706498311851913").unwrap(),
+                                             "policy_address",
+                                              &gen.g_n_1,
+                                              &gen.g_n_2).unwrap();
 
-//        let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &gen).unwrap();
-//
-//        println!("commitments = {:?}", commitments);
+        println!("factors = {:?}", factors);
 
-        println!("bn_rand(771) = {:?}", bn_rand(771));
+        let blinding_factors = AuthzProofBlindingFactors::new(&gen).unwrap();
+
+        println!("blinding_factors = {:?}", blinding_factors);
+
+        let factors = mocks::authz_proof_factors(); //AuthzProofFactors::new(&gen, &BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(), &BigNumber::from_dec("82482513509927463198200988655461469819592280137503867166383914706498311851913").unwrap()).unwrap();
+        let blinding_factors = mocks::authz_proof_blinding_factors();
+
+        let commitments = AuthzProofCommitments::new(&factors, &blinding_factors, &gen).unwrap();
+
+        println!("commitments = {:?}", commitments);
+
+//        let finish = gen.p_3.num_bits().unwrap();
+//        let start = finish - 4;
+//        for i in start..finish {
+//            println!("bn_rand({} = {:?}", i, bn_rand(i as usize));
+//        }
 
 //        let authz_proof_factors = mocks::authz_proof_factors();
 //        let (c_1, r_0) = gen_double_commitment_to_secret(&authz_proof_generators.g_1, &authz_proof_generators.h_1, &authz_proof_factors.agent_secret,
@@ -1461,10 +1464,10 @@ pub mod mocks {
         AuthzProofFactors {
             agent_secret: BigNumber::from_dec("89035060045652462381130209244352620421002985094628950327696113598322429853594").unwrap(),
             policy_address: BigNumber::from_dec("82482513509927463198200988655461469819592280137503867166383914706498311851913").unwrap(),
-            r: BigNumber::from_dec("373444499435622973298120774765644881530061950099441311686212507378365323396832957807277718321730882745388197842273738442078548394397370359563018795728458638144442479896198137150388200112065672398518558284220177381071088569286401838").unwrap(),
-            r_prime: BigNumber::from_dec("907587248344987532621760705590319645589225452345736905831961251252706433531501632567778084937083295085731780227145189350928250532127936426120838942949748192065894619150630831984039393134488948797558783391080380475775385474968663537").unwrap(),
-            K: BigNumber::from_dec("1567730211124226934595886878953317251990337439723327855719339400121568240657401972636562612767421619497944853573124317651438443951049003075097489617220862842193521919486318064069497834525392511901493827566389924927370527412378291840").unwrap(),
-            P: BigNumber::from_dec("1854766729919658859329031426948455698710224539700418666233056341411942283682652953555950690726373814627113748721241326318927206421862799458962389249514456142398382186866591365421111152297685303084514560652643576538426116604250179827").unwrap(),
+            r: BigNumber::from_dec("190632529128613414143612514476669949914908725583651060383853652077858910795850808951324075046444166369189569470179921229912654268486741084856389328193411934211285821236617092305932348502092754389139101986563304092947351363515973450885264274086010267387860937912632166068").unwrap(),
+            r_prime: BigNumber::from_dec("172678174500610954847067699942940618773563251454390072559917879112801034762289528383348499868303093788772450910666887422915534651708876602400677146601849185782744359904146841577088789959612045504906894134156213460839936234405912858547950880379889581401162667830569334984").unwrap(),
+            K: BigNumber::from_dec("53144218722167574971507804819878133160317281035848517551621606287333222028138767941232374708009826968678053591590564567203070993393351294942457968993977350325478238045894808879968841186184132422265826573143831951905476155139730106086734104949294092011105249277516107350").unwrap(),
+            P: BigNumber::from_dec("306988827344479412219019108902725593801296658038547712305858517227916518879198493573901356805803868615832722878210661051121177584993639361795078656837846867008701810743751778405769447573742132513408608146475715427660468110407171781996851220951633784776120479465034935633").unwrap(),
             policy_address_attr_name: "policy_address".to_string(),
             provisioned_witness: BigNumber::from_dec(constants::G_N_1).unwrap(),
             revocation_witness: BigNumber::from_dec(constants::G_N_2).unwrap(),
@@ -1473,19 +1476,19 @@ pub mod mocks {
 
     pub fn authz_proof_blinding_factors() -> AuthzProofBlindingFactors {
         AuthzProofBlindingFactors {
-            r_1: BigNumber::from_dec("65129174411411124782539338181400365516471533729661936065376957040661914580046314262021878796927852292237013939215505452912667385567979705875158002540276882222212988171380231314913897491671099498687901463482090854657207378873347336").unwrap(),
-            r_2: BigNumber::from_dec("639503229105111299807869079995664932890489507380868310741351495542799365098174695609275542909071663962914875070400874829958718225853261516353498155164198998884433004492299895885906383407728704200432838139658059812905321207445502249").unwrap(),
-            r_3: BigNumber::from_dec("467675726582599103468821744708279833270639571741215534369582603727399795116052068207530052428672705906300156428100418790524554887735418374801353777605910545082278228080772555134707728121391255671608704313385651959445968627474162042").unwrap(),
-            r_4: BigNumber::from_dec("721881323724960162445358150750224976525126143031612484471138181520802603516414620173940463456681570613003319613348247287090832029150837625474188679889855920700143012697024041201697924565364150259707847638851632947539367964290245128075300619298145975528723932452013392480701859096955065770026392558729304515498714331815516222105411248903786520708464626544347412582282329441513000932773092433827725604763495730136631338044673850192890030578553213295009627715001409").unwrap()
+            r_1: BigNumber::from_dec("121084177631384110056444336649729944276613410522126354928007667620121486692182254406650132671152044592700405336178214069642574366370475915939755732289184045044083512237521642720286191263720589619757548533742249790864005586688837243371988857474217886574184242574950527575").unwrap(),
+            r_2: BigNumber::from_dec("102992122747160928054190243189652822317519139995000522860206568677954928438803195941917953072078667138330265447840517612270694736250744000957591946742054090007946900205394980172806109303741061062266646162195063595573279585038745897623487563776185569295191474454662560391").unwrap(),
+            r_3: BigNumber::from_dec("123794598508193088266410939790877326581831826314522797479280560478511651779780266850535583217712071340646852689139567439423781618620247630318931882298709156674664399864269677566174005019243163847570300437800741578581003539009157537345918991455807705413906971705006303245").unwrap(),
+            r_4: BigNumber::from_dec("676788330816397702254115879291650967219880374887528365484676117288733187421646637788142610760339586043477060418719218065232270965463220782100327050345070953307819173037859470864795798368471770695373359100117712765156492529429084986956223420317921474310471812609121110421433465873991211374186475777106848678189733041259486556820234676633761018293600499992033218268935722935500360528756181950891956496523694635334169573832648122138878634242793493803450830730066272").unwrap()
         }
     }
 
     pub fn authz_proof_commitments() -> AuthzProofCommitments {
         AuthzProofCommitments {
-            c_1: BigNumber::from_dec("1302965041477986568837097080730219950930425563812104708300196382826548983478219403773130881943254282197659891903533312288382453858888407161432946992850126793011979117999320705930661139807328129539723811101714259305116922365513478151").unwrap(),
-            c_2: BigNumber::from_dec("3633710581229959010173629794835933967003424651356029895506030137354190078557221129160855403879534195091373926176560513029413251517672734056564495071463932862778561397043668412068430893598580832422967153362257052195811063548753703428").unwrap(),
-            c_3: BigNumber::from_dec("5247580181400880015489246887155088447104882484140483747572941799081450646357693220308757837591373601700150061754734228089996841896637997893495020560477480003008582233729074032680048869571759633693615375673419405511207631477262341641").unwrap(),
-            c_4: BigNumber::from_dec("3249183533908630114267097883310529979840035631571024018841933947336242323760498253700251806050923350698547533674468221833272674206753236371458116349404333600692856723754492926682408034487693019398748794127946693792829298590861749761354313458374886175625656674595087229069206093453014693731574954408635807971226368194112265828540613080627541404820601549354533901376968368888280390654838377396096002342422762802610553991429292070851012115401122504414251949554391227").unwrap(),
+            c_1: BigNumber::from_dec("246471808579850018137381675611960516267522543814410311613593883360767620831037549571269870105660932815499202703123552544946253751141483114134012671749078026761368846204723294976476014221277912997239831312350786014192714632552729415268514853512986048872322449061602988419").unwrap(),
+            c_2: BigNumber::from_dec("353123941360266631414130729551877025642753612106992163510839447554564996362774839052979157617551250744040226719034184664025530189146470965785699424837883162503791450877364767660111352637789424254643110941013531365082673417985592579348667464389609209674888502694237659212").unwrap(),
+            c_3: BigNumber::from_dec("916619420789849767120780409900706245645122279920783612525739252024074369203825290659050290454314420255361614223749490088162896102593586055703489745207620047236925533538033258116235828385973856482111371069891876541864596070073794586209393683938665138717520783328943319359").unwrap(),
+            c_4: BigNumber::from_dec("1667839538412182251436000344928121207353269760855246226302392196079801383503632175121041865510851999611655335632506929129658649434812609065072645657930222499769310149307428504662710255542637654738301589453900898671322608660225725334144572886617706917485488375572974474047980968628334887451764769701413970508426049493796899104276532418623792541545400321443125746994028866005602879781219204232043117733122709919369189114484359025273714809229511818391419292112302852").unwrap(),
         }
     }
 

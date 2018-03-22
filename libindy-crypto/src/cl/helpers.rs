@@ -279,18 +279,18 @@ pub fn transform_u32_to_array_of_u8(x: u32) -> Vec<u8> {
     result
 }
 
-pub fn get_mtilde(unrevealed_attrs: &BTreeSet<String>) -> Result<BTreeMap<String, BigNumber>, IndyCryptoError> {
+pub fn get_mtilde(unrevealed_attrs: &BTreeSet<String>, mtilde: &mut BTreeMap<String, BigNumber>) -> Result<(), IndyCryptoError> {
     trace!("Helpers::get_mtilde: >>> unrevealed_attrs: {:?}", unrevealed_attrs);
 
-    let mut mtilde: BTreeMap<String, BigNumber> = BTreeMap::new();
-
     for attr in unrevealed_attrs {
-        mtilde.insert(attr.clone(), bn_rand(LARGE_MVECT)?);
+        if !mtilde.contains_key(attr) {
+            mtilde.insert(attr.clone(), bn_rand(LARGE_MVECT)?);
+        }
     }
 
     trace!("Helpers::get_mtilde: <<< mtilde: {:?}", mtilde);
 
-    Ok(mtilde)
+    Ok(())
 }
 
 pub fn calc_teq(p_pub_key: &CredentialPrimaryPublicKey,
