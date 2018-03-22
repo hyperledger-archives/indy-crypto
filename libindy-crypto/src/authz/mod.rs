@@ -950,12 +950,10 @@ pub struct AuthzProofFactors {
 }
 
 impl AuthzProofFactors {
-    pub fn new(gen: &AuthzProofGenerators,
-               agent_secret: &BigNumber,
-               policy_address: &BigNumber,
-               policy_address_attr_name: &str,
-               provisioned_witness: &BigNumber,
-               revocation_witness: &BigNumber) -> Result<AuthzProofFactors, IndyCryptoError> {
+    pub fn generate_double_commitment(gen: &AuthzProofGenerators,
+                                      agent_secret: &BigNumber,
+                                      policy_address: &BigNumber) -> Result<(BigNumber, BigNumber,
+                                                                             BigNumber, BigNumber), IndyCryptoError>{
         let mut ctx = BigNumber::new_context()?;
 
         let r = generate_nonce(constants::R_0_SIZE, None, &gen.p_0)?;
@@ -974,6 +972,17 @@ impl AuthzProofFactors {
                                                     &gen.p_2, &mut ctx)?;
             if P.is_prime(Some(&mut ctx))? { break; }
         }
+        Ok((r, r_prime, K, P))
+    }
+
+    pub fn new(gen: &AuthzProofGenerators,
+               agent_secret: &BigNumber,
+               policy_address: &BigNumber,
+               policy_address_attr_name: &str,
+               provisioned_witness: &BigNumber,
+               revocation_witness: &BigNumber) -> Result<AuthzProofFactors, IndyCryptoError> {
+        let (r, r_prime, K, P) = AuthzProofFactors::generate_double_commitment(&gen,
+                                                                               &agent_secret, &policy_address)?;
 
         Ok(AuthzProofFactors { agent_secret: agent_secret.clone()?,
                                policy_address: policy_address.clone()?,
