@@ -7,6 +7,8 @@ use errors::IndyCryptoError;
 use std::iter::FromIterator;
 use utils::get_hash_as_int;
 
+use authz::{AuthzProof, AuthzAccumulators};
+
 /// Party that wants to check that prover has some credentials provided by issuer.
 pub struct Verifier {}
 
@@ -194,12 +196,11 @@ impl ProofVerifier {
     ///                                      None).unwrap();
     /// assert!(proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
     /// ```
-    pub fn verify(self, proof: &Proof, nonce: &Nonce) -> Result<bool, IndyCryptoError> {
-        trace!(
-            "ProofVerifier::verify: >>> proof: {:?}, nonce: {:?}",
-            proof,
-            nonce
-        );
+    pub fn verify(self,
+                  proof: &Proof,
+                  nonce: &Nonce,
+                  accumulators: Option<&AuthzAccumulators>) -> Result<bool, IndyCryptoError> {
+        trace!("ProofVerifier::verify: >>> proof: {:?}, nonce: {:?}", proof, nonce);
 
         ProofVerifier::_check_verify_params_consistency(&self.credentials, proof)?;
 
@@ -243,6 +244,11 @@ impl ProofVerifier {
 
         values.extend_from_slice(&tau_list);
         values.extend_from_slice(&proof.aggregated_proof.c_list);
+
+        if let Some(ref authz_proof) = proof.authz_proof {
+            authz_proof.verify(&proof.aggregated_proof.c_hash, &nonce, accumulators.unwrap())?;
+        }
+
         values.push(nonce.to_bytes()?);
 
         let c_hver = get_hash_as_int(&mut values)?;

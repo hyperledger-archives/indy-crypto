@@ -1,5 +1,6 @@
 use cl::verifier::*;
 use cl::*;
+use authz::AuthzAccumulators;
 use errors::ToErrorCode;
 use ffi::ErrorCode;
 use utils::ctypes::CTypesUtils;
@@ -101,19 +102,21 @@ pub extern fn indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier
 pub extern fn indy_crypto_cl_proof_verifier_verify(proof_verifier: *const c_void,
                                                    proof: *const c_void,
                                                    nonce: *const c_void,
+                                                   accumulators: *const c_void,
                                                    valid_p: *mut bool) -> ErrorCode {
     trace!("indy_crypto_cl_proof_verifier_verify: >>> proof_verifier: {:?}, proof: {:?}, nonce: {:?}, valid_p: {:?}", proof_verifier, proof, nonce, valid_p);
 
     check_useful_c_ptr!(proof_verifier, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(proof, Proof, ErrorCode::CommonInvalidParam2);
     check_useful_c_reference!(nonce, Nonce, ErrorCode::CommonInvalidParam3);
+    check_useful_opt_c_reference!(accumulators, AuthzAccumulators);
     check_useful_c_ptr!(valid_p, ErrorCode::CommonInvalidParam4);
 
     let proof_verifier = unsafe { Box::from_raw(proof_verifier as *mut ProofVerifier) };
 
     trace!("indy_crypto_cl_proof_verifier_verify: entities: >>> proof_verifier: {:?}, proof: {:?}, nonce: {:?}", proof_verifier, proof, nonce);
 
-    let res = match proof_verifier.verify(proof, nonce) {
+    let res = match proof_verifier.verify(proof, nonce, accumulators) {
         Ok(valid) => {
             trace!("indy_crypto_cl_proof_verifier_verify: valid: {:?}", valid);
             unsafe {
