@@ -279,7 +279,7 @@ impl Prover {
     /// use indy_crypto::cl::prover::Prover;
     ///
     /// let _proof_builder = Prover::new_proof_builder();
-    pub fn new_proof_builder() -> Result<ProofBuilder, IndyCryptoError> {
+    pub fn new_proof_builder<'a>() -> Result<ProofBuilder<'a>, IndyCryptoError> {
 
         Ok(ProofBuilder {
             authz_proof_init: None,
@@ -846,22 +846,22 @@ impl Prover {
 }
 
 #[derive(Debug)]
-pub struct ProofBuilder {
-    authz_proof_init: Option<AuthzProofInit>,
+pub struct ProofBuilder<'a> {
+    authz_proof_init: Option<AuthzProofInit<'a>>,
     common_attributes: BTreeMap<String, BigNumber>,
     init_proofs: BTreeMap<String, InitProof>,
     c_list: Vec<Vec<u8>>,
     tau_list: Vec<Vec<u8>>,
 }
 
-impl ProofBuilder {
+impl<'a> ProofBuilder<'a> {
     /// Creates m_tildes for attributes that will be the same across all subproofs
     pub fn add_common_attribute(&mut self, attr_name: &str) -> Result<(), IndyCryptoError> {
         self.common_attributes.insert(attr_name.to_owned(), bn_rand(LARGE_MVECT)?);
         Ok(())
     }
 
-    pub fn add_authz_proof_request(&mut self, authz_proof_factors: &AuthzProofFactors) -> Result<(), IndyCryptoError> {
+    pub fn add_authz_proof_request(&mut self, authz_proof_factors: &'a AuthzProofFactors) -> Result<(), IndyCryptoError> {
         trace!("ProofBuilder::add_authz_proof_request: >>> authz_proof_factors: {:?}", authz_proof_factors);
         if !self.common_attributes.contains_key(&authz_proof_factors.policy_address_attr_name) {
             return Err(IndyCryptoError::InvalidStructure(format!("{0} is marked as a common attribute. Please call ProofBuilder.add_common_attribute({0})", authz_proof_factors.policy_address_attr_name)));
@@ -1380,12 +1380,9 @@ impl ProofBuilder {
                                                               .difference(&sub_proof_request.revealed_attrs)
                                                               .cloned()
                                                               .collect::<BTreeSet<String>>();
-        for (key, value) in common_attributes.iter() {
-            unrevealed_attrs.remove(key);
-        }
 
-        let mut m_tilde = get_mtilde(&unrevealed_attrs)?;
-        m_tilde.extend(clone_bignum_map(&common_attributes)?);
+        let mut m_tilde = clone_bignum_map(&common_attributes)?;
+        get_mtilde(&unrevealed_attrs, &mut m_tilde)?;
 
         let a_prime = cred_pub_key.s
             .mod_exp(&r, &cred_pub_key.n, Some(&mut ctx))?
@@ -1624,8 +1621,7 @@ impl ProofBuilder {
         }
 
         let m2 = challenge.mul(&init_proof.m2, Some(&mut ctx))?.add(
-            &init_proof
-                .m2_tilde,
+            &init_proof.m2_tilde,
         )?;
 
         let mut revealed_attrs_with_values: BTreeMap<String, BigNumber> = BTreeMap::new();
