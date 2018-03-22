@@ -246,7 +246,8 @@ impl ProofVerifier {
         values.extend_from_slice(&proof.aggregated_proof.c_list);
 
         if let Some(ref authz_proof) = proof.authz_proof {
-            authz_proof.verify(&proof.aggregated_proof.c_hash, &nonce, accumulators.unwrap())?;
+            let t_list = authz_proof.verify(&proof.aggregated_proof.c_hash, accumulators.unwrap())?;
+            values.push(t_list);
         }
 
         values.push(nonce.to_bytes()?);

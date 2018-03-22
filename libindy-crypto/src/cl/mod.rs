@@ -1367,6 +1367,10 @@ mod test {
              blinded_credential_secrets_correctness_proof,
              credential_issuance_nonce) = setup_test();
 
+        let factors = authz_mocks::authz_proof_factors();
+
+        assert_eq!(&factors.policy_address, credential_values.attrs_values["policy_address"].value());
+
         let issuance_by_default = false;
         let (rev_key_pub, rev_key_priv, mut rev_reg, mut rev_tails_generator) =
             Issuer::new_revocation_registry_def(&credential_pub_key, issuer::mocks::max_cred_num(), issuance_by_default).unwrap();
@@ -1411,8 +1415,6 @@ mod test {
 
         proof_builder.add_common_attribute("link_secret").unwrap();
         proof_builder.add_common_attribute("policy_address").unwrap();
-
-        let factors = authz_mocks::authz_proof_factors();
 
         proof_builder.add_authz_proof_request(&factors).unwrap();
 
@@ -1506,8 +1508,6 @@ mod test {
                                              rev_reg,
                                              witness).unwrap();
 
-        //        println!("credential_signature = {:?}", credential_signature);
-
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
         sub_proof_request_builder
@@ -1517,6 +1517,9 @@ mod test {
 
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
+
+        proof_builder.add_common_attribute("link_secret").unwrap();
+        proof_builder.add_common_attribute("policy_address").unwrap();
 
         proof_builder
             .add_sub_proof_request(
