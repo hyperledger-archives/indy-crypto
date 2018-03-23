@@ -1100,8 +1100,8 @@ impl AuthzProofGenerators {
 
 #[derive(Debug)]
 pub struct AuthzAccumulators {
-    provisioned: BigNumber,
-    revoked: BigNumber
+    pub provisioned: BigNumber,
+    pub revoked: BigNumber
 }
 
 fn clone_bignum_hashmap<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>)
