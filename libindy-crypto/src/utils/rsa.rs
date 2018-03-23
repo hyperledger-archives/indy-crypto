@@ -35,10 +35,10 @@ pub fn generate_RSA_modulus(size: usize,
 ///
 /// # Result
 /// Return the new witness
-pub fn generate_witness(initial_witness: &BigNumber, exponents: &Vec<&BigNumber>,
+pub fn generate_witness(initial_witness: &BigNumber, exponents: &Vec<BigNumber>,
                         modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
     let mut updated_witness = initial_witness.clone()?;
-    for &e in exponents.iter() {
+    for ref e in exponents.iter() {
         updated_witness = updated_witness.mod_exp(&e, modulus, Some(ctx))?;
     }
     Ok(updated_witness)
@@ -69,7 +69,7 @@ mod tests {
         let e3 = BigNumber::from_dec("7").unwrap();
         let e4 = BigNumber::from_dec("11").unwrap();
         let e5 = BigNumber::from_dec("13").unwrap();
-        let exps = vec![&e1, &e2, &e3, &e4, &e5];
+        let exps = vec![e1, e2, e3, e4, e5];
         let n = BigNumber::from_dec("17").unwrap();
         assert_eq!(BigNumber::from_dec("10").unwrap(), generate_witness(&initial_witness,
                                                                         &exps, &n, &mut ctx).unwrap())

@@ -17,8 +17,8 @@ pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoError
     hash
 }
 
-pub fn clone_option_bignum(b: Option<BigNumber>) -> Result<Option<BigNumber>, IndyCryptoError> {
-    match b {
+pub fn clone_option_bignum(b: &Option<BigNumber>) -> Result<Option<BigNumber>, IndyCryptoError> {
+    match *b {
         Some(ref bn) => Ok(Some(bn.clone()?)),
         None => Ok(None)
     }

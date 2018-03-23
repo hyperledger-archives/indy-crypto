@@ -847,7 +847,7 @@ impl Prover {
 
 #[derive(Debug)]
 pub struct ProofBuilder<'a> {
-    authz_proof_init: Option<AuthzProofInit<'a>>,
+    pub authz_proof_init: Option<AuthzProofInit<'a>>,
     common_attributes: BTreeMap<String, BigNumber>,
     init_proofs: BTreeMap<String, InitProof>,
     c_list: Vec<Vec<u8>>,
