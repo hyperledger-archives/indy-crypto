@@ -205,9 +205,12 @@ impl ProofVerifier {
         ProofVerifier::_check_verify_params_consistency(&self.credentials, proof)?;
 
         let mut tau_list: Vec<Vec<u8>> = Vec::new();
+        let mut include_authz_proof = false;
 
         for (issuer_key_id, proof_item) in &proof.proofs {
             let credential: &VerifiableCredential = &self.credentials[issuer_key_id];
+
+            include_authz_proof |= credential.sub_proof_request.include_authz_proof;
 
             if let (Some(non_revocation_proof),
                     Some(cred_rev_pub_key),
@@ -240,10 +243,15 @@ impl ProofVerifier {
             )?)?;
         }
 
+        if include_authz_proof && proof.authz_proof.is_none() {
+            return Ok(false);
+        }
+
         let mut values: Vec<Vec<u8>> = Vec::new();
 
         values.extend_from_slice(&tau_list);
         values.extend_from_slice(&proof.aggregated_proof.c_list);
+
 
         if let Some(ref authz_proof) = proof.authz_proof {
             let t_list = authz_proof.verify(&proof.aggregated_proof.c_hash, accumulators.unwrap())?;
