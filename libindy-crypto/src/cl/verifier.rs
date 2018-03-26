@@ -243,8 +243,8 @@ impl ProofVerifier {
             )?)?;
         }
 
-        if include_authz_proof && proof.auth_proof.is_none() {
-            return false;
+        if include_authz_proof && proof.authz_proof.is_none() {
+            return Ok(false);
         }
 
         let mut values: Vec<Vec<u8>> = Vec::new();
