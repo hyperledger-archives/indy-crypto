@@ -245,7 +245,9 @@ impl<'a> JsonDecodable<'a> for RevocationRegistry {}
 /// `Revocation Registry Delta` contains Accumulator changes.
 /// Must be applied to `Revocation Registry`
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RevocationRegistryDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
     prev_accum: Option<Accumulator>,
     accum: Accumulator,
     #[serde(skip_serializing_if = "HashSet::is_empty")]
@@ -261,6 +263,18 @@ impl JsonEncodable for RevocationRegistryDelta {}
 impl<'a> JsonDecodable<'a> for RevocationRegistryDelta {}
 
 impl RevocationRegistryDelta {
+    pub fn from_parts(rev_reg_from: Option<&RevocationRegistry>,
+                      rev_reg_to: &RevocationRegistry,
+                      issued: &HashSet<u32>,
+                      revoked: &HashSet<u32>) -> RevocationRegistryDelta {
+        RevocationRegistryDelta {
+            prev_accum: rev_reg_from.map(|rev_reg| rev_reg.accum),
+            accum: rev_reg_to.accum.clone(),
+            issued: issued.clone(),
+            revoked: revoked.clone()
+        }
+    }
+
     pub fn merge(&mut self, other_delta: &RevocationRegistryDelta) -> Result<(), IndyCryptoError> {
         if other_delta.prev_accum.is_none() || self.accum != other_delta.prev_accum.unwrap() {
             return Err(IndyCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
