@@ -280,7 +280,6 @@ impl RevocationRegistryDelta {
             return Err(IndyCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
         }
 
-        self.prev_accum = Some(self.accum);
         self.accum = other_delta.accum;
 
         self.issued.extend(
@@ -463,16 +462,23 @@ impl<'a> JsonDecodable<'a> for Witness {}
 impl Witness {
     pub fn new<RTA>(rev_idx: u32,
                     max_cred_num: u32,
+                    issuance_by_default: bool,
                     rev_reg_delta: &RevocationRegistryDelta,
                     rev_tails_accessor: &RTA) -> Result<Witness, IndyCryptoError> where RTA: RevocationTailsAccessor {
-        trace!("Witness::new: >>> rev_idx: {:?}, max_cred_num: {:?}, rev_reg_delta: {:?}",
-               rev_idx, max_cred_num, rev_reg_delta);
+        trace!("Witness::new: >>> rev_idx: {:?}, max_cred_num: {:?}, issuance_by_default: {:?}, rev_reg_delta: {:?}",
+               rev_idx, max_cred_num, issuance_by_default, rev_reg_delta);
 
         let mut omega = PointG2::new_inf()?;
 
-        let mut issued = rev_reg_delta.issued.clone();
-        issued.remove(&rev_idx);
+        let mut issued = if issuance_by_default {
+            (1..max_cred_num + 1).collect::<HashSet<u32>>()
+                .difference(&rev_reg_delta.revoked).cloned().collect::<HashSet<u32>>()
+        } else {
+            rev_reg_delta.issued.clone()
+        };
 
+        issued.remove(&rev_idx);
+        
         for j in issued.iter() {
             let index = max_cred_num + 1 - j + rev_idx;
             rev_tails_accessor.access_tail(index, &mut |tail| {
@@ -1117,7 +1123,7 @@ mod test {
                                                &rev_key_priv,
                                                &simple_tail_accessor).unwrap();
 
-        let witness = Witness::new(rev_idx, max_cred_num, &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
+        let witness = Witness::new(rev_idx, max_cred_num, issuance_by_default, &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
 
         Prover::process_credential_signature(&mut cred_signature,
                                              &cred_values,
