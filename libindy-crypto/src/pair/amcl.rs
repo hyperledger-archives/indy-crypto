@@ -30,7 +30,48 @@ use serde::de::{Deserialize, Deserializer, Visitor, Error as DError};
 #[cfg(feature = "serialization")]
 use std::fmt;
 
+#[cfg(test)]
+use std::cell::RefCell;
+
+#[cfg(test)]
+thread_local! {
+  pub static PAIR_USE_MOCKS: RefCell<bool> = RefCell::new(false);
+}
+
+#[cfg(test)]
+pub struct PairMocksHelper {}
+
+#[cfg(test)]
+impl PairMocksHelper {
+    pub fn inject() {
+        PAIR_USE_MOCKS.with(|use_mocks| {
+            *use_mocks.borrow_mut() = true;
+        });
+    }
+
+    pub fn is_injected() -> bool {
+        PAIR_USE_MOCKS.with(|use_mocks| {
+            return *use_mocks.borrow();
+        })
+    }
+}
+
+#[cfg(not(test))]
 fn random_mod_order() -> Result<BIG, IndyCryptoError> {
+    _random_mod_order()
+}
+
+#[cfg(test)]
+fn random_mod_order() -> Result<BIG, IndyCryptoError> {
+    if PairMocksHelper::is_injected() {
+        Ok(BIG::from_hex("B7D7DC1499EA50 6F16C9B5FE2C00 466542B923D8C9 FB01F2122DE924 22EB5716".to_string()))
+    }
+    else {
+        _random_mod_order()
+    }
+}
+
+fn _random_mod_order() -> Result<BIG, IndyCryptoError> {
     let mut seed = vec![0; MODBYTES];
     let mut os_rng = OsRng::new().unwrap();
     os_rng.fill_bytes(&mut seed.as_mut_slice());
