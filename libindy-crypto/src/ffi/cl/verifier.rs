@@ -124,14 +124,14 @@ mod tests {
         let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
         let master_secret = _master_secret();
         let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
+        let (blinded_credential_secrets, credential_secrets_blinding_factors,
+            blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
+                                                                                   credential_key_correctness_proof,
+                                                                                   master_secret,
+                                                                                   master_secret_blinding_nonce);
         let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
+        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
+                                                                                        blinded_credential_secrets_correctness_proof,
                                                                                         master_secret_blinding_nonce,
                                                                                         credential_issuance_nonce,
                                                                                         credential_pub_key,
@@ -140,7 +140,7 @@ mod tests {
         let sub_proof_request = _sub_proof_request();
         _process_credential_signature(credential_signature,
                                       signature_correctness_proof,
-                                      master_secret_blinding_data,
+                                      credential_secrets_blinding_factors,
                                       master_secret,
                                       credential_pub_key,
                                       credential_issuance_nonce,
@@ -165,7 +165,7 @@ mod tests {
         _free_proof_verifier(proof_verifier_p, proof, proof_building_nonce);
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
         _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+        _free_blinded_credential_secrets(blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof);
         _free_nonce(master_secret_blinding_nonce);
         _free_nonce(credential_issuance_nonce);
         _free_nonce(proof_building_nonce);
@@ -179,14 +179,14 @@ mod tests {
         let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
         let master_secret = _master_secret();
         let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
+        let (blinded_credential_secrets, credential_secrets_blinding_factors,
+            blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
+                                                                                   credential_key_correctness_proof,
+                                                                                   master_secret,
+                                                                                   master_secret_blinding_nonce);
         let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
+        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
+                                                                                        blinded_credential_secrets_correctness_proof,
                                                                                         master_secret_blinding_nonce,
                                                                                         credential_issuance_nonce,
                                                                                         credential_pub_key,
@@ -195,7 +195,7 @@ mod tests {
         let sub_proof_request = _sub_proof_request();
         _process_credential_signature(credential_signature,
                                       signature_correctness_proof,
-                                      master_secret_blinding_data,
+                                      credential_secrets_blinding_factors,
                                       master_secret,
                                       credential_pub_key,
                                       credential_issuance_nonce,
@@ -224,7 +224,7 @@ mod tests {
         _free_proof_verifier(proof_verifier, proof, proof_building_nonce);
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
         _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+        _free_blinded_credential_secrets(blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof);
         _free_nonce(master_secret_blinding_nonce);
         _free_nonce(credential_issuance_nonce);
         _free_nonce(proof_building_nonce);
@@ -238,14 +238,14 @@ mod tests {
         let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
         let master_secret = _master_secret();
         let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
+        let (blinded_credential_secrets, credential_secrets_blinding_factors,
+            blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
+                                                                                   credential_key_correctness_proof,
+                                                                                   master_secret,
+                                                                                   master_secret_blinding_nonce);
         let credential_issuance_nonce = _nonce();
-        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_master_secret,
-                                                                                        blinded_master_secret_correctness_proof,
+        let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
+                                                                                        blinded_credential_secrets_correctness_proof,
                                                                                         master_secret_blinding_nonce,
                                                                                         credential_issuance_nonce,
                                                                                         credential_pub_key,
@@ -254,7 +254,7 @@ mod tests {
         let sub_proof_request = _sub_proof_request();
         _process_credential_signature(credential_signature,
                                       signature_correctness_proof,
-                                      master_secret_blinding_data,
+                                      credential_secrets_blinding_factors,
                                       master_secret,
                                       credential_pub_key,
                                       credential_issuance_nonce,
@@ -280,7 +280,7 @@ mod tests {
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
         _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+        _free_blinded_credential_secrets(blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof);
         _free_nonce(master_secret_blinding_nonce);
         _free_nonce(credential_issuance_nonce);
         _free_nonce(proof_building_nonce);
@@ -295,17 +295,17 @@ mod tests {
         let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
         let master_secret = _master_secret();
         let master_secret_blinding_nonce = _nonce();
-        let (blinded_master_secret, master_secret_blinding_data,
-            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              master_secret,
-                                                                              master_secret_blinding_nonce);
+        let (blinded_credential_secrets, credential_secrets_blinding_factors,
+            blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
+                                                                                   credential_key_correctness_proof,
+                                                                                   master_secret,
+                                                                                   master_secret_blinding_nonce);
         let credential_issuance_nonce = _nonce();
         let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
 
         let (credential_signature, signature_correctness_proof, rev_reg_delta) =
-            _credential_signature_with_revoc(blinded_master_secret,
-                                             blinded_master_secret_correctness_proof,
+            _credential_signature_with_revoc(blinded_credential_secrets,
+                                             blinded_credential_secrets_correctness_proof,
                                              master_secret_blinding_nonce,
                                              credential_issuance_nonce,
                                              credential_pub_key,
@@ -318,7 +318,7 @@ mod tests {
         let witness = _witness(rev_reg_delta, tail_storage.get_ctx());
         _process_credential_signature(credential_signature,
                                       signature_correctness_proof,
-                                      master_secret_blinding_data,
+                                      credential_secrets_blinding_factors,
                                       master_secret,
                                       credential_pub_key,
                                       credential_issuance_nonce,
@@ -344,7 +344,7 @@ mod tests {
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
         _free_master_secret(master_secret);
-        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+        _free_blinded_credential_secrets(blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof);
         _free_nonce(master_secret_blinding_nonce);
         _free_nonce(credential_issuance_nonce);
         _free_nonce(proof_building_nonce);

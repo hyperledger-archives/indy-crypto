@@ -294,31 +294,31 @@ pub extern fn indy_crypto_cl_credential_values_builder_new(credential_values_bui
     res
 }
 
-/// Adds new attribute dec_value to credential values map.
+/// Adds new known attribute dec_value to credential values map.
 ///
 /// # Arguments
 /// * `credential_values_builder` - Reference that contains credential values builder instance pointer.
 /// * `attr` - Claim attr to add as null terminated string.
 /// * `dec_value` - Claim attr dec_value. Decimal BigNum representation as null terminated string.
 #[no_mangle]
-pub extern fn indy_crypto_cl_credential_values_builder_add_value(credential_values_builder: *const c_void,
+pub extern fn indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder: *const c_void,
                                                                  attr: *const c_char,
                                                                  dec_value: *const c_char) -> ErrorCode {
-    trace!("indy_crypto_cl_credential_values_builder_add_value: >>> credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}",
+    trace!("indy_crypto_cl_credential_values_builder_add_dec_known: >>> credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}",
            credential_values_builder, attr, dec_value);
 
     check_useful_mut_c_reference!(credential_values_builder, CredentialValuesBuilder, ErrorCode::CommonInvalidParam1);
     check_useful_c_str!(attr, ErrorCode::CommonInvalidParam2);
     check_useful_c_str!(dec_value, ErrorCode::CommonInvalidParam3);
 
-    trace!("indy_crypto_cl_credential_values_builder_add_value: entities: credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}", credential_values_builder, attr, dec_value);
+    trace!("indy_crypto_cl_credential_values_builder_add_dec_known: entities: credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}", credential_values_builder, attr, dec_value);
 
-    let res = match credential_values_builder.add_value(&attr, &dec_value) {
+    let res = match credential_values_builder.add_dec_known(&attr, &dec_value) {
         Ok(_) => ErrorCode::Success,
         Err(err) => err.to_error_code()
     };
 
-    trace!("indy_crypto_cl_credential_values_builder_add_value: <<< res: {:?}", res);
+    trace!("indy_crypto_cl_credential_values_builder_add_dec_known: <<< res: {:?}", res);
     res
 }
 
@@ -749,18 +749,18 @@ mod tests {
     }
 
     #[test]
-    fn indy_crypto_cl_credential_values_builder_add_value_works() {
+    fn indy_crypto_cl_credential_values_builder_add_dec_known_works() {
         let credential_values_builder = _credential_values_builder();
 
         let attr = CString::new("sex").unwrap();
         let dec_value = CString::new("89057765651800459030103911598694169835931320404459570102253965466045532669865684092518362135930940112502263498496335250135601124519172068317163741086983519494043168252186111551835366571584950296764626458785776311514968350600732183408950813066589742888246925358509482561838243805468775416479523402043160919428168650069477488093758569936116799246881809224343325540306266957664475026390533069487455816053169001876208052109360113102565642529699056163373190930839656498261278601357214695582219007449398650197048218304260447909283768896882743373383452996855450316360259637079070460616248922547314789644935074980711243164129").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder, attr.as_ptr(), dec_value.as_ptr());
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder, attr.as_ptr(), dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 
         let attr = CString::new("name").unwrap();
         let dec_value = CString::new("58606710922154038918005745652863947546479611221487923871520854046018234465128105585608812090213473225037875788462225679336791123783441657062831589984290779844020407065450830035885267846722229953206567087435754612694085258455822926492275621650532276267042885213400704012011608869094703483233081911010530256094461587809601298503874283124334225428746479707531278882536314925285434699376158578239556590141035593717362562548075653598376080466948478266094753818404986494459240364648986755479857098110402626477624280802323635285059064580583239726433768663879431610261724430965980430886959304486699145098822052003020688956471").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder, attr.as_ptr(), dec_value.as_ptr());
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder, attr.as_ptr(), dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 
@@ -970,7 +970,7 @@ pub mod mocks {
 
         let attr = CString::new("name").unwrap();
         let dec_value = CString::new("1139481716457488690172217916278103335").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder,
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
                                                                           attr.as_ptr(),
                                                                           dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
@@ -978,7 +978,7 @@ pub mod mocks {
 
         let attr = CString::new("sex").unwrap();
         let dec_value = CString::new("5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder,
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
                                                                           attr.as_ptr(),
                                                                           dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
@@ -986,7 +986,7 @@ pub mod mocks {
 
         let attr = CString::new("age").unwrap();
         let dec_value = CString::new("28").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder,
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
                                                                           attr.as_ptr(),
                                                                           dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
@@ -994,7 +994,7 @@ pub mod mocks {
 
         let attr = CString::new("height").unwrap();
         let dec_value = CString::new("175").unwrap();
-        let err_code = indy_crypto_cl_credential_values_builder_add_value(credential_values_builder,
+        let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
                                                                           attr.as_ptr(),
                                                                           dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);

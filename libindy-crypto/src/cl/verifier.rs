@@ -130,21 +130,21 @@ impl ProofVerifier {
     /// let (credential_pub_key, credential_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, false).unwrap();
     ///
     /// let master_secret = Prover::new_master_secret().unwrap();
-    /// let master_secret_blinding_nonce = new_nonce().unwrap();
-    /// let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-    ///     Prover::blind_master_secret(&credential_pub_key, &cred_key_correctness_proof, &master_secret, &master_secret_blinding_nonce).unwrap();
+    /// let credential_nonce = new_nonce().unwrap();
+    /// let (blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof) =
+    ///     Prover::blind_master_secret(&credential_pub_key, &cred_key_correctness_proof, &master_secret, &credential_nonce).unwrap();
     ///
     /// let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-    /// credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+    /// credential_values_builder.add_dec_known("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
     /// let credential_values = credential_values_builder.finalize().unwrap();
     ///
     /// let credential_issuance_nonce = new_nonce().unwrap();
     ///
     /// let (mut credential_signature, signature_correctness_proof) =
     ///     Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-    ///                             &blinded_master_secret,
-    ///                             &blinded_master_secret_correctness_proof,
-    ///                             &master_secret_blinding_nonce,
+    ///                             &blinded_credential_secrets,
+    ///                             &blinded_credential_secrets_correctness_proof,
+    ///                             &credential_nonce,
     ///                             &credential_issuance_nonce,
     ///                             &credential_values,
     ///                             &credential_pub_key,
@@ -153,7 +153,7 @@ impl ProofVerifier {
     /// Prover::process_credential_signature(&mut credential_signature,
     ///                                      &credential_values,
     ///                                      &signature_correctness_proof,
-    ///                                      &master_secret_blinding_data,
+    ///                                      &credential_secrets_blinding_factors,
     ///                                      &master_secret,
     ///                                      &credential_pub_key,
     ///                                      &credential_issuance_nonce,
