@@ -1,6 +1,7 @@
 extern crate serde_json;
 
 mod constants;
+#[macro_use]
 mod helpers;
 pub mod issuer;
 pub mod prover;
@@ -19,27 +20,28 @@ use std::hash::Hash;
 /// # Example
 /// ```
 /// use indy_crypto::cl::new_nonce;
+///
 /// let _nonce = new_nonce().unwrap();
 /// ```
 pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
     Ok(helpers::bn_rand(constants::LARGE_NONCE)?)
 }
 
-/// A list of attributes a Claim is based on.
+/// A list of attributes a Credential is based on.
 #[derive(Debug, Clone)]
-pub struct ClaimSchema {
+pub struct CredentialSchema {
     attrs: HashSet<String> /* attr names */
 }
 
-/// A Builder of `Claim Schema`.
+/// A Builder of `Credential Schema`.
 #[derive(Debug)]
-pub struct ClaimSchemaBuilder {
+pub struct CredentialSchemaBuilder {
     attrs: HashSet<String> /* attr names */
 }
 
-impl ClaimSchemaBuilder {
-    pub fn new() -> Result<ClaimSchemaBuilder, IndyCryptoError> {
-        Ok(ClaimSchemaBuilder {
+impl CredentialSchemaBuilder {
+    pub fn new() -> Result<CredentialSchemaBuilder, IndyCryptoError> {
+        Ok(CredentialSchemaBuilder {
             attrs: HashSet::new()
         })
     }
@@ -49,36 +51,36 @@ impl ClaimSchemaBuilder {
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<ClaimSchema, IndyCryptoError> {
-        Ok(ClaimSchema {
+    pub fn finalize(self) -> Result<CredentialSchema, IndyCryptoError> {
+        Ok(CredentialSchema {
             attrs: self.attrs
         })
     }
 }
 
-/// Values of attributes from `Claim Schema` (must be integers).
+/// Values of attributes from `Credential Schema` (must be integers).
 #[derive(Debug)]
-pub struct ClaimValues {
+pub struct CredentialValues {
     attrs_values: HashMap<String, BigNumber>
 }
 
-impl ClaimValues {
-    pub fn clone(&self) -> Result<ClaimValues, IndyCryptoError> {
-        Ok(ClaimValues {
+impl CredentialValues {
+    pub fn clone(&self) -> Result<CredentialValues, IndyCryptoError> {
+        Ok(CredentialValues {
             attrs_values: clone_bignum_map(&self.attrs_values)?
         })
     }
 }
 
-/// A Builder of `Claim Values`.
+/// A Builder of `Credential Values`.
 #[derive(Debug)]
-pub struct ClaimValuesBuilder {
+pub struct CredentialValuesBuilder {
     attrs_values: HashMap<String, BigNumber> /* attr_name -> int representation of value */
 }
 
-impl ClaimValuesBuilder {
-    pub fn new() -> Result<ClaimValuesBuilder, IndyCryptoError> {
-        Ok(ClaimValuesBuilder {
+impl CredentialValuesBuilder {
+    pub fn new() -> Result<CredentialValuesBuilder, IndyCryptoError> {
+        Ok(CredentialValuesBuilder {
             attrs_values: HashMap::new()
         })
     }
@@ -88,66 +90,66 @@ impl ClaimValuesBuilder {
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<ClaimValues, IndyCryptoError> {
-        Ok(ClaimValues {
+    pub fn finalize(self) -> Result<CredentialValues, IndyCryptoError> {
+        Ok(CredentialValues {
             attrs_values: self.attrs_values
         })
     }
 }
 
 /// `Issuer Public Key` contains 2 internal parts.
-/// One for signing primary claims and second for signing non-revocation claims.
-/// These keys are used to proof that claim was issued and doesn’t revoked by this issuer.
+/// One for signing primary credentials and second for signing non-revocation credentials.
+/// These keys are used to proof that credential was issued and doesn’t revoked by this issuer.
 /// Issuer keys have global identifier that must be known to all parties.
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
-pub struct IssuerPublicKey {
-    p_key: IssuerPrimaryPublicKey,
-    r_key: Option<IssuerRevocationPublicKey>,
+pub struct CredentialPublicKey {
+    p_key: CredentialPrimaryPublicKey,
+    r_key: Option<CredentialRevocationPublicKey>,
 }
 
-impl IssuerPublicKey {
-    pub fn clone(&self) -> Result<IssuerPublicKey, IndyCryptoError> {
-        Ok(IssuerPublicKey {
+impl CredentialPublicKey {
+    pub fn clone(&self) -> Result<CredentialPublicKey, IndyCryptoError> {
+        Ok(CredentialPublicKey {
             p_key: self.p_key.clone()?,
             r_key: self.r_key.clone()
         })
     }
 
-    pub fn get_primary_key(&self) -> Result<IssuerPrimaryPublicKey, IndyCryptoError> {
+    pub fn get_primary_key(&self) -> Result<CredentialPrimaryPublicKey, IndyCryptoError> {
         Ok(self.p_key.clone()?)
     }
 
-    pub fn get_revocation_key(&self) -> Result<Option<IssuerRevocationPublicKey>, IndyCryptoError> {
+    pub fn get_revocation_key(&self) -> Result<Option<CredentialRevocationPublicKey>, IndyCryptoError> {
         Ok(self.r_key.clone())
     }
 
-    pub fn build_from_parts(p_key: &IssuerPrimaryPublicKey, r_key: Option<&IssuerRevocationPublicKey>) -> Result<IssuerPublicKey, IndyCryptoError> {
-        Ok(IssuerPublicKey {
+    pub fn build_from_parts(p_key: &CredentialPrimaryPublicKey, r_key: Option<&CredentialRevocationPublicKey>) -> Result<CredentialPublicKey, IndyCryptoError> {
+        Ok(CredentialPublicKey {
             p_key: p_key.clone()?,
             r_key: r_key.map(|key| key.clone())
         })
     }
 }
 
-impl JsonEncodable for IssuerPublicKey {}
+impl JsonEncodable for CredentialPublicKey {}
 
-impl<'a> JsonDecodable<'a> for IssuerPublicKey {}
+impl<'a> JsonDecodable<'a> for CredentialPublicKey {}
 
 /// `Issuer Private Key`: contains 2 internal parts.
-/// One for signing primary claims and second for signing non-revocation claims.
+/// One for signing primary credentials and second for signing non-revocation credentials.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct IssuerPrivateKey {
-    p_key: IssuerPrimaryPrivateKey,
-    r_key: Option<IssuerRevocationPrivateKey>,
+pub struct CredentialPrivateKey {
+    p_key: CredentialPrimaryPrivateKey,
+    r_key: Option<CredentialRevocationPrivateKey>,
 }
 
-impl JsonEncodable for IssuerPrivateKey {}
+impl JsonEncodable for CredentialPrivateKey {}
 
-impl<'a> JsonDecodable<'a> for IssuerPrivateKey {}
+impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 
-/// Issuer's "Public Key" is used to verify the Issuer's signature over the Claim's attributes' values (primary claim).
+/// Issuer's "Public Key" is used to verify the Issuer's signature over the Credential's attributes' values (primary credential).
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct IssuerPrimaryPublicKey {
+pub struct CredentialPrimaryPublicKey {
     n: BigNumber,
     s: BigNumber,
     rms: BigNumber,
@@ -156,9 +158,9 @@ pub struct IssuerPrimaryPublicKey {
     z: BigNumber
 }
 
-impl IssuerPrimaryPublicKey {
-    pub fn clone(&self) -> Result<IssuerPrimaryPublicKey, IndyCryptoError> {
-        Ok(IssuerPrimaryPublicKey {
+impl CredentialPrimaryPublicKey {
+    pub fn clone(&self) -> Result<CredentialPrimaryPublicKey, IndyCryptoError> {
+        Ok(CredentialPrimaryPublicKey {
             n: self.n.clone()?,
             s: self.s.clone()?,
             rms: self.rms.clone()?,
@@ -169,35 +171,35 @@ impl IssuerPrimaryPublicKey {
     }
 }
 
-/// Issuer's "Private Key" used for signing Claim's attributes' values (primary claim)
+/// Issuer's "Private Key" used for signing Credential's attributes' values (primary credential)
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct IssuerPrimaryPrivateKey {
+pub struct CredentialPrimaryPrivateKey {
     p: BigNumber,
     q: BigNumber
 }
 
 /// `Primary Public Key Metadata` required for building of Proof Correctness of `Issuer Public Key`
 #[derive(Debug)]
-pub struct IssuerPrimaryPublicKeyMetadata {
+pub struct CredentialPrimaryPublicKeyMetadata {
     xz: BigNumber,
     xr: BTreeMap<String, BigNumber>
 }
 
 /// Proof of `Issuer Public Key` correctness
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
-pub struct KeyCorrectnessProof {
+pub struct CredentialKeyCorrectnessProof {
     c: BigNumber,
     xz_cap: BigNumber,
     xr_cap: BTreeMap<String, BigNumber>
 }
 
-impl JsonEncodable for KeyCorrectnessProof {}
+impl JsonEncodable for CredentialKeyCorrectnessProof {}
 
-impl<'a> JsonDecodable<'a> for KeyCorrectnessProof {}
+impl<'a> JsonDecodable<'a> for CredentialKeyCorrectnessProof {}
 
-/// `Revocation Public Key` is used to verify that claim was'nt revoked by Issuer.
+/// `Revocation Public Key` is used to verify that credential was'nt revoked by Issuer.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct IssuerRevocationPublicKey {
+pub struct CredentialRevocationPublicKey {
     g: PointG1,
     g_dash: PointG2,
     h: PointG1,
@@ -211,103 +213,216 @@ pub struct IssuerRevocationPublicKey {
     y: PointG2,
 }
 
-/// `Revocation Private Key` is used for signing Claim.
+/// `Revocation Private Key` is used for signing Credential.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct IssuerRevocationPrivateKey {
+pub struct CredentialRevocationPrivateKey {
     x: GroupOrderElement,
     sk: GroupOrderElement
 }
 
-/// `Revocation Registry Public` contains revocation keys, accumulator and accumulator tails.
+pub type Accumulator = PointG2;
+
+/// `Revocation Registry` contains accumulator.
 /// Must be published by Issuer on a tamper-evident and highly available storage
-/// Used by prover to prove that a claim hasn't revoked by the issuer
+/// Used by prover to prove that a credential hasn't revoked by the issuer
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RevocationRegistryPublic {
-    key: RevocationAccumulatorPublicKey,
-    acc: RevocationAccumulator,
-    tails: RevocationAccumulatorTails,
+pub struct RevocationRegistry {
+    accum: Accumulator
 }
 
-impl RevocationRegistryPublic {
-    pub fn get_accumulator_key(&self) -> Result<RevocationAccumulatorPublicKey, IndyCryptoError> {
-        Ok(self.key.clone())
+impl From<RevocationRegistryDelta> for RevocationRegistry {
+    fn from(rev_reg_delta: RevocationRegistryDelta) -> RevocationRegistry {
+        RevocationRegistry {
+            accum: rev_reg_delta.accum
+        }
+    }
+}
+
+impl JsonEncodable for RevocationRegistry {}
+
+impl<'a> JsonDecodable<'a> for RevocationRegistry {}
+
+/// `Revocation Registry Delta` contains Accumulator changes.
+/// Must be applied to `Revocation Registry`
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevocationRegistryDelta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prev_accum: Option<Accumulator>,
+    accum: Accumulator,
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
+    #[serde(default)]
+    issued: HashSet<u32>,
+    #[serde(skip_serializing_if = "HashSet::is_empty")]
+    #[serde(default)]
+    revoked: HashSet<u32>
+}
+
+impl JsonEncodable for RevocationRegistryDelta {}
+
+impl<'a> JsonDecodable<'a> for RevocationRegistryDelta {}
+
+impl RevocationRegistryDelta {
+    pub fn from_parts(rev_reg_from: Option<&RevocationRegistry>,
+                      rev_reg_to: &RevocationRegistry,
+                      issued: &HashSet<u32>,
+                      revoked: &HashSet<u32>) -> RevocationRegistryDelta {
+        RevocationRegistryDelta {
+            prev_accum: rev_reg_from.map(|rev_reg| rev_reg.accum),
+            accum: rev_reg_to.accum.clone(),
+            issued: issued.clone(),
+            revoked: revoked.clone()
+        }
     }
 
-    pub fn get_accumulator(&self) -> Result<RevocationAccumulator, IndyCryptoError> {
-        Ok(self.acc.clone())
+    pub fn merge(&mut self, other_delta: &RevocationRegistryDelta) -> Result<(), IndyCryptoError> {
+        if other_delta.prev_accum.is_none() || self.accum != other_delta.prev_accum.unwrap() {
+            return Err(IndyCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
+        }
+
+        self.accum = other_delta.accum;
+
+        self.issued.extend(
+            other_delta.issued.difference(&self.revoked));
+
+        self.revoked.extend(
+            other_delta.revoked.difference(&self.issued));
+
+        for index in other_delta.revoked.iter() {
+            self.issued.remove(index);
+        }
+
+        for index in other_delta.issued.iter() {
+            self.revoked.remove(index);
+        }
+
+        Ok(())
+    }
+}
+
+/// `Revocation Key Public` Accumulator public key.
+/// Must be published together with Accumulator
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RevocationKeyPublic {
+    z: Pair
+}
+
+impl JsonEncodable for RevocationKeyPublic {}
+
+impl<'a> JsonDecodable<'a> for RevocationKeyPublic {}
+
+/// `Revocation Key Private` Accumulator primate key.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct RevocationKeyPrivate {
+    gamma: GroupOrderElement
+}
+
+impl JsonEncodable for RevocationKeyPrivate {}
+
+impl<'a> JsonDecodable<'a> for RevocationKeyPrivate {}
+
+/// `Tail` point of curve used to update accumulator.
+pub type Tail = PointG2;
+
+impl Tail {
+    fn new_tail(index: u32, g_dash: &PointG2, gamma: &GroupOrderElement) -> Result<Tail, IndyCryptoError> {
+        let i_bytes = helpers::transform_u32_to_array_of_u8(index);
+        let mut pow = GroupOrderElement::from_bytes(&i_bytes)?;
+        pow = gamma.pow_mod(&pow)?;
+        Ok(g_dash.mul(&pow)?)
+    }
+}
+
+/// Generator of `Tail's`.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RevocationTailsGenerator {
+    size: u32,
+    current_index: u32,
+    g_dash: PointG2,
+    gamma: GroupOrderElement
+}
+
+impl RevocationTailsGenerator {
+    fn new(max_cred_num: u32, gamma: GroupOrderElement, g_dash: PointG2) -> Self {
+        RevocationTailsGenerator {
+            size: 2 * max_cred_num + 1, /* Unused 0th + valuable 1..L + unused (L+1)th + valuable (L+2)..(2L) */
+            current_index: 0,
+            gamma,
+            g_dash,
+        }
     }
 
-    pub fn get_tails(&self) -> Result<RevocationAccumulatorTails, IndyCryptoError> {
-        Ok(self.tails.clone())
+    pub fn count(&self) -> u32 {
+        self.size - self.current_index
     }
 
-    pub fn build_from_parts(key: &RevocationAccumulatorPublicKey, acc: &RevocationAccumulator, tails: &RevocationAccumulatorTails) -> Result<RevocationRegistryPublic, IndyCryptoError> {
-        Ok(RevocationRegistryPublic {
-            key: key.clone(),
-            acc: acc.clone(),
-            tails: tails.clone()
+    pub fn next(&mut self) -> Result<Option<Tail>, IndyCryptoError> {
+        if self.current_index >= self.size {
+            return Ok(None);
+        }
+
+        let tail = Tail::new_tail(self.current_index, &self.g_dash, &self.gamma)?;
+
+        self.current_index += 1;
+
+        Ok(Some(tail))
+    }
+}
+
+impl JsonEncodable for RevocationTailsGenerator {}
+
+impl<'a> JsonDecodable<'a> for RevocationTailsGenerator {}
+
+pub trait RevocationTailsAccessor {
+    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError>;
+}
+
+/// Simple implementation of `RevocationTailsAccessor` that stores all tails as HashMap.
+#[derive(Debug, Clone)]
+pub struct SimpleTailsAccessor {
+    tails: Vec<Tail>
+}
+
+impl RevocationTailsAccessor for SimpleTailsAccessor {
+    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError> {
+        Ok(accessor(&self.tails[tail_id as usize]))
+    }
+}
+
+impl SimpleTailsAccessor {
+    pub fn new(rev_tails_generator: &mut RevocationTailsGenerator) -> Result<SimpleTailsAccessor, IndyCryptoError> {
+        let mut tails: Vec<Tail> = Vec::new();
+        while let Some(tail) = rev_tails_generator.next()? {
+            tails.push(tail);
+        }
+        Ok(SimpleTailsAccessor {
+            tails
         })
     }
 }
 
-impl JsonEncodable for RevocationRegistryPublic {}
 
-impl<'a> JsonDecodable<'a> for RevocationRegistryPublic {}
-
-/// `Revocation Registry Private` used for adding claims in the accumulator.
+/// Issuer's signature over Credential attribute values.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct RevocationRegistryPrivate {
-    key: RevocationAccumulatorPrivateKey,
+pub struct CredentialSignature {
+    p_credential: PrimaryCredentialSignature,
+    r_credential: Option<NonRevocationCredentialSignature> /* will be used to proof is credential revoked preparation */,
 }
 
-impl JsonEncodable for RevocationRegistryPrivate {}
-
-impl<'a> JsonDecodable<'a> for RevocationRegistryPrivate {}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RevocationAccumulator {
-    acc: PointG2,
-    v: HashSet<u32> /* used indexes */,
-    max_claim_num: u32,
-}
-
-impl RevocationAccumulator {
-    pub fn is_full(&self) -> bool {
-        self.v.len() >= self.max_claim_num as usize
-    }
-    pub fn is_idx_used(&self, idx: u32) -> bool {
-        self.v.contains(&idx)
+impl CredentialSignature {
+    pub fn extract_index(&self) -> Option<u32> {
+        self.r_credential
+            .as_ref()
+            .map(|r_credential| r_credential.i)
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct RevocationAccumulatorPrivateKey {
-    gamma: GroupOrderElement
-}
+impl JsonEncodable for CredentialSignature {}
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RevocationAccumulatorPublicKey {
-    z: Pair
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct RevocationAccumulatorTails {
-    tails_dash: HashMap<u32 /* index in acc */, PointG2>,
-}
-
-/// Issuer's signature over Claim attribute values.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ClaimSignature {
-    p_claim: PrimaryClaimSignature,
-    r_claim: Option<NonRevocationClaimSignature> /* will be used to proof is claim revoked preparation */,
-}
-
-impl JsonEncodable for ClaimSignature {}
-
-impl<'a> JsonDecodable<'a> for ClaimSignature {}
+impl<'a> JsonDecodable<'a> for CredentialSignature {}
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PrimaryClaimSignature {
+pub struct PrimaryCredentialSignature {
     m_2: BigNumber,
     a: BigNumber,
     e: BigNumber,
@@ -315,11 +430,11 @@ pub struct PrimaryClaimSignature {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct NonRevocationClaimSignature {
+pub struct NonRevocationCredentialSignature {
     sigma: PointG1,
     c: GroupOrderElement,
     vr_prime_prime: GroupOrderElement,
-    witness: Witness,
+    witness_signature: WitnessSignature,
     g_i: PointG1,
     i: u32,
     m2: GroupOrderElement
@@ -337,18 +452,100 @@ impl<'a> JsonDecodable<'a> for SignatureCorrectnessProof {}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Witness {
-    sigma_i: PointG2,
-    u_i: PointG2,
-    g_i: PointG1,
-    omega: PointG2,
-    v: HashSet<u32>
+    omega: PointG2
 }
 
-/// Secret key encoded in a claim that is used to prove that prover owns the claim; can be used to
-/// prove linkage across claims.
+impl JsonEncodable for Witness {}
+
+impl<'a> JsonDecodable<'a> for Witness {}
+
+impl Witness {
+    pub fn new<RTA>(rev_idx: u32,
+                    max_cred_num: u32,
+                    issuance_by_default: bool,
+                    rev_reg_delta: &RevocationRegistryDelta,
+                    rev_tails_accessor: &RTA) -> Result<Witness, IndyCryptoError> where RTA: RevocationTailsAccessor {
+        trace!("Witness::new: >>> rev_idx: {:?}, max_cred_num: {:?}, issuance_by_default: {:?}, rev_reg_delta: {:?}",
+               rev_idx, max_cred_num, issuance_by_default, rev_reg_delta);
+
+        let mut omega = PointG2::new_inf()?;
+
+        let mut issued = if issuance_by_default {
+            (1..max_cred_num + 1).collect::<HashSet<u32>>()
+                .difference(&rev_reg_delta.revoked).cloned().collect::<HashSet<u32>>()
+        } else {
+            rev_reg_delta.issued.clone()
+        };
+
+        issued.remove(&rev_idx);
+        
+        for j in issued.iter() {
+            let index = max_cred_num + 1 - j + rev_idx;
+            rev_tails_accessor.access_tail(index, &mut |tail| {
+                omega = omega.add(tail).unwrap();
+            })?;
+        }
+
+        let witness = Witness {
+            omega
+        };
+
+        trace!("Witness::new: <<< witness: {:?}", witness);
+
+        Ok(witness)
+    }
+
+    pub fn update<RTA>(&mut self,
+                       rev_idx: u32,
+                       max_cred_num: u32,
+                       rev_reg_delta: &RevocationRegistryDelta,
+                       rev_tails_accessor: &RTA) -> Result<(), IndyCryptoError> where RTA: RevocationTailsAccessor {
+        trace!("Witness::update: >>> rev_idx: {:?}, max_cred_num: {:?}, rev_reg_delta: {:?}",
+               rev_idx, max_cred_num, rev_reg_delta);
+
+        let mut omega_denom = PointG2::new_inf()?;
+        for j in rev_reg_delta.revoked.iter() {
+            if rev_idx.eq(j) { continue; }
+
+            let index = max_cred_num + 1 - j + rev_idx;
+            rev_tails_accessor.access_tail(index, &mut |tail| {
+                omega_denom = omega_denom.add(tail).unwrap();
+            })?;
+        }
+
+        let mut omega_num = PointG2::new_inf()?;
+        for j in rev_reg_delta.issued.iter() {
+            if rev_idx.eq(j) { continue; }
+
+            let index = max_cred_num + 1 - j + rev_idx;
+            rev_tails_accessor.access_tail(index, &mut |tail| {
+                omega_num = omega_num.add(tail).unwrap();
+            })?;
+        }
+
+        let new_omega: PointG2 = self.omega.add(
+            &omega_num.sub(&omega_denom)?)?;
+
+        self.omega = new_omega;
+
+        trace!("Witness::update: <<<");
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WitnessSignature {
+    sigma_i: PointG2,
+    u_i: PointG2,
+    g_i: PointG1
+}
+
+/// Secret key encoded in a credential that is used to prove that prover owns the credential; can be used to
+/// prove linkage across credentials.
 /// Prover blinds master secret, generating `BlindedMasterSecret` and `MasterSecretBlindingData` (blinding factors)
-/// and sends the `BlindedMasterSecret` to Issuer who then encodes it claim creation.
-/// The blinding factors are used by Prover for post processing of issued claims.
+/// and sends the `BlindedMasterSecret` to Issuer who then encodes it credential creation.
+/// The blinding factors are used by Prover for post processing of issued credentials.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecret {
     ms: BigNumber,
@@ -364,7 +561,7 @@ impl JsonEncodable for MasterSecret {}
 
 impl<'a> JsonDecodable<'a> for MasterSecret {}
 
-/// Blinded Master Secret uses by Issuer in claim creation.
+/// Blinded Master Secret uses by Issuer in credential creation.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlindedMasterSecret {
     u: BigNumber,
@@ -375,7 +572,7 @@ impl JsonEncodable for BlindedMasterSecret {}
 
 impl<'a> JsonDecodable<'a> for BlindedMasterSecret {}
 
-/// `Master Secret Blinding Data` used by Prover for post processing of claims received from Issuer.
+/// `Master Secret Blinding Data` used by Prover for post processing of credentials received from Issuer.
 /// TODO: Should be renamed `MasterSecretBlindingFactors`
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecretBlindingData {
@@ -400,17 +597,17 @@ pub struct RevocationBlindedMasterSecretData {
 }
 
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct BlindedMasterSecretProofCorrectness {
+pub struct BlindedMasterSecretCorrectnessProof {
     c: BigNumber,
     v_dash_cap: BigNumber,
     ms_cap: BigNumber
 }
 
-impl JsonEncodable for BlindedMasterSecretProofCorrectness {}
+impl JsonEncodable for BlindedMasterSecretCorrectnessProof {}
 
-impl<'a> JsonDecodable<'a> for BlindedMasterSecretProofCorrectness {}
+impl<'a> JsonDecodable<'a> for BlindedMasterSecretCorrectnessProof {}
 
-/// “Sub Proof Request” - input to create a Proof for a claim;
+/// “Sub Proof Request” - input to create a Proof for a credential;
 /// Contains attributes to be revealed and predicates.
 #[derive(Debug, Clone)]
 pub struct SubProofRequest {
@@ -474,13 +671,13 @@ pub enum PredicateType {
     GE
 }
 
-/// Proof is complex crypto structure created by prover over multiple claims that allows to prove that prover:
-/// 1) Knows signature over claims issued with specific issuer keys (identified by key id)
-/// 2) Claim contains attributes with specific values that prover wants to disclose
-/// 3) Claim contains attributes with valid predicates that verifier wants the prover to satisfy.
+/// Proof is complex crypto structure created by prover over multiple credentials that allows to prove that prover:
+/// 1) Knows signature over credentials issued with specific issuer keys (identified by key id)
+/// 2) Credential contains attributes with specific values that prover wants to disclose
+/// 3) Credential contains attributes with valid predicates that verifier wants the prover to satisfy.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Proof {
-    proofs: HashMap<String /* issuer pub key id */, SubProof>,
+    proofs: Vec<SubProof>,
     aggregated_proof: AggregatedProof,
 }
 
@@ -537,9 +734,9 @@ pub struct NonRevocProof {
 pub struct InitProof {
     primary_init_proof: PrimaryInitProof,
     non_revoc_init_proof: Option<NonRevocInitProof>,
-    claim_values: ClaimValues,
+    credential_values: CredentialValues,
     sub_proof_request: SubProofRequest,
-    claim_schema: ClaimSchema
+    credential_schema: CredentialSchema
 }
 
 
@@ -723,11 +920,12 @@ impl JsonEncodable for Nonce {}
 impl<'a> JsonDecodable<'a> for Nonce {}
 
 #[derive(Debug)]
-pub struct VerifyClaim {
-    pub_key: IssuerPublicKey,
-    r_reg: Option<RevocationRegistryPublic>,
+pub struct VerifiableCredential {
+    pub_key: CredentialPublicKey,
     sub_proof_request: SubProofRequest,
-    claim_schema: ClaimSchema
+    credential_schema: CredentialSchema,
+    rev_key_pub: Option<RevocationKeyPublic>,
+    rev_reg: Option<RevocationRegistry>
 }
 
 trait BytesView {
@@ -798,71 +996,167 @@ mod test {
 
     #[test]
     fn demo() {
-        let mut claim_schema_builder = Issuer::new_claim_schema_builder().unwrap();
-        claim_schema_builder.add_attr("name").unwrap();
-        claim_schema_builder.add_attr("sex").unwrap();
-        claim_schema_builder.add_attr("age").unwrap();
-        claim_schema_builder.add_attr("height").unwrap();
-        let claim_schema = claim_schema_builder.finalize().unwrap();
+        let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
+        credential_schema_builder.add_attr("name").unwrap();
+        credential_schema_builder.add_attr("sex").unwrap();
+        credential_schema_builder.add_attr("age").unwrap();
+        credential_schema_builder.add_attr("height").unwrap();
+        let credential_schema = credential_schema_builder.finalize().unwrap();
 
-        let (issuer_pub_key, issuer_priv_key, issuer_key_correctness_proof) = Issuer::new_keys(&claim_schema, false).unwrap();
+        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
 
         let master_secret = Prover::new_master_secret().unwrap();
 
         let master_secret_blinding_nonce = new_nonce().unwrap();
 
         let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-            Prover::blind_master_secret(&issuer_pub_key,
-                                        &issuer_key_correctness_proof,
+            Prover::blind_master_secret(&cred_pub_key,
+                                        &cred_key_correctness_proof,
                                         &master_secret,
                                         &master_secret_blinding_nonce).unwrap();
 
-        let mut claim_values_builder = Issuer::new_claim_values_builder().unwrap();
-        claim_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        claim_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        claim_values_builder.add_value("age", "28").unwrap();
-        claim_values_builder.add_value("height", "175").unwrap();
-        let claim_values = claim_values_builder.finalize().unwrap();
+        let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
+        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
+        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+        credential_values_builder.add_value("age", "28").unwrap();
+        credential_values_builder.add_value("height", "175").unwrap();
+        let cred_values = credential_values_builder.finalize().unwrap();
 
-        let claim_issuance_nonce = new_nonce().unwrap();
+        let cred_issuance_nonce = new_nonce().unwrap();
 
-        let (mut claim_signature, signature_correctness_proof) = Issuer::sign_claim("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                                                                    &blinded_master_secret,
-                                                                                    &blinded_master_secret_correctness_proof,
-                                                                                    &master_secret_blinding_nonce,
-                                                                                    &claim_issuance_nonce,
-                                                                                    &claim_values,
-                                                                                    &issuer_pub_key,
-                                                                                    &issuer_priv_key,
-                                                                                    Some(1),
-                                                                                    None,
-                                                                                    None).unwrap();
-        Prover::process_claim_signature(&mut claim_signature,
-                                        &claim_values,
-                                        &signature_correctness_proof,
-                                        &master_secret_blinding_data,
-                                        &master_secret,
-                                        &issuer_pub_key,
-                                        &claim_issuance_nonce,
-                                        None).unwrap();
+        let (mut cred_signature, signature_correctness_proof) = Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
+                                                                                        &blinded_master_secret,
+                                                                                        &blinded_master_secret_correctness_proof,
+                                                                                        &master_secret_blinding_nonce,
+                                                                                        &cred_issuance_nonce,
+                                                                                        &cred_values,
+                                                                                        &cred_pub_key,
+                                                                                        &cred_priv_key).unwrap();
+
+        Prover::process_credential_signature(&mut cred_signature,
+                                             &cred_values,
+                                             &signature_correctness_proof,
+                                             &master_secret_blinding_data,
+                                             &master_secret,
+                                             &cred_pub_key,
+                                             &cred_issuance_nonce,
+                                             None,
+                                             None,
+                                             None).unwrap();
 
         let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
         sub_proof_request_builder.add_revealed_attr("name").unwrap();
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
-        proof_builder.add_sub_proof_request("issuer_key_id_1",
-                                            &sub_proof_request,
-                                            &claim_schema,
-                                            &claim_signature,
-                                            &claim_values,
-                                            &issuer_pub_key,
+        proof_builder.add_sub_proof_request(&sub_proof_request,
+                                            &credential_schema,
+                                            &cred_signature,
+                                            &cred_values,
+                                            &cred_pub_key,
+                                            None,
                                             None).unwrap();
-        let proov_request_nonce = new_nonce().unwrap();
-        let proof = proof_builder.finalize(&proov_request_nonce, &master_secret).unwrap();
+
+        let proof_request_nonce = new_nonce().unwrap();
+        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
-        proof_verifier.add_sub_proof_request("issuer_key_id_1", &sub_proof_request, &claim_schema, &issuer_pub_key, None).unwrap();
-        assert_eq!(true, proof_verifier.verify(&proof, &proov_request_nonce).unwrap());
+        proof_verifier.add_sub_proof_request(&sub_proof_request,
+                                             &credential_schema,
+                                             &cred_pub_key,
+                                             None,
+                                             None).unwrap();
+        assert!(proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
+    }
+
+    #[test]
+    fn demo_revocation() {
+        let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
+        credential_schema_builder.add_attr("name").unwrap();
+        credential_schema_builder.add_attr("sex").unwrap();
+        credential_schema_builder.add_attr("age").unwrap();
+        credential_schema_builder.add_attr("height").unwrap();
+        let credential_schema = credential_schema_builder.finalize().unwrap();
+
+        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+
+        let max_cred_num = 5;
+        let issuance_by_default = false;
+        let (rev_key_pub, rev_key_priv, mut rev_reg, mut rev_tails_generator) =
+            Issuer::new_revocation_registry_def(&cred_pub_key, max_cred_num, issuance_by_default).unwrap();
+
+        let simple_tail_accessor = SimpleTailsAccessor::new(&mut rev_tails_generator).unwrap();
+
+        let master_secret = Prover::new_master_secret().unwrap();
+
+        let master_secret_blinding_nonce = new_nonce().unwrap();
+
+        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
+            Prover::blind_master_secret(&cred_pub_key,
+                                        &cred_key_correctness_proof,
+                                        &master_secret,
+                                        &master_secret_blinding_nonce).unwrap();
+
+        let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
+        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
+        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+        credential_values_builder.add_value("age", "28").unwrap();
+        credential_values_builder.add_value("height", "175").unwrap();
+        let cred_values = credential_values_builder.finalize().unwrap();
+
+        let credential_issuance_nonce = new_nonce().unwrap();
+
+        let rev_idx = 1;
+        let (mut cred_signature, signature_correctness_proof, rev_reg_delta) =
+            Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
+                                               &blinded_master_secret,
+                                               &blinded_master_secret_correctness_proof,
+                                               &master_secret_blinding_nonce,
+                                               &credential_issuance_nonce,
+                                               &cred_values,
+                                               &cred_pub_key,
+                                               &cred_priv_key,
+                                               rev_idx,
+                                               max_cred_num,
+                                               issuance_by_default,
+                                               &mut rev_reg,
+                                               &rev_key_priv,
+                                               &simple_tail_accessor).unwrap();
+
+        let witness = Witness::new(rev_idx, max_cred_num, issuance_by_default, &rev_reg_delta.unwrap(), &simple_tail_accessor).unwrap();
+
+        Prover::process_credential_signature(&mut cred_signature,
+                                             &cred_values,
+                                             &signature_correctness_proof,
+                                             &master_secret_blinding_data,
+                                             &master_secret,
+                                             &cred_pub_key,
+                                             &credential_issuance_nonce,
+                                             Some(&rev_key_pub),
+                                             Some(&rev_reg),
+                                             Some(&witness)).unwrap();
+
+        let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
+        sub_proof_request_builder.add_revealed_attr("name").unwrap();
+        sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
+        let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
+        let mut proof_builder = Prover::new_proof_builder().unwrap();
+        proof_builder.add_sub_proof_request(&sub_proof_request,
+                                            &credential_schema,
+                                            &cred_signature,
+                                            &cred_values,
+                                            &cred_pub_key,
+                                            Some(&rev_reg),
+                                            Some(&witness)).unwrap();
+        let proof_request_nonce = new_nonce().unwrap();
+        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
+
+        let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
+        proof_verifier.add_sub_proof_request(&sub_proof_request,
+                                             &credential_schema,
+                                             &cred_pub_key,
+                                             Some(&rev_key_pub),
+                                             Some(&rev_reg)).unwrap();
+        assert_eq!(true, proof_verifier.verify(&proof, &proof_request_nonce).unwrap());
     }
 }
