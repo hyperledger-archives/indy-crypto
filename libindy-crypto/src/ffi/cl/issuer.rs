@@ -9,6 +9,11 @@ use libc::c_char;
 
 use std::os::raw::c_void;
 use std::ptr::null;
+use std::slice;
+
+use std::collections::HashSet;
+use std::iter::FromIterator;
+
 
 /// Creates and returns credential definition (public and private keys, correctness proof) entities.
 ///
@@ -205,28 +210,28 @@ pub extern fn indy_crypto_cl_credential_private_key_to_json(credential_priv_key:
 /// * `credential_priv_key_json` - Reference that contains credential private key json.
 /// * `credential_priv_key_p` - Reference that will contain credential private key instance pointer.
 #[no_mangle]
-pub extern fn indy_crypto_cl_issuer_private_key_from_json(credential_priv_key_json: *const c_char,
-                                                          credential_priv_key_p: *mut *const c_void) -> ErrorCode {
-    trace!("indy_crypto_cl_issuer_private_key_from_json: >>> credential_priv_key_json: {:?}, credential_priv_key_p: {:?}", credential_priv_key_json, credential_priv_key_p);
+pub extern fn indy_crypto_cl_credential_private_key_from_json(credential_priv_key_json: *const c_char,
+                                                              credential_priv_key_p: *mut *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_credential_private_key_from_json: >>> credential_priv_key_json: {:?}, credential_priv_key_p: {:?}", credential_priv_key_json, credential_priv_key_p);
 
     check_useful_c_str!(credential_priv_key_json, ErrorCode::CommonInvalidParam1);
     check_useful_c_ptr!(credential_priv_key_p, ErrorCode::CommonInvalidParam2);
 
-    trace!("indy_crypto_cl_issuer_private_key_from_json: entity: credential_priv_key_json: {:?}", credential_priv_key_json);
+    trace!("indy_crypto_cl_credential_private_key_from_json: entity: credential_priv_key_json: {:?}", credential_priv_key_json);
 
     let res = match CredentialPrivateKey::from_json(&credential_priv_key_json) {
         Ok(credential_priv_key) => {
-            trace!("indy_crypto_cl_issuer_private_key_from_json: credential_priv_key: {:?}", credential_priv_key);
+            trace!("indy_crypto_cl_credential_private_key_from_json: credential_priv_key: {:?}", credential_priv_key);
             unsafe {
                 *credential_priv_key_p = Box::into_raw(Box::new(credential_priv_key)) as *const c_void;
-                trace!("indy_crypto_cl_issuer_private_key_from_json: *credential_priv_key_p: {:?}", *credential_priv_key_p);
+                trace!("indy_crypto_cl_credential_private_key_from_json: *credential_priv_key_p: {:?}", *credential_priv_key_p);
             }
             ErrorCode::Success
         }
         Err(err) => err.to_error_code()
     };
 
-    trace!("indy_crypto_cl_issuer_private_key_from_json: <<< res: {:?}", res);
+    trace!("indy_crypto_cl_credential_private_key_from_json: <<< res: {:?}", res);
     res
 }
 
@@ -759,7 +764,7 @@ pub extern fn indy_crypto_cl_revocation_tails_generator_free(rev_tails_generator
 /// * `blinded_credential_secrets_correctness_proof` - Blinded master secret correctness proof instance pointer.
 /// * `credential_nonce` - Nonce instance pointer used for verification of blinded_credential_secrets_correctness_proof.
 /// * `credential_issuance_nonce` - Nonce instance pointer used for creation of signature_correctness_proof.
-/// * `credential_values` - Claim values to be signed instance pointer.
+/// * `credential_values` - Credential values to be signed instance pointer.
 /// * `credential_pub_key` - Credential public key instance pointer.
 /// * `credential_priv_key` - Credential private key instance pointer.
 /// * `credential_signature_p` - Reference that will contain credential signature instance pointer.
@@ -843,7 +848,7 @@ pub extern fn indy_crypto_cl_issuer_sign_credential(prover_id: *const c_char,
 /// * `blinded_credential_secrets_correctness_proof` - Blinded master secret correctness proof instance pointer.
 /// * `credential_nonce` - Nonce instance pointer used for verification of blinded_credential_secrets_correctness_proof.
 /// * `credential_issuance_nonce` - Nonce instance pointer used for creation of signature_correctness_proof.
-/// * `credential_values` - Claim values to be signed instance pointer.
+/// * `credential_values` - Credential values to be signed instance pointer.
 /// * `credential_pub_key` - Credential public key instance pointer.
 /// * `credential_priv_key` - Credential private key instance pointer.
 /// * `rev_idx` - User index in revocation accumulator. Required for non-revocation credential_signature part generation.
@@ -1190,6 +1195,40 @@ pub extern fn indy_crypto_cl_revocation_registry_delta_free(revocation_registry_
     res
 }
 
+#[no_mangle]
+pub extern fn indy_crypto_revocation_registry_delta_from_parts(rev_reg_from: *const c_void,
+                                                               rev_reg_to: *const c_void,
+                                                               issued: *const u32, issued_len: usize,
+                                                               revoked: *const u32, revoked_len: usize,
+                                                               rev_reg_delta_p: *mut *const c_void) -> ErrorCode {
+    trace!("indy_crypto_revocation_registry_delta_from_parts: >>> rev_reg_from: {:?}, rev_reg_to: {:?}, issued: {:?},\
+     issued_len: {:?}, revoked: {:?}, revoked_len: {:?}, rev_reg_delta_p: {:?}",
+           rev_reg_from, rev_reg_to, issued, issued_len, revoked, revoked_len, rev_reg_delta_p);
+
+    check_useful_opt_c_reference!(rev_reg_from, RevocationRegistry);
+    check_useful_c_reference!(rev_reg_to, RevocationRegistry, ErrorCode::CommonInvalidParam2);
+    check_useful_hashset!(issued, issued_len, ErrorCode::CommonInvalidParam3, ErrorCode::CommonInvalidParam4);
+    check_useful_hashset!(revoked, revoked_len, ErrorCode::CommonInvalidParam5, ErrorCode::CommonInvalidParam6);
+
+    trace!("indy_crypto_revocation_registry_delta_from_parts: >>> rev_reg_from: {:?}, rev_reg_to: {:?}, issued: {:?}, revoked: {:?}",
+           rev_reg_from, rev_reg_to, issued, revoked);
+
+    let rev_reg_delta =
+        RevocationRegistryDelta::from_parts(rev_reg_from, rev_reg_to, &issued, &revoked);
+
+    trace!("indy_crypto_revocation_registry_delta_from_parts: rev_reg_delta: {:?}", rev_reg_delta);
+
+    unsafe {
+        *rev_reg_delta_p = Box::into_raw(Box::new(rev_reg_delta)) as *const c_void;
+        trace!("indy_crypto_revocation_registry_delta_from_parts: *rev_reg_delta_p: {:?}", *rev_reg_delta_p);
+    }
+
+    let res = ErrorCode::Success;
+
+    trace!("indy_crypto_revocation_registry_delta_from_parts: <<< res: {:?}", res);
+    res
+}
+
 /// Revokes a credential by a rev_idx in a given revocation registry.
 ///
 /// # Arguments
@@ -1264,6 +1303,35 @@ pub extern fn indy_crypto_cl_issuer_recovery_credential(rev_reg: *const c_void,
 
     trace!("indy_crypto_cl_issuer_recovery_credential: <<< res: {:?}", res);
     ErrorCode::Success
+}
+
+#[no_mangle]
+pub extern fn indy_crypto_cl_issuer_merge_revocation_registry_deltas(revoc_reg_delta: *const c_void,
+                                                                     other_revoc_reg_delta: *const c_void,
+                                                                     merged_revoc_reg_delta_p: *mut *const c_void) -> ErrorCode {
+    trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: >>> revoc_reg_delta: {:?}, other_revoc_reg_delta: {:?}",
+           revoc_reg_delta, other_revoc_reg_delta);
+
+    check_useful_mut_c_reference!(revoc_reg_delta, RevocationRegistryDelta, ErrorCode::CommonInvalidParam1);
+    check_useful_c_reference!(other_revoc_reg_delta, RevocationRegistryDelta, ErrorCode::CommonInvalidParam2);
+
+    trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: entities: revoc_reg_delta: {:?}, other_revoc_reg_delta: {:?}",
+           revoc_reg_delta, other_revoc_reg_delta);
+
+    let res = match revoc_reg_delta.merge(other_revoc_reg_delta) {
+        Ok(merged_revoc_reg_delta) => {
+            trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: merged_revoc_reg_delta: {:?}", merged_revoc_reg_delta);
+            unsafe {
+                *merged_revoc_reg_delta_p = Box::into_raw(Box::new(merged_revoc_reg_delta)) as *const c_void;
+                trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: *merged_revoc_reg_delta_p: {:?}", *merged_revoc_reg_delta_p);
+            }
+            ErrorCode::Success
+        }
+        Err(err) => err.to_error_code()
+    };
+
+    trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: <<< res: {:?}", res);
+    res
 }
 
 #[cfg(test)]
@@ -1346,7 +1414,7 @@ mod tests {
         assert_eq!(err_code, ErrorCode::Success);
 
         let mut credential_priv_key_p: *const c_void = ptr::null();
-        let err_code = indy_crypto_cl_issuer_private_key_from_json(credential_priv_key_json_p, &mut credential_priv_key_p);
+        let err_code = indy_crypto_cl_credential_private_key_from_json(credential_priv_key_json_p, &mut credential_priv_key_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1859,6 +1927,86 @@ mod tests {
         _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
         _free_blinded_credential_secrets(blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof);
         _free_nonce(credential_nonce);
+        _free_nonce(credential_issuance_nonce);
+        _free_credential_signature_with_revoc(credential_signature, signature_correctness_proof, revocation_registry_delta);
+    }
+
+    #[test]
+    fn indy_crypto_cl_revocation_registry_delta_from_parts_works() {
+        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+
+        let rev_reg_from: *const c_void = ptr::null();
+
+        let issued_h = vec![1];
+        let issued = issued_h.as_ptr();
+        let issued_len = issued_h.len();
+
+        let revoked_h = vec![];
+        let revoked = revoked_h.as_ptr();
+        let revoked_len = revoked_h.len();
+
+        let mut rev_reg_delta_p: *const c_void = ptr::null();
+
+        let err_code = indy_crypto_revocation_registry_delta_from_parts(rev_reg_from,
+                                                                        rev_reg,
+                                                                        issued, issued_len,
+                                                                        revoked, revoked_len,
+                                                                        &mut rev_reg_delta_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+    }
+
+    #[test]
+    fn indy_crypto_cl_issuer_merge_revoc_deltas_works() {
+        let (credential_pub_key, credential_priv_key, credential_key_correctness_proof) = _credential_def();
+        let (rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator) = _revocation_registry_def(credential_pub_key);
+        let master_secret = _master_secret();
+        let master_secret_blinding_nonce = _nonce();
+        let (blinded_master_secret, master_secret_blinding_data,
+            blinded_master_secret_correctness_proof) = _blinded_master_secret(credential_pub_key,
+                                                                              credential_key_correctness_proof,
+                                                                              master_secret,
+                                                                              master_secret_blinding_nonce);
+        let credential_issuance_nonce = _nonce();
+        let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
+
+        let (credential_signature, signature_correctness_proof, revocation_registry_delta) =
+            _credential_signature_with_revoc(blinded_master_secret,
+                                             blinded_master_secret_correctness_proof,
+                                             master_secret_blinding_nonce,
+                                             credential_issuance_nonce,
+                                             credential_pub_key,
+                                             credential_priv_key,
+                                             rev_key_priv,
+                                             rev_reg,
+                                             tail_storage.get_ctx());
+
+        let mut revocation_registry_delta_p: *const c_void = ptr::null();
+
+        let err_code = indy_crypto_cl_issuer_revoke_credential(rev_reg,
+                                                               5,
+                                                               1,
+                                                               tail_storage.get_ctx(),
+                                                               FFISimpleTailStorage::tail_take,
+                                                               FFISimpleTailStorage::tail_put,
+                                                               &mut revocation_registry_delta_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        let mut merged_revocation_registry_delta_p: *const c_void = ptr::null();
+
+        let err_code = indy_crypto_cl_issuer_merge_revocation_registry_deltas(revocation_registry_delta,
+                                                                              revocation_registry_delta_p,
+                                                                              &mut merged_revocation_registry_delta_p);
+        assert_eq!(err_code, ErrorCode::Success);
+
+        _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
+        _free_revocation_registry_def(rev_key_pub, rev_key_priv, rev_reg, rev_tails_generator);
+        _free_blinded_master_secret(blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof);
+        _free_master_secret(master_secret);
+        _free_nonce(master_secret_blinding_nonce);
         _free_nonce(credential_issuance_nonce);
         _free_credential_signature_with_revoc(credential_signature, signature_correctness_proof, revocation_registry_delta);
     }
