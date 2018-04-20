@@ -22,6 +22,7 @@ use amcl::rand::RAND;
 
 use rand::os::OsRng;
 use rand::Rng;
+use std::fmt::{Debug, Formatter, Error};
 
 #[cfg(feature = "serialization")]
 use serde::ser::{Serialize, Serializer, Error as SError};
@@ -81,7 +82,7 @@ fn _random_mod_order() -> Result<BIG, IndyCryptoError> {
     Ok(BIG::randomnum(&BIG::new_ints(&CURVE_ORDER), &mut rng))
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct PointG1 {
     point: ECP
 }
@@ -200,6 +201,12 @@ impl PointG1 {
     }
 }
 
+impl Debug for PointG1 {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "PointG1 {{ point: {} }}", self.point.to_hex())
+    }
+}
+
 #[cfg(feature = "serialization")]
 impl Serialize for PointG1 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -230,7 +237,7 @@ impl<'a> Deserialize<'a> for PointG1 {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct PointG2 {
     point: ECP2
 }
@@ -328,6 +335,12 @@ impl PointG2 {
     }
 }
 
+impl Debug for PointG2 {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "PointG2 {{ point: {} }}", self.point.to_hex())
+    }
+}
+
 #[cfg(feature = "serialization")]
 impl Serialize for PointG2 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -358,7 +371,7 @@ impl<'a> Deserialize<'a> for PointG2 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct GroupOrderElement {
     bn: BIG
 }
@@ -496,6 +509,12 @@ impl GroupOrderElement {
     }
 }
 
+impl Debug for GroupOrderElement {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "GroupOrderElement {{ bn: {} }}", self.bn.to_hex())
+    }
+}
+
 #[cfg(feature = "serialization")]
 impl Serialize for GroupOrderElement {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer {
@@ -526,7 +545,7 @@ impl<'a> Deserialize<'a> for GroupOrderElement {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq)]
 pub struct Pair {
     pair: FP12
 }
@@ -590,6 +609,12 @@ impl Pair {
         let mut vec = vec![0u8; Self::BYTES_REPR_SIZE];
         r.tobytes(&mut vec);
         Ok(vec)
+    }
+}
+
+impl Debug for Pair {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "Pair {{ pair: {} }}", self.pair.to_hex())
     }
 }
 
