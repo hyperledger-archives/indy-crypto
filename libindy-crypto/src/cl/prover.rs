@@ -6,7 +6,7 @@ use pair::*;
 use super::helpers::*;
 use utils::commitment::{get_pedersen_commitment, get_exponentiated_generators};
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::iter::FromIterator;
 
 /// Credentials owner that can proof and partially disclose the credentials to verifier.
@@ -217,32 +217,39 @@ impl Prover {
         trace!("Prover::_check_credential_key_correctness_proof: >>> pr_pub_key: {:?}, key_correctness_proof: {:?}",
                pr_pub_key, key_correctness_proof);
 
+        if pr_pub_key.r.keys().collect::<HashSet<&String>>().ne(
+            &key_correctness_proof.xr_cap.iter().map(|&(ref key, ref _val)| key).collect()) {
+            return Err(IndyCryptoError::InvalidStructure(
+                format!("Key Correctness Proof invalid: attributes {:?} are inconsistent with public key {:?}",
+                        key_correctness_proof.xr_cap, pr_pub_key)));
+        }
+
         let mut ctx = BigNumber::new_context()?;
 
         let z_inverse = pr_pub_key.z.inverse(&pr_pub_key.n, Some(&mut ctx))?;
         let z_cap = get_pedersen_commitment(&z_inverse, &key_correctness_proof.c,
                                             &pr_pub_key.s, &key_correctness_proof.xz_cap, &pr_pub_key.n, &mut ctx)?;
 
-        let mut r_cap: BTreeMap<String, BigNumber> = BTreeMap::new();
-        for (key, r_value) in pr_pub_key.r.iter() {
-            let xr_cap_value = key_correctness_proof.xr_cap
-                .get(key)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in key_correctness_proof.xr_cap", key)))?;
+        let mut ordered_r_values = Vec::new();
+        let mut ordered_r_cap_values = Vec::new();
+
+        for &(ref key, ref xr_cap_value) in &key_correctness_proof.xr_cap {
+            let r_value = &pr_pub_key.r[key];
+            ordered_r_values.push(r_value.clone()?);
 
             let r_inverse = r_value.inverse(&pr_pub_key.n, Some(&mut ctx))?;
             let val = get_pedersen_commitment(&r_inverse, &key_correctness_proof.c,
                                               &pr_pub_key.s, &xr_cap_value, &pr_pub_key.n, &mut ctx)?;
-
-            r_cap.insert(key.to_owned(), val);
+            ordered_r_cap_values.push(val);
         }
 
         let mut values: Vec<u8> = Vec::new();
         values.extend_from_slice(&pr_pub_key.z.to_bytes()?);
-        for val in pr_pub_key.r.values() {
+        for val in ordered_r_values {
             values.extend_from_slice(&val.to_bytes()?);
         }
         values.extend_from_slice(&z_cap.to_bytes()?);
-        for val in r_cap.values() {
+        for val in ordered_r_cap_values {
             values.extend_from_slice(&val.to_bytes()?);
         }
 
