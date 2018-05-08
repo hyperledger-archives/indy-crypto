@@ -398,13 +398,40 @@ mod tests {
     const RANGE_RIGHT: usize = 592;
 
     #[test]
-    #[ignore] //TODO check
-    fn generate_prime_in_range_works() {
+    #[ignore] //FIXME check range is valid
+    fn generate_prime_in_range_works_for_random_range() {
         let start = BigNumber::rand(RANGE_LEFT).unwrap();
         let end = BigNumber::rand(RANGE_RIGHT).unwrap();
         let random_prime = BigNumber::generate_prime_in_range(&start, &end).unwrap();
         assert!(start < random_prime);
         assert!(end > random_prime);
+    }
+
+    #[test]
+    #[ignore] //FIXME generate_prime_in_range should not hangs
+    fn generate_prime_in_range_works_for_invalid_fixed_ranges() {
+        let invalid_ranges: Vec<(usize, usize)> = vec![(0, 2), (1, 2), (4, 5)];
+
+        invalid_ranges.iter().for_each(|&(start, end)| {
+            let start = BigNumber::from_u32(start).unwrap();
+            let end = BigNumber::from_u32(end).unwrap();
+
+            BigNumber::generate_prime_in_range(&start, &end).unwrap_err();
+        });
+    }
+
+    #[test]
+    fn generate_prime_in_range_works_for_valid_fixed_ranges() {
+        let valid_ranges: Vec<(usize, usize)> = vec![(0, 3), (2, 3), ];
+
+        valid_ranges.iter().for_each(|&(start, end)| {
+            let start = BigNumber::from_u32(start).unwrap();
+            let end = BigNumber::from_u32(end).unwrap();
+
+            let prime = BigNumber::generate_prime_in_range(&start, &end).unwrap();
+            assert!(start <= prime);
+            assert!(prime < end);
+        });
     }
 
     #[cfg(feature = "serialization")]
