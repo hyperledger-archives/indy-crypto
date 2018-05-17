@@ -12,8 +12,9 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
-use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+
+use std::collections::{HashMap, HashSet};
+use std::hash::Hash;
 
 /// Creates random nonce
 ///
@@ -303,7 +304,7 @@ impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 pub struct CredentialPrimaryPublicKey {
     n: BigNumber,
     s: BigNumber,
-    r: BTreeMap<String /* attr_name */, BigNumber>,
+    r: HashMap<String /* attr_name */, BigNumber>,
     rctxt: BigNumber,
     z: BigNumber
 }
@@ -331,7 +332,7 @@ pub struct CredentialPrimaryPrivateKey {
 #[derive(Debug)]
 pub struct CredentialPrimaryPublicKeyMetadata {
     xz: BigNumber,
-    xr: BTreeMap<String, BigNumber>
+    xr: HashMap<String, BigNumber>
 }
 
 /// Proof of `Issuer Public Key` correctness
@@ -339,7 +340,7 @@ pub struct CredentialPrimaryPublicKeyMetadata {
 pub struct CredentialKeyCorrectnessProof {
     c: BigNumber,
     xz_cap: BigNumber,
-    xr_cap: BTreeMap<String, BigNumber>
+    xr_cap: Vec<(String, BigNumber)>,
 }
 
 impl JsonEncodable for CredentialKeyCorrectnessProof {}
@@ -1166,6 +1167,7 @@ fn clone_bignum_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, BigNumber>) -> Resu
     }
     Ok(res)
 }
+
 
 fn clone_credential_value_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, CredentialValue>) -> Result<BTreeMap<K, CredentialValue>, IndyCryptoError> {
     let mut res = BTreeMap::new();
