@@ -120,7 +120,7 @@ impl SignKey {
 }
 
 /// BLS verification key.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VerKey {
     point: PointG2,
     bytes: Vec<u8>
@@ -379,18 +379,23 @@ impl Bls {
     /// assert!(valid)
     /// ```
     pub fn verify_multi_sig(multi_sig: &MultiSignature, message: &[u8], ver_keys: &[&VerKey], gen: &Generator) -> Result<bool, IndyCryptoError> {
-        let mut multi_sig_e_list: Vec<Pair> = Vec::new();
+        // Since each signer (identified by a Verkey) has signed the same message, the public keys
+        // can be added together to form the aggregated verkey
+        let mut aggregated_verkey = PointG2::new_inf()?;
         for ver_key in ver_keys {
-            let h = Bls::_hash(message)?;
-            multi_sig_e_list.push(Pair::pair(&h, &ver_key.point)?);
+            aggregated_verkey = aggregated_verkey.add(&ver_key.point)?;
         }
 
-        let mut multi_sig_e = multi_sig_e_list.get(0).ok_or(IndyCryptoError::InvalidStructure(format!("Element not found")))?.clone();
-        for e in multi_sig_e_list[1..].to_vec() {
-            multi_sig_e = multi_sig_e.mul(&e)?;
-        }
+        // TODO: Add a new method that takes a message and an aggregated verkey and expose using
+        // the C API. Verifiers can thus cache the aggregated verkey and avoid several EC point additions.
+        // The code below should be moved to such method.
 
-        Ok(Pair::pair(&multi_sig.point, &gen.point)?.eq(&multi_sig_e))
+        let msg_hash = Bls::_hash(message)?;
+
+        let lhs = Pair::pair(&multi_sig.point, &gen.point)?;
+        let rhs = Pair::pair(&msg_hash, &aggregated_verkey)?;
+
+        Ok(lhs.eq(&rhs))
     }
 
     fn _hash(message: &[u8]) -> Result<PointG1, IndyCryptoError> {
