@@ -12,7 +12,8 @@ use errors::IndyCryptoError;
 use pair::*;
 use utils::json::{JsonEncodable, JsonDecodable};
 
-use std::collections::{HashMap, HashSet};
+use std::cmp::Ordering;
+use std::collections::{HashMap, HashSet, BTreeSet, BTreeMap};
 use std::hash::Hash;
 
 /// Creates random nonce
@@ -30,20 +31,18 @@ pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
 /// A list of attributes a Credential is based on.
 #[derive(Debug, Clone)]
 pub struct CredentialSchema {
-    attrs: HashSet<String> /* attr names */
+    attrs: BTreeSet<String>, /* attr names */
 }
 
 /// A Builder of `Credential Schema`.
 #[derive(Debug)]
 pub struct CredentialSchemaBuilder {
-    attrs: HashSet<String> /* attr names */
+    attrs: BTreeSet<String>, /* attr names */
 }
 
 impl CredentialSchemaBuilder {
     pub fn new() -> Result<CredentialSchemaBuilder, IndyCryptoError> {
-        Ok(CredentialSchemaBuilder {
-            attrs: HashSet::new()
-        })
+        Ok(CredentialSchemaBuilder { attrs: BTreeSet::new() })
     }
 
     pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
@@ -52,22 +51,112 @@ impl CredentialSchemaBuilder {
     }
 
     pub fn finalize(self) -> Result<CredentialSchema, IndyCryptoError> {
-        Ok(CredentialSchema {
-            attrs: self.attrs
-        })
+        Ok(CredentialSchema { attrs: self.attrs })
     }
 }
 
-/// Values of attributes from `Credential Schema` (must be integers).
+#[derive(Debug, Clone)]
+pub struct NonCredentialSchema {
+    attrs: BTreeSet<String>,
+}
+
+#[derive(Debug)]
+pub struct NonCredentialSchemaBuilder {
+    attrs: BTreeSet<String>,
+}
+
+impl NonCredentialSchemaBuilder {
+    pub fn new() -> Result<NonCredentialSchemaBuilder, IndyCryptoError> {
+        Ok(NonCredentialSchemaBuilder {
+            attrs: BTreeSet::new(),
+        })
+    }
+
+    pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+        self.attrs.insert(attr.to_owned());
+        Ok(())
+    }
+
+    pub fn finalize(self) -> Result<NonCredentialSchema, IndyCryptoError> {
+        Ok(NonCredentialSchema { attrs: self.attrs })
+    }
+}
+
+/// The m value for attributes,
+/// commitments also store a blinding factor
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum CredentialValue {
+    Known { value: BigNumber }, //Issuer and Prover know these
+    Hidden { value: BigNumber }, //Only known to Prover who binds these into the U factor
+    Commitment {
+        value: BigNumber,
+        blinding_factor: BigNumber,
+    }, //Only known to Prover, not included in the credential, used for proving knowledge during issuance
+}
+
+impl CredentialValue {
+    pub fn clone(&self) -> Result<CredentialValue, IndyCryptoError> {
+        Ok(match *self {
+            CredentialValue::Known { ref value } => CredentialValue::Known {
+                value: value.clone()?,
+            },
+            CredentialValue::Hidden { ref value } => CredentialValue::Hidden {
+                value: value.clone()?,
+            },
+            CredentialValue::Commitment {
+                ref value,
+                ref blinding_factor,
+            } => CredentialValue::Commitment {
+                value: value.clone()?,
+                blinding_factor: blinding_factor.clone()?,
+            },
+        })
+    }
+
+    pub fn is_known(&self) -> bool {
+        match *self {
+            CredentialValue::Known { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        match *self {
+            CredentialValue::Hidden { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_commitment(&self) -> bool {
+        match *self {
+            CredentialValue::Commitment { .. } => true,
+            _ => false,
+        }
+    }
+
+    pub fn value(&self) -> &BigNumber {
+        match *self {
+            CredentialValue::Known { ref value } => value,
+            CredentialValue::Hidden { ref value } => value,
+            CredentialValue::Commitment { ref value, .. } => value,
+        }
+    }
+}
+
+impl JsonEncodable for CredentialValue {}
+
+impl<'a> JsonDecodable<'a> for CredentialValue {}
+
+/// Values of attributes from `Claim Schema` (must be integers).
 #[derive(Debug)]
 pub struct CredentialValues {
-    attrs_values: HashMap<String, BigNumber>
+    attrs_values: BTreeMap<String, CredentialValue>,
 }
 
 impl CredentialValues {
     pub fn clone(&self) -> Result<CredentialValues, IndyCryptoError> {
         Ok(CredentialValues {
-            attrs_values: clone_bignum_map(&self.attrs_values)?
+            attrs_values: clone_credential_value_map(&self.attrs_values)?
         })
     }
 }
@@ -75,25 +164,88 @@ impl CredentialValues {
 /// A Builder of `Credential Values`.
 #[derive(Debug)]
 pub struct CredentialValuesBuilder {
-    attrs_values: HashMap<String, BigNumber> /* attr_name -> int representation of value */
+    attrs_values: BTreeMap<String, CredentialValue>, /* attr_name -> int representation of value */
 }
 
 impl CredentialValuesBuilder {
     pub fn new() -> Result<CredentialValuesBuilder, IndyCryptoError> {
-        Ok(CredentialValuesBuilder {
-            attrs_values: HashMap::new()
-        })
+        Ok(CredentialValuesBuilder { attrs_values: BTreeMap::new() })
     }
 
-    pub fn add_value(&mut self, attr: &str, dec_value: &str) -> Result<(), IndyCryptoError> {
-        self.attrs_values.insert(attr.to_owned(), BigNumber::from_dec(dec_value)?);
+    pub fn add_dec_known(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Known { value: BigNumber::from_dec(value)? },
+        );
+        Ok(())
+    }
+
+    pub fn add_dec_hidden(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Hidden { value: BigNumber::from_dec(value)? },
+        );
+        Ok(())
+    }
+
+    pub fn add_dec_commitment(
+        &mut self,
+        attr: &str,
+        value: &str,
+        blinding_factor: &str,
+    ) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Commitment {
+                value: BigNumber::from_dec(value)?,
+                blinding_factor: BigNumber::from_dec(blinding_factor)?,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn add_value_known(
+        &mut self,
+        attr: &str,
+        value: &BigNumber,
+    ) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Known { value: value.clone()? },
+        );
+        Ok(())
+    }
+
+    pub fn add_value_hidden(
+        &mut self,
+        attr: &str,
+        value: &BigNumber,
+    ) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Hidden { value: value.clone()? },
+        );
+        Ok(())
+    }
+
+    pub fn add_value_commitment(
+        &mut self,
+        attr: &str,
+        value: &BigNumber,
+        blinding_factor: &BigNumber,
+    ) -> Result<(), IndyCryptoError> {
+        self.attrs_values.insert(
+            attr.to_owned(),
+            CredentialValue::Commitment {
+                value: value.clone()?,
+                blinding_factor: blinding_factor.clone()?,
+            },
+        );
         Ok(())
     }
 
     pub fn finalize(self) -> Result<CredentialValues, IndyCryptoError> {
-        Ok(CredentialValues {
-            attrs_values: self.attrs_values
-        })
+        Ok(CredentialValues { attrs_values: self.attrs_values })
     }
 }
 
@@ -148,11 +300,10 @@ impl JsonEncodable for CredentialPrivateKey {}
 impl<'a> JsonDecodable<'a> for CredentialPrivateKey {}
 
 /// Issuer's "Public Key" is used to verify the Issuer's signature over the Credential's attributes' values (primary credential).
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 pub struct CredentialPrimaryPublicKey {
     n: BigNumber,
     s: BigNumber,
-    rms: BigNumber,
     r: HashMap<String /* attr_name */, BigNumber>,
     rctxt: BigNumber,
     z: BigNumber
@@ -163,10 +314,36 @@ impl CredentialPrimaryPublicKey {
         Ok(CredentialPrimaryPublicKey {
             n: self.n.clone()?,
             s: self.s.clone()?,
-            rms: self.rms.clone()?,
             r: clone_bignum_map(&self.r)?,
             rctxt: self.rctxt.clone()?,
             z: self.z.clone()?
+        })
+    }
+}
+
+impl <'a> ::serde::de::Deserialize<'a> for CredentialPrimaryPublicKey {
+    fn deserialize<D: ::serde::de::Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct CredentialPrimaryPublicKeyV1 {
+            n: BigNumber,
+            s: BigNumber,
+            r: HashMap<String /* attr_name */, BigNumber>,
+            rctxt: BigNumber,
+            #[serde(default)]
+            rms: BigNumber,
+            z: BigNumber
+        }
+
+        let mut helper = CredentialPrimaryPublicKeyV1::deserialize(deserializer)?;
+        if helper.rms != BigNumber::default() {
+            helper.r.insert("master_secret".to_string(), helper.rms);
+        }
+        Ok(CredentialPrimaryPublicKey {
+            n: helper.n,
+            s: helper.s,
+            rctxt: helper.rctxt,
+            z: helper.z,
+            r: helper.r
         })
     }
 }
@@ -198,7 +375,7 @@ impl JsonEncodable for CredentialKeyCorrectnessProof {}
 impl<'a> JsonDecodable<'a> for CredentialKeyCorrectnessProof {}
 
 /// `Revocation Public Key` is used to verify that credential was'nt revoked by Issuer.
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct CredentialRevocationPublicKey {
     g: PointG1,
     g_dash: PointG2,
@@ -232,9 +409,7 @@ pub struct RevocationRegistry {
 
 impl From<RevocationRegistryDelta> for RevocationRegistry {
     fn from(rev_reg_delta: RevocationRegistryDelta) -> RevocationRegistry {
-        RevocationRegistry {
-            accum: rev_reg_delta.accum
-        }
+        RevocationRegistry { accum: rev_reg_delta.accum }
     }
 }
 
@@ -377,7 +552,7 @@ pub trait RevocationTailsAccessor {
     fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError>;
 }
 
-/// Simple implementation of `RevocationTailsAccessor` that stores all tails as HashMap.
+/// Simple implementation of `RevocationTailsAccessor` that stores all tails as BTreeMap.
 #[derive(Debug, Clone)]
 pub struct SimpleTailsAccessor {
     tails: Vec<Tail>
@@ -395,9 +570,7 @@ impl SimpleTailsAccessor {
         while let Some(tail) = rev_tails_generator.next()? {
             tails.push(tail);
         }
-        Ok(SimpleTailsAccessor {
-            tails
-        })
+        Ok(SimpleTailsAccessor { tails })
     }
 }
 
@@ -429,7 +602,7 @@ pub struct PrimaryCredentialSignature {
     v: BigNumber
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NonRevocationCredentialSignature {
     sigma: PointG1,
     c: GroupOrderElement,
@@ -450,7 +623,7 @@ impl JsonEncodable for SignatureCorrectnessProof {}
 
 impl<'a> JsonDecodable<'a> for SignatureCorrectnessProof {}
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Witness {
     omega: PointG2
 }
@@ -478,7 +651,6 @@ impl Witness {
         };
 
         issued.remove(&rev_idx);
-        
         for j in issued.iter() {
             let index = max_cred_num + 1 - j + rev_idx;
             rev_tails_accessor.access_tail(index, &mut |tail| {
@@ -486,9 +658,7 @@ impl Witness {
             })?;
         }
 
-        let witness = Witness {
-            omega
-        };
+        let witness = Witness { omega };
 
         trace!("Witness::new: <<< witness: {:?}", witness);
 
@@ -523,8 +693,7 @@ impl Witness {
             })?;
         }
 
-        let new_omega: PointG2 = self.omega.add(
-            &omega_num.sub(&omega_denom)?)?;
+        let new_omega: PointG2 = self.omega.add(&omega_num.sub(&omega_denom)?)?;
 
         self.omega = new_omega;
 
@@ -534,7 +703,7 @@ impl Witness {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WitnessSignature {
     sigma_i: PointG2,
     u_i: PointG2,
@@ -543,8 +712,8 @@ pub struct WitnessSignature {
 
 /// Secret key encoded in a credential that is used to prove that prover owns the credential; can be used to
 /// prove linkage across credentials.
-/// Prover blinds master secret, generating `BlindedMasterSecret` and `MasterSecretBlindingData` (blinding factors)
-/// and sends the `BlindedMasterSecret` to Issuer who then encodes it credential creation.
+/// Prover blinds master secret, generating `BlindedCredentialSecrets` and `CredentialSecretsBlindingFactors` (blinding factors)
+/// and sends the `BlindedCredentialSecrets` to Issuer who then encodes it credential creation.
 /// The blinding factors are used by Prover for post processing of issued credentials.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct MasterSecret {
@@ -555,6 +724,10 @@ impl MasterSecret {
     pub fn clone(&self) -> Result<MasterSecret, IndyCryptoError> {
         Ok(MasterSecret { ms: self.ms.clone()? })
     }
+
+    pub fn value(&self) -> Result<BigNumber, IndyCryptoError> {
+        Ok(self.ms.clone()?)
+    }
 }
 
 impl JsonEncodable for MasterSecret {}
@@ -563,56 +736,60 @@ impl<'a> JsonDecodable<'a> for MasterSecret {}
 
 /// Blinded Master Secret uses by Issuer in credential creation.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct BlindedMasterSecret {
+pub struct BlindedCredentialSecrets {
     u: BigNumber,
-    ur: Option<PointG1>
+    ur: Option<PointG1>,
+    hidden_attributes: BTreeSet<String>,
+    committed_attributes: BTreeMap<String, BigNumber>
 }
 
-impl JsonEncodable for BlindedMasterSecret {}
+impl JsonEncodable for BlindedCredentialSecrets {}
 
-impl<'a> JsonDecodable<'a> for BlindedMasterSecret {}
+impl<'a> JsonDecodable<'a> for BlindedCredentialSecrets {}
 
-/// `Master Secret Blinding Data` used by Prover for post processing of credentials received from Issuer.
-/// TODO: Should be renamed `MasterSecretBlindingFactors`
+/// `CredentialSecretsBlindingFactors` used by Prover for post processing of credentials received from Issuer.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct MasterSecretBlindingData {
+pub struct CredentialSecretsBlindingFactors {
     v_prime: BigNumber,
     vr_prime: Option<GroupOrderElement>
 }
 
-impl JsonEncodable for MasterSecretBlindingData {}
+impl JsonEncodable for CredentialSecretsBlindingFactors {}
 
-impl<'a> JsonDecodable<'a> for MasterSecretBlindingData {}
+impl<'a> JsonDecodable<'a> for CredentialSecretsBlindingFactors {}
 
 #[derive(Eq, PartialEq, Debug)]
-pub struct PrimaryBlindedMasterSecretData {
+pub struct PrimaryBlindedCredentialSecretsFactors {
     u: BigNumber,
     v_prime: BigNumber,
+    hidden_attributes: BTreeSet<String>,
+    committed_attributes: BTreeMap<String, BigNumber>,
 }
 
 #[derive(Debug)]
-pub struct RevocationBlindedMasterSecretData {
+pub struct RevocationBlindedCredentialSecretsFactors {
     ur: PointG1,
     vr_prime: GroupOrderElement,
 }
 
 #[derive(Debug, Eq, PartialEq, Deserialize, Serialize)]
-pub struct BlindedMasterSecretCorrectnessProof {
-    c: BigNumber,
-    v_dash_cap: BigNumber,
-    ms_cap: BigNumber
+pub struct BlindedCredentialSecretsCorrectnessProof {
+    c: BigNumber, // Fiat-Shamir challenge hash
+    v_dash_cap: BigNumber, // Value to prove knowledge of `u` construction in `BlindedCredentialSecrets`
+    m_caps: BTreeMap<String, BigNumber>, // Values for proving knowledge of committed values
+    r_caps: BTreeMap<String, BigNumber>, // Blinding values for m_caps
 }
 
-impl JsonEncodable for BlindedMasterSecretCorrectnessProof {}
+impl JsonEncodable for BlindedCredentialSecretsCorrectnessProof {}
 
-impl<'a> JsonDecodable<'a> for BlindedMasterSecretCorrectnessProof {}
+impl<'a> JsonDecodable<'a> for BlindedCredentialSecretsCorrectnessProof {}
 
 /// “Sub Proof Request” - input to create a Proof for a credential;
 /// Contains attributes to be revealed and predicates.
 #[derive(Debug, Clone)]
 pub struct SubProofRequest {
-    revealed_attrs: HashSet<String>,
-    predicates: HashSet<Predicate>,
+    revealed_attrs: BTreeSet<String>,
+    predicates: BTreeSet<Predicate>,
 }
 
 /// Builder of “Sub Proof Request”.
@@ -625,8 +802,8 @@ impl SubProofRequestBuilder {
     pub fn new() -> Result<SubProofRequestBuilder, IndyCryptoError> {
         Ok(SubProofRequestBuilder {
             value: SubProofRequest {
-                revealed_attrs: HashSet::new(),
-                predicates: HashSet::new()
+                revealed_attrs: BTreeSet::new(),
+                predicates: BTreeSet::new()
             }
         })
     }
@@ -671,6 +848,18 @@ pub enum PredicateType {
     GE
 }
 
+impl Ord for Predicate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.attr_name.cmp(&other.attr_name)
+    }
+}
+
+impl PartialOrd for Predicate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 /// Proof is complex crypto structure created by prover over multiple credentials that allows to prove that prover:
 /// 1) Knows signature over credentials issued with specific issuer keys (identified by key id)
 /// 2) Credential contains attributes with specific values that prover wants to disclose
@@ -703,15 +892,43 @@ pub struct PrimaryProof {
     ge_proofs: Vec<PrimaryPredicateGEProof>
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Serialize)]
 pub struct PrimaryEqualProof {
-    revealed_attrs: HashMap<String /* attr_name of revealed */, BigNumber>,
+    revealed_attrs: BTreeMap<String /* attr_name of revealed */, BigNumber>,
     a_prime: BigNumber,
     e: BigNumber,
     v: BigNumber,
     m: HashMap<String /* attr_name of all except revealed */, BigNumber>,
-    m1: BigNumber,
     m2: BigNumber
+}
+
+impl <'a> ::serde::de::Deserialize<'a> for PrimaryEqualProof {
+    fn deserialize<D: ::serde::de::Deserializer<'a>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct PrimaryEqualProofV1 {
+            revealed_attrs: BTreeMap<String /* attr_name of revealed */, BigNumber>,
+            a_prime: BigNumber,
+            e: BigNumber,
+            v: BigNumber,
+            m: HashMap<String /* attr_name of all except revealed */, BigNumber>,
+            #[serde(default)]
+            m1: BigNumber,
+            m2: BigNumber
+        }
+
+        let mut helper = PrimaryEqualProofV1::deserialize(deserializer)?;
+        if helper.m1 != BigNumber::default() {
+            helper.m.insert("master_secret".to_string(), helper.m1);
+        }
+        Ok(PrimaryEqualProof {
+            revealed_attrs: helper.revealed_attrs,
+            a_prime: helper.a_prime,
+            e: helper.e,
+            v: helper.v,
+            m: helper.m,
+            m2: helper.m2
+        })
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -736,7 +953,8 @@ pub struct InitProof {
     non_revoc_init_proof: Option<NonRevocInitProof>,
     credential_values: CredentialValues,
     sub_proof_request: SubProofRequest,
-    credential_schema: CredentialSchema
+    credential_schema: CredentialSchema,
+    non_credential_schema: NonCredentialSchema,
 }
 
 
@@ -793,9 +1011,8 @@ pub struct PrimaryEqualInitProof {
     v_tilde: BigNumber,
     v_prime: BigNumber,
     m_tilde: HashMap<String, BigNumber>,
-    m1_tilde: BigNumber,
     m2_tilde: BigNumber,
-    m2: BigNumber
+    m2: BigNumber,
 }
 
 impl PrimaryEqualInitProof {
@@ -818,7 +1035,7 @@ pub struct PrimaryPredicateGEInitProof {
     r_tilde: HashMap<String, BigNumber>,
     alpha_tilde: BigNumber,
     predicate: Predicate,
-    t: HashMap<String, BigNumber>
+    t: HashMap<String, BigNumber>,
 }
 
 impl PrimaryPredicateGEInitProof {
@@ -851,8 +1068,22 @@ pub struct NonRevocProofXList {
 
 impl NonRevocProofXList {
     pub fn as_list(&self) -> Result<Vec<GroupOrderElement>, IndyCryptoError> {
-        Ok(vec![self.rho, self.o, self.c, self.o_prime, self.m, self.m_prime, self.t, self.t_prime,
-                self.m2, self.s, self.r, self.r_prime, self.r_prime_prime, self.r_prime_prime_prime])
+        Ok(vec![
+            self.rho,
+            self.o,
+            self.c,
+            self.o_prime,
+            self.m,
+            self.m_prime,
+            self.t,
+            self.t_prime,
+            self.m2,
+            self.s,
+            self.r,
+            self.r_prime,
+            self.r_prime_prime,
+            self.r_prime_prime_prime,
+        ])
     }
 
     pub fn from_list(seq: Vec<GroupOrderElement>) -> NonRevocProofXList {
@@ -888,8 +1119,15 @@ pub struct NonRevocProofCList {
 
 impl NonRevocProofCList {
     pub fn as_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
-        Ok(vec![self.e.to_bytes()?, self.d.to_bytes()?, self.a.to_bytes()?, self.g.to_bytes()?,
-                self.w.to_bytes()?, self.s.to_bytes()?, self.u.to_bytes()?])
+        Ok(vec![
+            self.e.to_bytes()?,
+            self.d.to_bytes()?,
+            self.a.to_bytes()?,
+            self.g.to_bytes()?,
+            self.w.to_bytes()?,
+            self.s.to_bytes()?,
+            self.u.to_bytes()?,
+        ])
     }
 }
 
@@ -907,8 +1145,16 @@ pub struct NonRevocProofTauList {
 
 impl NonRevocProofTauList {
     pub fn as_slice(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
-        Ok(vec![self.t1.to_bytes()?, self.t2.to_bytes()?, self.t3.to_bytes()?, self.t4.to_bytes()?,
-                self.t5.to_bytes()?, self.t6.to_bytes()?, self.t7.to_bytes()?, self.t8.to_bytes()?])
+        Ok(vec![
+            self.t1.to_bytes()?,
+            self.t2.to_bytes()?,
+            self.t3.to_bytes()?,
+            self.t4.to_bytes()?,
+            self.t5.to_bytes()?,
+            self.t6.to_bytes()?,
+            self.t7.to_bytes()?,
+            self.t8.to_bytes()?,
+        ])
     }
 }
 
@@ -924,6 +1170,7 @@ pub struct VerifiableCredential {
     pub_key: CredentialPublicKey,
     sub_proof_request: SubProofRequest,
     credential_schema: CredentialSchema,
+    non_credential_schema: NonCredentialSchema,
     rev_key_pub: Option<RevocationKeyPublic>,
     rev_reg: Option<RevocationRegistry>
 }
@@ -969,9 +1216,17 @@ impl AppendByteArray for Vec<Vec<u8>> {
     }
 }
 
-fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>)
-                                          -> Result<HashMap<K, BigNumber>, IndyCryptoError> {
-    let mut res: HashMap<K, BigNumber> = HashMap::new();
+fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>) -> Result<HashMap<K, BigNumber>, IndyCryptoError> {
+    let mut res = HashMap::new();
+    for (k, v) in other.iter() {
+        res.insert(k.clone(), v.clone()?);
+    }
+    Ok(res)
+}
+
+
+fn clone_credential_value_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, CredentialValue>) -> Result<BTreeMap<K, CredentialValue>, IndyCryptoError> {
+    let mut res = BTreeMap::new();
     for (k, v) in other {
         res.insert(k.clone(), v.clone()?);
     }
@@ -986,6 +1241,78 @@ mod test {
     use self::verifier::Verifier;
 
     #[test]
+    fn credential_primary_public_key_conversion_works() {
+        let string1 = r#"{
+                 "n":"94752773003676215520340390286428145970577435379747248974837494389412082076547661891067434652276048522392442077335235388384984508621151996372559370276527598415204914831299768834758349425880859567795461321350412568232531440683627330032285846734752711268206613305069973750567165548816744023441650243801226580089078611213688037852063937259593837571943085718154394160122127891902723469618952030300431400181642597638732611518885616750614674142486169255034160093153314427704384760404032620300207070597238445621198019686315730573836193179483581719638565112589368474184957790046080767607443902003396643479910885086397579016949",
+                 "s":"69412039600361800795429063472749802282903100455399422661844374992112119187258494682747330126416608111152308407310993289705267392969490079422545377823004584691698371089275086755756916575365439635768831063415050875440259347714303092581127338698890829662982679857654396534761554232914231213603075653629534596880597317047082696083166437821687405393805812336036647064899914817619861844092002636340952247588092904075021313598848481976631171767602864723880294787434756140969093416957086578979859382777377267118038126527549503876861370823520292585383483415337137062969402135540724590433024573312636828352734474276871187481042",
+                 "r":{
+                    "age":"90213462228557102785520674066817329607065098280886260103565465379328385444439123494955469500769864345819799623656302322427095342533906338563811194606234218499052997878891037890681314502037670093285650999142741875494918117023196753133733183769000368858655309319559871473827485381905587653145346258174022279515774231018893119774525087260785417971477049379955435611260162822960318458092151247522911151421981946748062572207451174079699745404644326303405628719711440096340436702151418321760375229323874027809433387030362543124015034968644213166988773750220839778654632868402703075643503247560457217265822566406481434257658",
+                    "height":"5391629214047043372090966654120333203094518833743674393685635640778311836867622750170495792524304436281896432811455146477306501487333852472234525296058562723428516533641819658096275918819548576029252844651857904411902677509566190811985500618327955392620642519618001469964706236997279744030829811760566269297728600224591162795849338756438466021999870256717098048301453122263380103723520670896747657149140787953289875480355961166269553534983692005983375091110745903845958291035125718192228291126861666488320123420563113398593180368102996188897121307947248313167444374640621348136184583596487812048321382789134349482978",
+                    "name":"77620276231641170120118188540269028385259155493880444038204934044861538875241492581309232702380290690573764595644801264135299029620031922004969464948925209245961139274806949465303313280327009910224580146266877846633558282936147503639084871235301887617650455108586169172459479774206351621894071684884758716731250212971549835402948093455393537573942251389197338609379019568250835525301455105289583537704528678164781839386485243301381405947043141406604458853106372019953011725448481499511842635580639867624862131749700424467221215201558826025502015289693451254344465767556321748122037274143231500322140291667454975911415",
+                    "sex":"9589127953934298285127566793382980040568251918610023890115614786922171891298122457059996745443282235104668609426602496632245081143706804923757991602521162900045665258654877250328921570207935035808607238170708932487500434929591458680514420504595293934408583558084774019418964434729989362874165849497341625769388145344718883550286508846516335790153998186614300493752317413537864956171451048868305380731285315760405126912629495204641829764230906698870575251861738847175174907714361155400020318026100833368698707674675548636610079631382774152211885405135045997623813094890524761824654025566099289284433567918244183562578"
+                 },
+                 "rms": "51663676247842478814965591806476166314018329779100758392678204435864101706276421100107118776199283981546682625125866769910726045178868995629346547166162207336629797340989495021248125384357605197654315399409367101440127312902706857104045262430326903112478154165057770802221835566137181123204394005042244715693211063132775814710986488082414421678086296488865286754803461178476006057306298883090062534704773627985221339716152111236985859907502262026150818487846053415153813804554830872575193396851274528558072704096323791923604931528594861707067370303707070124331485728734993074005001622035563911923643592706985074084035",
+                 "rctxt":"60293229766149238310917923493206871325969738638348535857162249827595080348039120693847207728852550647187915587987334466582959087190830489258423645708276339586344792464665557038628519694583193692804909304334143467285824750999826903922956158114736424517794036832742439893595716442609416914557200249087236453529632524328334442017327755310827841619727229956823928475210644630763245343116656886668444813463622336899670813312626960927341115875144198394937398391514458462051400588820774593570752884252721428948286332429715774158007033348855655388287735570407811513582431434394169600082273657382209764160600063473877124656503",
+                 "z":"70486542646006986754234343446999146345523665952265004264483059055307042644604796098478326629348068818272043688144751523020343994424262034067120716287162029288580118176972850899641747743901392814182335879624697285262287085187745166728443417803755667806532945136078671895589773743252882095592683767377435647759252676700424432160196120135306640079450582642553870190550840243254909737360996391470076977433525925799327058405911708739601511578904084479784054523375804238021939950198346585735956776232824298799161587408330541161160988641895300133750453032202142977745163418534140360029475702333980267724847703258887949227842"
+              }"#;
+
+        let string2 = r#"{
+                 "n":"94752773003676215520340390286428145970577435379747248974837494389412082076547661891067434652276048522392442077335235388384984508621151996372559370276527598415204914831299768834758349425880859567795461321350412568232531440683627330032285846734752711268206613305069973750567165548816744023441650243801226580089078611213688037852063937259593837571943085718154394160122127891902723469618952030300431400181642597638732611518885616750614674142486169255034160093153314427704384760404032620300207070597238445621198019686315730573836193179483581719638565112589368474184957790046080767607443902003396643479910885086397579016949",
+                 "s":"69412039600361800795429063472749802282903100455399422661844374992112119187258494682747330126416608111152308407310993289705267392969490079422545377823004584691698371089275086755756916575365439635768831063415050875440259347714303092581127338698890829662982679857654396534761554232914231213603075653629534596880597317047082696083166437821687405393805812336036647064899914817619861844092002636340952247588092904075021313598848481976631171767602864723880294787434756140969093416957086578979859382777377267118038126527549503876861370823520292585383483415337137062969402135540724590433024573312636828352734474276871187481042",
+                 "r":{
+                    "age":"90213462228557102785520674066817329607065098280886260103565465379328385444439123494955469500769864345819799623656302322427095342533906338563811194606234218499052997878891037890681314502037670093285650999142741875494918117023196753133733183769000368858655309319559871473827485381905587653145346258174022279515774231018893119774525087260785417971477049379955435611260162822960318458092151247522911151421981946748062572207451174079699745404644326303405628719711440096340436702151418321760375229323874027809433387030362543124015034968644213166988773750220839778654632868402703075643503247560457217265822566406481434257658",
+                    "height":"5391629214047043372090966654120333203094518833743674393685635640778311836867622750170495792524304436281896432811455146477306501487333852472234525296058562723428516533641819658096275918819548576029252844651857904411902677509566190811985500618327955392620642519618001469964706236997279744030829811760566269297728600224591162795849338756438466021999870256717098048301453122263380103723520670896747657149140787953289875480355961166269553534983692005983375091110745903845958291035125718192228291126861666488320123420563113398593180368102996188897121307947248313167444374640621348136184583596487812048321382789134349482978",
+                    "name":"77620276231641170120118188540269028385259155493880444038204934044861538875241492581309232702380290690573764595644801264135299029620031922004969464948925209245961139274806949465303313280327009910224580146266877846633558282936147503639084871235301887617650455108586169172459479774206351621894071684884758716731250212971549835402948093455393537573942251389197338609379019568250835525301455105289583537704528678164781839386485243301381405947043141406604458853106372019953011725448481499511842635580639867624862131749700424467221215201558826025502015289693451254344465767556321748122037274143231500322140291667454975911415",
+                    "sex":"9589127953934298285127566793382980040568251918610023890115614786922171891298122457059996745443282235104668609426602496632245081143706804923757991602521162900045665258654877250328921570207935035808607238170708932487500434929591458680514420504595293934408583558084774019418964434729989362874165849497341625769388145344718883550286508846516335790153998186614300493752317413537864956171451048868305380731285315760405126912629495204641829764230906698870575251861738847175174907714361155400020318026100833368698707674675548636610079631382774152211885405135045997623813094890524761824654025566099289284433567918244183562578",
+                    "master_secret": "51663676247842478814965591806476166314018329779100758392678204435864101706276421100107118776199283981546682625125866769910726045178868995629346547166162207336629797340989495021248125384357605197654315399409367101440127312902706857104045262430326903112478154165057770802221835566137181123204394005042244715693211063132775814710986488082414421678086296488865286754803461178476006057306298883090062534704773627985221339716152111236985859907502262026150818487846053415153813804554830872575193396851274528558072704096323791923604931528594861707067370303707070124331485728734993074005001622035563911923643592706985074084035"
+                 },
+                 "rctxt":"60293229766149238310917923493206871325969738638348535857162249827595080348039120693847207728852550647187915587987334466582959087190830489258423645708276339586344792464665557038628519694583193692804909304334143467285824750999826903922956158114736424517794036832742439893595716442609416914557200249087236453529632524328334442017327755310827841619727229956823928475210644630763245343116656886668444813463622336899670813312626960927341115875144198394937398391514458462051400588820774593570752884252721428948286332429715774158007033348855655388287735570407811513582431434394169600082273657382209764160600063473877124656503",
+                 "z":"70486542646006986754234343446999146345523665952265004264483059055307042644604796098478326629348068818272043688144751523020343994424262034067120716287162029288580118176972850899641747743901392814182335879624697285262287085187745166728443417803755667806532945136078671895589773743252882095592683767377435647759252676700424432160196120135306640079450582642553870190550840243254909737360996391470076977433525925799327058405911708739601511578904084479784054523375804238021939950198346585735956776232824298799161587408330541161160988641895300133750453032202142977745163418534140360029475702333980267724847703258887949227842"
+              }"#;
+
+        let one = serde_json::from_str::<CredentialPrimaryPublicKey>(string1).unwrap();
+        let two = serde_json::from_str::<CredentialPrimaryPublicKey>(string2).unwrap();
+
+        assert_eq!(two, one);
+    }
+
+    #[test]
+    fn primary_equal_proof_conversion_works() {
+        let string1 = r#"{
+            "revealed_attrs":{ "name":"1139481716457488690172217916278103335" },
+            "a_prime":"73051896986344783783621559954466052240337632808477729510525777007534198657123370460809453476237905269777928500034476888078179811369103091702326392092669222868996323974762333077146800752404116534730748685092400106417894776122280960547391515814302192999142386455183675790870578615457141270148590712693325301185445330992767208427208215818892089082206123243055148017865514286222759353929656015594529211154843197464055996993778878163967106658629893439206203941596066380562586058713924055616953462170537040600604826428201808405436865130230174790116739542071871153581967170346076628186863101926791732126528122264782281465094",
+            "e":"26894279258848531841414955598838798345606055130059418263879278878511424413654641307014787224496208858379991228288791608261549931755104416",
+            "v":"769593829417540943566687651216000708099616242062220026508500847265211856977241087739974159673381844796906987056271685312217722655254322996792650873775611656861273544234724432321045515309211146266498852589181986850053751764534235454974453901933962390148609111520973909072559803423360526975061164422239685006387576029266210201929872373313392190241424322333321394922891207577033519614434276723347140746548441162607411616008633618021962845423830579218345578253882839612570986096830936195064001459565147361336597305783767484298283647710212770870573787603073109857430854719681849489345098539472090186844042540487233617799636327572785715912348265648433678177765454231546725849288046905854444755145184654162149010359429569273734847400697627028832950969890252877892391103230391674009825009176344665382964776819962789472959504523580584494299815960094679820651071251157496967617834816772303813309035759721203718921501821175528106375",
+            "m":{
+                "age":"1143281854280323408461665818853228702279803847691030529301464848501919856277927436364331044530711281448694432838145799412204154542183613877104383361274202256495017144684827419222",
+                "sex":"13123681697669364600723785784083768668401173003182555407713667959884184961072036088391942098105496874381346284841774772987179772727928471347011107103459387881602408580853389973314",
+                "height":"5824877563809831190436025794795529331411852203759926644567286594845018041324472260994302109635777382645241758582661313361940262319244084725507113643699421966391425299602530147274"
+             },
+             "m1":"8583218861046444624186479147396651631579156942204850397797096661516116684243552483174250620744158944865553535495733571632663325011575249979223204777745326895517953843420687756433",
+             "m2":"5731555078708393357614629066851705238802823277918949054467378429261691189252606979808518037016695141384783224302687321866277811431449642994233365265728281815807346591371594096297"
+         }"#;
+        let string2 = r#"{
+            "revealed_attrs":{ "name":"1139481716457488690172217916278103335" },
+            "a_prime":"73051896986344783783621559954466052240337632808477729510525777007534198657123370460809453476237905269777928500034476888078179811369103091702326392092669222868996323974762333077146800752404116534730748685092400106417894776122280960547391515814302192999142386455183675790870578615457141270148590712693325301185445330992767208427208215818892089082206123243055148017865514286222759353929656015594529211154843197464055996993778878163967106658629893439206203941596066380562586058713924055616953462170537040600604826428201808405436865130230174790116739542071871153581967170346076628186863101926791732126528122264782281465094",
+            "e":"26894279258848531841414955598838798345606055130059418263879278878511424413654641307014787224496208858379991228288791608261549931755104416",
+            "v":"769593829417540943566687651216000708099616242062220026508500847265211856977241087739974159673381844796906987056271685312217722655254322996792650873775611656861273544234724432321045515309211146266498852589181986850053751764534235454974453901933962390148609111520973909072559803423360526975061164422239685006387576029266210201929872373313392190241424322333321394922891207577033519614434276723347140746548441162607411616008633618021962845423830579218345578253882839612570986096830936195064001459565147361336597305783767484298283647710212770870573787603073109857430854719681849489345098539472090186844042540487233617799636327572785715912348265648433678177765454231546725849288046905854444755145184654162149010359429569273734847400697627028832950969890252877892391103230391674009825009176344665382964776819962789472959504523580584494299815960094679820651071251157496967617834816772303813309035759721203718921501821175528106375",
+            "m":{
+                "age":"1143281854280323408461665818853228702279803847691030529301464848501919856277927436364331044530711281448694432838145799412204154542183613877104383361274202256495017144684827419222",
+                "sex":"13123681697669364600723785784083768668401173003182555407713667959884184961072036088391942098105496874381346284841774772987179772727928471347011107103459387881602408580853389973314",
+                "height":"5824877563809831190436025794795529331411852203759926644567286594845018041324472260994302109635777382645241758582661313361940262319244084725507113643699421966391425299602530147274",
+                "master_secret":"8583218861046444624186479147396651631579156942204850397797096661516116684243552483174250620744158944865553535495733571632663325011575249979223204777745326895517953843420687756433"
+             },
+             "m2":"5731555078708393357614629066851705238802823277918949054467378429261691189252606979808518037016695141384783224302687321866277811431449642994233365265728281815807346591371594096297"
+         }"#;
+
+        let one = serde_json::from_str::<PrimaryEqualProof>(string1).unwrap();
+        let two = serde_json::from_str::<PrimaryEqualProof>(string2).unwrap();
+
+        assert_eq!(two, one);
+    }
+
+
+    #[test]
     fn demo() {
         let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
         credential_schema_builder.add_attr("name").unwrap();
@@ -994,31 +1321,37 @@ mod test {
         credential_schema_builder.add_attr("height").unwrap();
         let credential_schema = credential_schema_builder.finalize().unwrap();
 
-        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+        let mut non_credential_schema_builder = NonCredentialSchemaBuilder::new().unwrap();
+        non_credential_schema_builder.add_attr("master_secret").unwrap();
+        let non_credential_schema = non_credential_schema_builder.finalize().unwrap();
+
+        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, &non_credential_schema, true).unwrap();
 
         let master_secret = Prover::new_master_secret().unwrap();
-
-        let master_secret_blinding_nonce = new_nonce().unwrap();
-
-        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-            Prover::blind_master_secret(&cred_pub_key,
-                                        &cred_key_correctness_proof,
-                                        &master_secret,
-                                        &master_secret_blinding_nonce).unwrap();
+        let credential_nonce = new_nonce().unwrap();
 
         let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        credential_values_builder.add_value("age", "28").unwrap();
-        credential_values_builder.add_value("height", "175").unwrap();
+        credential_values_builder.add_value_hidden("master_secret", &master_secret.value().unwrap()).unwrap();
+        credential_values_builder.add_dec_known("name", "1139481716457488690172217916278103335").unwrap();
+        credential_values_builder.add_dec_known("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+        credential_values_builder.add_dec_known("age", "28").unwrap();
+        credential_values_builder.add_dec_known("height", "175").unwrap();
         let cred_values = credential_values_builder.finalize().unwrap();
+
+        let (blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof) =
+            Prover::blind_credential_secrets(&cred_pub_key,
+                                        &cred_key_correctness_proof,
+                                        &cred_values,
+                                        &credential_nonce).unwrap();
+
+
 
         let cred_issuance_nonce = new_nonce().unwrap();
 
         let (mut cred_signature, signature_correctness_proof) = Issuer::sign_credential("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                                                                        &blinded_master_secret,
-                                                                                        &blinded_master_secret_correctness_proof,
-                                                                                        &master_secret_blinding_nonce,
+                                                                                        &blinded_credential_secrets,
+                                                                                        &blinded_credential_secrets_correctness_proof,
+                                                                                        &credential_nonce,
                                                                                         &cred_issuance_nonce,
                                                                                         &cred_values,
                                                                                         &cred_pub_key,
@@ -1027,8 +1360,7 @@ mod test {
         Prover::process_credential_signature(&mut cred_signature,
                                              &cred_values,
                                              &signature_correctness_proof,
-                                             &master_secret_blinding_data,
-                                             &master_secret,
+                                             &credential_secrets_blinding_factors,
                                              &cred_pub_key,
                                              &cred_issuance_nonce,
                                              None,
@@ -1040,8 +1372,10 @@ mod test {
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
+        proof_builder.add_common_attribute("master_secret").unwrap();
         proof_builder.add_sub_proof_request(&sub_proof_request,
                                             &credential_schema,
+                                            &non_credential_schema,
                                             &cred_signature,
                                             &cred_values,
                                             &cred_pub_key,
@@ -1049,11 +1383,12 @@ mod test {
                                             None).unwrap();
 
         let proof_request_nonce = new_nonce().unwrap();
-        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
+        let proof = proof_builder.finalize(&proof_request_nonce).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(&sub_proof_request,
                                              &credential_schema,
+                                             &non_credential_schema,
                                              &cred_pub_key,
                                              None,
                                              None).unwrap();
@@ -1069,7 +1404,11 @@ mod test {
         credential_schema_builder.add_attr("height").unwrap();
         let credential_schema = credential_schema_builder.finalize().unwrap();
 
-        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, true).unwrap();
+        let mut non_credential_schema_builder = NonCredentialSchemaBuilder::new().unwrap();
+        non_credential_schema_builder.add_attr("master_secret").unwrap();
+        let non_credential_schema = non_credential_schema_builder.finalize().unwrap();
+
+        let (cred_pub_key, cred_priv_key, cred_key_correctness_proof) = Issuer::new_credential_def(&credential_schema, &non_credential_schema, true).unwrap();
 
         let max_cred_num = 5;
         let issuance_by_default = false;
@@ -1080,29 +1419,32 @@ mod test {
 
         let master_secret = Prover::new_master_secret().unwrap();
 
-        let master_secret_blinding_nonce = new_nonce().unwrap();
-
-        let (blinded_master_secret, master_secret_blinding_data, blinded_master_secret_correctness_proof) =
-            Prover::blind_master_secret(&cred_pub_key,
-                                        &cred_key_correctness_proof,
-                                        &master_secret,
-                                        &master_secret_blinding_nonce).unwrap();
+        let credential_nonce = new_nonce().unwrap();
 
         let mut credential_values_builder = Issuer::new_credential_values_builder().unwrap();
-        credential_values_builder.add_value("name", "1139481716457488690172217916278103335").unwrap();
-        credential_values_builder.add_value("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
-        credential_values_builder.add_value("age", "28").unwrap();
-        credential_values_builder.add_value("height", "175").unwrap();
+        credential_values_builder.add_value_hidden("master_secret", &master_secret.value().unwrap()).unwrap();
+        credential_values_builder.add_dec_known("name", "1139481716457488690172217916278103335").unwrap();
+        credential_values_builder.add_dec_known("sex", "5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
+        credential_values_builder.add_dec_known("age", "28").unwrap();
+        credential_values_builder.add_dec_known("height", "175").unwrap();
         let cred_values = credential_values_builder.finalize().unwrap();
+
+        let (blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof) =
+            Prover::blind_credential_secrets(&cred_pub_key,
+                                        &cred_key_correctness_proof,
+                                        &cred_values,
+                                        &credential_nonce).unwrap();
+
+
 
         let credential_issuance_nonce = new_nonce().unwrap();
 
         let rev_idx = 1;
         let (mut cred_signature, signature_correctness_proof, rev_reg_delta) =
             Issuer::sign_credential_with_revoc("CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFVW",
-                                               &blinded_master_secret,
-                                               &blinded_master_secret_correctness_proof,
-                                               &master_secret_blinding_nonce,
+                                               &blinded_credential_secrets,
+                                               &blinded_credential_secrets_correctness_proof,
+                                               &credential_nonce,
                                                &credential_issuance_nonce,
                                                &cred_values,
                                                &cred_pub_key,
@@ -1119,8 +1461,7 @@ mod test {
         Prover::process_credential_signature(&mut cred_signature,
                                              &cred_values,
                                              &signature_correctness_proof,
-                                             &master_secret_blinding_data,
-                                             &master_secret,
+                                             &credential_secrets_blinding_factors,
                                              &cred_pub_key,
                                              &credential_issuance_nonce,
                                              Some(&rev_key_pub),
@@ -1132,19 +1473,22 @@ mod test {
         sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
         let mut proof_builder = Prover::new_proof_builder().unwrap();
+        proof_builder.add_common_attribute("master_secret").unwrap();
         proof_builder.add_sub_proof_request(&sub_proof_request,
                                             &credential_schema,
+                                            &non_credential_schema,
                                             &cred_signature,
                                             &cred_values,
                                             &cred_pub_key,
                                             Some(&rev_reg),
                                             Some(&witness)).unwrap();
         let proof_request_nonce = new_nonce().unwrap();
-        let proof = proof_builder.finalize(&proof_request_nonce, &master_secret).unwrap();
+        let proof = proof_builder.finalize(&proof_request_nonce).unwrap();
 
         let mut proof_verifier = Verifier::new_proof_verifier().unwrap();
         proof_verifier.add_sub_proof_request(&sub_proof_request,
                                              &credential_schema,
+                                             &non_credential_schema,
                                              &cred_pub_key,
                                              Some(&rev_key_pub),
                                              Some(&rev_reg)).unwrap();
