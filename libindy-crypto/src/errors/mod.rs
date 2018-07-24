@@ -1,3 +1,5 @@
+extern crate serde_json;
+
 use ffi::ErrorCode;
 
 use std::error::Error;
@@ -21,6 +23,10 @@ pub enum IndyCryptoError {
     InvalidState(String),
     InvalidStructure(String),
     IOError(io::Error),
+    AnoncredsRevocationAccumulatorIsFull(String),
+    AnoncredsInvalidRevocationAccumulatorIndex(String),
+    AnoncredsCredentialRevoked(String),
+    AnoncredsProofRejected(String),
 }
 
 impl fmt::Display for IndyCryptoError {
@@ -37,7 +43,11 @@ impl fmt::Display for IndyCryptoError {
             IndyCryptoError::InvalidParam9(ref description) => write!(f, "Invalid param 4: {}", description),
             IndyCryptoError::InvalidState(ref description) => write!(f, "Invalid library state: {}", description),
             IndyCryptoError::InvalidStructure(ref description) => write!(f, "Invalid structure: {}", description),
-            IndyCryptoError::IOError(ref err) => err.fmt(f)
+            IndyCryptoError::IOError(ref err) => err.fmt(f),
+            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(ref description) => write!(f, "Revocation accumulator is full: {}", description),
+            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(ref description) => write!(f, "Invalid revocation accumulator index: {}", description),
+            IndyCryptoError::AnoncredsCredentialRevoked(ref description) => write!(f, "Credential revoked: {}", description),
+            IndyCryptoError::AnoncredsProofRejected(ref description) => write!(f, "Proof rejected: {}", description),
         }
     }
 }
@@ -45,18 +55,22 @@ impl fmt::Display for IndyCryptoError {
 impl Error for IndyCryptoError {
     fn description(&self) -> &str {
         match *self {
-            IndyCryptoError::InvalidParam1(ref description) |
-            IndyCryptoError::InvalidParam2(ref description) |
-            IndyCryptoError::InvalidParam3(ref description) |
-            IndyCryptoError::InvalidParam4(ref description) |
-            IndyCryptoError::InvalidParam5(ref description) |
-            IndyCryptoError::InvalidParam6(ref description) |
-            IndyCryptoError::InvalidParam7(ref description) |
-            IndyCryptoError::InvalidParam8(ref description) |
-            IndyCryptoError::InvalidParam9(ref description) |
-            IndyCryptoError::InvalidState(ref description) |
+            IndyCryptoError::InvalidParam1(ref description) => description,
+            IndyCryptoError::InvalidParam2(ref description) => description,
+            IndyCryptoError::InvalidParam3(ref description) => description,
+            IndyCryptoError::InvalidParam4(ref description) => description,
+            IndyCryptoError::InvalidParam5(ref description) => description,
+            IndyCryptoError::InvalidParam6(ref description) => description,
+            IndyCryptoError::InvalidParam7(ref description) => description,
+            IndyCryptoError::InvalidParam8(ref description) => description,
+            IndyCryptoError::InvalidParam9(ref description) => description,
+            IndyCryptoError::InvalidState(ref description) => description,
             IndyCryptoError::InvalidStructure(ref description) => description,
-            IndyCryptoError::IOError(ref err) => err.description()
+            IndyCryptoError::IOError(ref err) => err.description(),
+            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(ref description) => description,
+            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(ref description) => description,
+            IndyCryptoError::AnoncredsCredentialRevoked(ref description) => description,
+            IndyCryptoError::AnoncredsProofRejected(ref description) => description,
         }
     }
 
@@ -73,7 +87,11 @@ impl Error for IndyCryptoError {
             IndyCryptoError::InvalidParam9(_) |
             IndyCryptoError::InvalidState(_) |
             IndyCryptoError::InvalidStructure(_) => None,
-            IndyCryptoError::IOError(ref err) => Some(err)
+            IndyCryptoError::IOError(ref err) => Some(err),
+            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(_) => None,
+            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(_) => None,
+            IndyCryptoError::AnoncredsCredentialRevoked(_) => None,
+            IndyCryptoError::AnoncredsProofRejected(_) => None,
         }
     }
 }
@@ -92,7 +110,17 @@ impl ToErrorCode for IndyCryptoError {
             IndyCryptoError::InvalidParam9(_) => ErrorCode::CommonInvalidParam9,
             IndyCryptoError::InvalidState(_) => ErrorCode::CommonInvalidState,
             IndyCryptoError::InvalidStructure(_) => ErrorCode::CommonInvalidStructure,
-            IndyCryptoError::IOError(_) => ErrorCode::CommonIOError
+            IndyCryptoError::IOError(_) => ErrorCode::CommonIOError,
+            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(_) => ErrorCode::AnoncredsRevocationAccumulatorIsFull,
+            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(_) => ErrorCode::AnoncredsInvalidRevocationAccumulatorIndex,
+            IndyCryptoError::AnoncredsCredentialRevoked(_) => ErrorCode::AnoncredsCredentialRevoked,
+            IndyCryptoError::AnoncredsProofRejected(_) => ErrorCode::AnoncredsProofRejected,
         }
+    }
+}
+
+impl From<serde_json::Error> for IndyCryptoError {
+    fn from(err: serde_json::Error) -> IndyCryptoError {
+        IndyCryptoError::InvalidStructure(err.to_string())
     }
 }
