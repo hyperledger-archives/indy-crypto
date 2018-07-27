@@ -1,4 +1,4 @@
-from indy_crypto.bls import Bls, Generator, SignKey, VerKey, Signature, MultiSignature
+from indy_crypto.bls import Bls, Generator, SignKey, VerKey, ProofOfPossession, Signature, MultiSignature
 
 
 def test_sign(signature1: Signature):
@@ -11,6 +11,11 @@ def test_sign_for_seed(signature2: Signature):
 
 def test_verify(generator: Generator, message: bytes, ver_key1: VerKey, signature1: Signature):
     valid = Bls.verify(signature1, message, ver_key1, generator)
+    assert valid
+
+
+def test_verify_pop(generator: Generator, ver_key1: VerKey, pop: ProofOfPossession):
+    valid = Bls.verify_pop(pop, ver_key1, generator)
     assert valid
 
 
