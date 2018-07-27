@@ -1,4 +1,4 @@
-from indy_crypto.bls import Bls, Generator, SignKey, VerKey, Signature, MultiSignature
+from indy_crypto.bls import Bls, Generator, SignKey, VerKey, ProofOfPossession, Signature, MultiSignature
 
 import pytest
 
@@ -72,6 +72,15 @@ def signature2(message: bytes, sign_key2: SignKey) -> Signature:
     assert type(signature) is Signature
     assert signature.c_instance is not None
     return signature
+
+
+@pytest.fixture
+def pop(ver_key1: VerKey, sign_key1: SignKey) -> ProofOfPossession:
+    pop = ProofOfPossession.new(ver_key1, sign_key1)
+
+    assert type(pop) is ProofOfPossession
+    assert pop.c_instance is not None
+    return pop
 
 
 @pytest.fixture
