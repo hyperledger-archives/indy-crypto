@@ -1,5 +1,5 @@
 use bn::{BigNumber, BigNumberContext};
-use errors::IndyCryptoError;
+use errors::HLCryptoError;
 
 
 /// Generate a pedersen commitment to a given number
@@ -16,7 +16,7 @@ use errors::IndyCryptoError;
 /// Return the pedersen commitment, i.e `(gen_1^m)*(gen_2^r)`
 pub fn get_pedersen_commitment(gen_1: &BigNumber, m: &BigNumber,
                                gen_2: &BigNumber, r: &BigNumber,
-                               modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+                               modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, HLCryptoError> {
     let commitment = gen_1.mod_exp(m, modulus, Some(ctx))?
         .mod_mul(&gen_2.mod_exp(r, modulus, Some(ctx))?,
                  modulus, Some(ctx))?;
@@ -35,7 +35,7 @@ pub fn get_pedersen_commitment(gen_1: &BigNumber, m: &BigNumber,
 /// # Result
 /// Return the pedersen commitment, i.e `(g_1^m_1)*(g_2^m_2)*...(g_i^m_i)*(gen_2^r)`
 pub fn get_generalized_pedersen_commitment(to_commit: Vec<(&BigNumber, &BigNumber)>,
-                                           modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+                                           modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, HLCryptoError> {
     let accumulated = get_exponentiated_generators(to_commit, modulus, ctx)?;
 
     Ok(accumulated)
@@ -53,7 +53,7 @@ pub fn get_generalized_pedersen_commitment(to_commit: Vec<(&BigNumber, &BigNumbe
 /// # Result
 /// Return the exponentiation, i.e `(g_1^e_1)*(g_2^e_2)*...(g_i^e_i)`
 pub fn get_exponentiated_generators(to_exponentiate: Vec<(&BigNumber, &BigNumber)>,
-                                    modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+                                    modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, HLCryptoError> {
     let accumulated = to_exponentiate.iter()
                                      .fold(BigNumber::from_u32(1),
                                            |acc, &(g, m)| acc?.mod_mul(&g.mod_exp(m, modulus, Some(ctx))?, modulus, Some(ctx)))?;

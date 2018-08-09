@@ -1,5 +1,5 @@
 use bn::{BigNumber, BigNumberContext};
-use errors::IndyCryptoError;
+use errors::HLCryptoError;
 
 /// Generate an RSA modulus of a given size
 ///
@@ -10,9 +10,9 @@ use errors::IndyCryptoError;
 /// # Result
 /// Return the RSA modulus and the factors
 pub fn generate_rsa_modulus(size: usize,
-                            ctx: &mut BigNumberContext) -> Result<(BigNumber, BigNumber, BigNumber), IndyCryptoError> {
+                            ctx: &mut BigNumberContext) -> Result<(BigNumber, BigNumber, BigNumber), HLCryptoError> {
     if size % 2 != 0 {
-        return Err(IndyCryptoError::InvalidParam1(
+        return Err(HLCryptoError::InvalidParam1(
             format!("Need an even number of bits, found {}", size))
         );
     }
@@ -36,7 +36,7 @@ pub fn generate_rsa_modulus(size: usize,
 /// # Result
 /// Return the new witness
 pub fn generate_witness(initial_witness: &BigNumber, exponents: &Vec<BigNumber>,
-                        modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+                        modulus: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, HLCryptoError> {
     let mut updated_witness = initial_witness.clone()?;
     for ref e in exponents.iter() {
         updated_witness = updated_witness.mod_exp(&e, modulus, Some(ctx))?;

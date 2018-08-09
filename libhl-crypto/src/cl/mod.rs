@@ -6,7 +6,7 @@ pub mod prover;
 pub mod verifier;
 
 use bn::BigNumber;
-use errors::IndyCryptoError;
+use errors::HLCryptoError;
 use pair::*;
 
 use std::cmp::Ordering;
@@ -17,11 +17,11 @@ use std::hash::Hash;
 ///
 /// # Example
 /// ```
-/// use indy_crypto::cl::new_nonce;
+/// use hl_crypto::cl::new_nonce;
 ///
 /// let _nonce = new_nonce().unwrap();
 /// ```
-pub fn new_nonce() -> Result<Nonce, IndyCryptoError> {
+pub fn new_nonce() -> Result<Nonce, HLCryptoError> {
     Ok(helpers::bn_rand(constants::LARGE_NONCE)?)
 }
 
@@ -38,16 +38,16 @@ pub struct CredentialSchemaBuilder {
 }
 
 impl CredentialSchemaBuilder {
-    pub fn new() -> Result<CredentialSchemaBuilder, IndyCryptoError> {
+    pub fn new() -> Result<CredentialSchemaBuilder, HLCryptoError> {
         Ok(CredentialSchemaBuilder { attrs: BTreeSet::new() })
     }
 
-    pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_attr(&mut self, attr: &str) -> Result<(), HLCryptoError> {
         self.attrs.insert(attr.to_owned());
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<CredentialSchema, IndyCryptoError> {
+    pub fn finalize(self) -> Result<CredentialSchema, HLCryptoError> {
         Ok(CredentialSchema { attrs: self.attrs })
     }
 }
@@ -63,18 +63,18 @@ pub struct NonCredentialSchemaBuilder {
 }
 
 impl NonCredentialSchemaBuilder {
-    pub fn new() -> Result<NonCredentialSchemaBuilder, IndyCryptoError> {
+    pub fn new() -> Result<NonCredentialSchemaBuilder, HLCryptoError> {
         Ok(NonCredentialSchemaBuilder {
             attrs: BTreeSet::new(),
         })
     }
 
-    pub fn add_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_attr(&mut self, attr: &str) -> Result<(), HLCryptoError> {
         self.attrs.insert(attr.to_owned());
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<NonCredentialSchema, IndyCryptoError> {
+    pub fn finalize(self) -> Result<NonCredentialSchema, HLCryptoError> {
         Ok(NonCredentialSchema { attrs: self.attrs })
     }
 }
@@ -92,7 +92,7 @@ pub enum CredentialValue {
 }
 
 impl CredentialValue {
-    pub fn clone(&self) -> Result<CredentialValue, IndyCryptoError> {
+    pub fn clone(&self) -> Result<CredentialValue, HLCryptoError> {
         Ok(match *self {
             CredentialValue::Known { ref value } => CredentialValue::Known {
                 value: value.clone()?,
@@ -147,7 +147,7 @@ pub struct CredentialValues {
 }
 
 impl CredentialValues {
-    pub fn clone(&self) -> Result<CredentialValues, IndyCryptoError> {
+    pub fn clone(&self) -> Result<CredentialValues, HLCryptoError> {
         Ok(CredentialValues {
             attrs_values: clone_credential_value_map(&self.attrs_values)?
         })
@@ -161,11 +161,11 @@ pub struct CredentialValuesBuilder {
 }
 
 impl CredentialValuesBuilder {
-    pub fn new() -> Result<CredentialValuesBuilder, IndyCryptoError> {
+    pub fn new() -> Result<CredentialValuesBuilder, HLCryptoError> {
         Ok(CredentialValuesBuilder { attrs_values: BTreeMap::new() })
     }
 
-    pub fn add_dec_known(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_dec_known(&mut self, attr: &str, value: &str) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Known { value: BigNumber::from_dec(value)? },
@@ -173,7 +173,7 @@ impl CredentialValuesBuilder {
         Ok(())
     }
 
-    pub fn add_dec_hidden(&mut self, attr: &str, value: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_dec_hidden(&mut self, attr: &str, value: &str) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Hidden { value: BigNumber::from_dec(value)? },
@@ -186,7 +186,7 @@ impl CredentialValuesBuilder {
         attr: &str,
         value: &str,
         blinding_factor: &str,
-    ) -> Result<(), IndyCryptoError> {
+    ) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Commitment {
@@ -201,7 +201,7 @@ impl CredentialValuesBuilder {
         &mut self,
         attr: &str,
         value: &BigNumber,
-    ) -> Result<(), IndyCryptoError> {
+    ) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Known { value: value.clone()? },
@@ -213,7 +213,7 @@ impl CredentialValuesBuilder {
         &mut self,
         attr: &str,
         value: &BigNumber,
-    ) -> Result<(), IndyCryptoError> {
+    ) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Hidden { value: value.clone()? },
@@ -226,7 +226,7 @@ impl CredentialValuesBuilder {
         attr: &str,
         value: &BigNumber,
         blinding_factor: &BigNumber,
-    ) -> Result<(), IndyCryptoError> {
+    ) -> Result<(), HLCryptoError> {
         self.attrs_values.insert(
             attr.to_owned(),
             CredentialValue::Commitment {
@@ -237,7 +237,7 @@ impl CredentialValuesBuilder {
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<CredentialValues, IndyCryptoError> {
+    pub fn finalize(self) -> Result<CredentialValues, HLCryptoError> {
         Ok(CredentialValues { attrs_values: self.attrs_values })
     }
 }
@@ -253,22 +253,22 @@ pub struct CredentialPublicKey {
 }
 
 impl CredentialPublicKey {
-    pub fn clone(&self) -> Result<CredentialPublicKey, IndyCryptoError> {
+    pub fn clone(&self) -> Result<CredentialPublicKey, HLCryptoError> {
         Ok(CredentialPublicKey {
             p_key: self.p_key.clone()?,
             r_key: self.r_key.clone()
         })
     }
 
-    pub fn get_primary_key(&self) -> Result<CredentialPrimaryPublicKey, IndyCryptoError> {
+    pub fn get_primary_key(&self) -> Result<CredentialPrimaryPublicKey, HLCryptoError> {
         Ok(self.p_key.clone()?)
     }
 
-    pub fn get_revocation_key(&self) -> Result<Option<CredentialRevocationPublicKey>, IndyCryptoError> {
+    pub fn get_revocation_key(&self) -> Result<Option<CredentialRevocationPublicKey>, HLCryptoError> {
         Ok(self.r_key.clone())
     }
 
-    pub fn build_from_parts(p_key: &CredentialPrimaryPublicKey, r_key: Option<&CredentialRevocationPublicKey>) -> Result<CredentialPublicKey, IndyCryptoError> {
+    pub fn build_from_parts(p_key: &CredentialPrimaryPublicKey, r_key: Option<&CredentialRevocationPublicKey>) -> Result<CredentialPublicKey, HLCryptoError> {
         Ok(CredentialPublicKey {
             p_key: p_key.clone()?,
             r_key: r_key.map(|key| key.clone())
@@ -295,7 +295,7 @@ pub struct CredentialPrimaryPublicKey {
 }
 
 impl CredentialPrimaryPublicKey {
-    pub fn clone(&self) -> Result<CredentialPrimaryPublicKey, IndyCryptoError> {
+    pub fn clone(&self) -> Result<CredentialPrimaryPublicKey, HLCryptoError> {
         Ok(CredentialPrimaryPublicKey {
             n: self.n.clone()?,
             s: self.s.clone()?,
@@ -423,9 +423,9 @@ impl RevocationRegistryDelta {
         }
     }
 
-    pub fn merge(&mut self, other_delta: &RevocationRegistryDelta) -> Result<(), IndyCryptoError> {
+    pub fn merge(&mut self, other_delta: &RevocationRegistryDelta) -> Result<(), HLCryptoError> {
         if other_delta.prev_accum.is_none() || self.accum != other_delta.prev_accum.unwrap() {
-            return Err(IndyCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
+            return Err(HLCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
         }
 
         self.accum = other_delta.accum;
@@ -465,7 +465,7 @@ pub struct RevocationKeyPrivate {
 pub type Tail = PointG2;
 
 impl Tail {
-    fn new_tail(index: u32, g_dash: &PointG2, gamma: &GroupOrderElement) -> Result<Tail, IndyCryptoError> {
+    fn new_tail(index: u32, g_dash: &PointG2, gamma: &GroupOrderElement) -> Result<Tail, HLCryptoError> {
         let i_bytes = helpers::transform_u32_to_array_of_u8(index);
         let mut pow = GroupOrderElement::from_bytes(&i_bytes)?;
         pow = gamma.pow_mod(&pow)?;
@@ -496,7 +496,7 @@ impl RevocationTailsGenerator {
         self.size - self.current_index
     }
 
-    pub fn next(&mut self) -> Result<Option<Tail>, IndyCryptoError> {
+    pub fn next(&mut self) -> Result<Option<Tail>, HLCryptoError> {
         if self.current_index >= self.size {
             return Ok(None);
         }
@@ -510,7 +510,7 @@ impl RevocationTailsGenerator {
 }
 
 pub trait RevocationTailsAccessor {
-    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError>;
+    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), HLCryptoError>;
 }
 
 /// Simple implementation of `RevocationTailsAccessor` that stores all tails as BTreeMap.
@@ -520,13 +520,13 @@ pub struct SimpleTailsAccessor {
 }
 
 impl RevocationTailsAccessor for SimpleTailsAccessor {
-    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), IndyCryptoError> {
+    fn access_tail(&self, tail_id: u32, accessor: &mut FnMut(&Tail)) -> Result<(), HLCryptoError> {
         Ok(accessor(&self.tails[tail_id as usize]))
     }
 }
 
 impl SimpleTailsAccessor {
-    pub fn new(rev_tails_generator: &mut RevocationTailsGenerator) -> Result<SimpleTailsAccessor, IndyCryptoError> {
+    pub fn new(rev_tails_generator: &mut RevocationTailsGenerator) -> Result<SimpleTailsAccessor, HLCryptoError> {
         let mut tails: Vec<Tail> = Vec::new();
         while let Some(tail) = rev_tails_generator.next()? {
             tails.push(tail);
@@ -586,7 +586,7 @@ impl Witness {
                     max_cred_num: u32,
                     issuance_by_default: bool,
                     rev_reg_delta: &RevocationRegistryDelta,
-                    rev_tails_accessor: &RTA) -> Result<Witness, IndyCryptoError> where RTA: RevocationTailsAccessor {
+                    rev_tails_accessor: &RTA) -> Result<Witness, HLCryptoError> where RTA: RevocationTailsAccessor {
         trace!("Witness::new: >>> rev_idx: {:?}, max_cred_num: {:?}, issuance_by_default: {:?}, rev_reg_delta: {:?}",
                rev_idx, max_cred_num, issuance_by_default, rev_reg_delta);
 
@@ -618,7 +618,7 @@ impl Witness {
                        rev_idx: u32,
                        max_cred_num: u32,
                        rev_reg_delta: &RevocationRegistryDelta,
-                       rev_tails_accessor: &RTA) -> Result<(), IndyCryptoError> where RTA: RevocationTailsAccessor {
+                       rev_tails_accessor: &RTA) -> Result<(), HLCryptoError> where RTA: RevocationTailsAccessor {
         trace!("Witness::update: >>> rev_idx: {:?}, max_cred_num: {:?}, rev_reg_delta: {:?}",
                rev_idx, max_cred_num, rev_reg_delta);
 
@@ -670,11 +670,11 @@ pub struct MasterSecret {
 }
 
 impl MasterSecret {
-    pub fn clone(&self) -> Result<MasterSecret, IndyCryptoError> {
+    pub fn clone(&self) -> Result<MasterSecret, HLCryptoError> {
         Ok(MasterSecret { ms: self.ms.clone()? })
     }
 
-    pub fn value(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn value(&self) -> Result<BigNumber, HLCryptoError> {
         Ok(self.ms.clone()?)
     }
 }
@@ -732,7 +732,7 @@ pub struct SubProofRequestBuilder {
 }
 
 impl SubProofRequestBuilder {
-    pub fn new() -> Result<SubProofRequestBuilder, IndyCryptoError> {
+    pub fn new() -> Result<SubProofRequestBuilder, HLCryptoError> {
         Ok(SubProofRequestBuilder {
             value: SubProofRequest {
                 revealed_attrs: BTreeSet::new(),
@@ -741,15 +741,15 @@ impl SubProofRequestBuilder {
         })
     }
 
-    pub fn add_revealed_attr(&mut self, attr: &str) -> Result<(), IndyCryptoError> {
+    pub fn add_revealed_attr(&mut self, attr: &str) -> Result<(), HLCryptoError> {
         self.value.revealed_attrs.insert(attr.to_owned());
         Ok(())
     }
 
-    pub fn add_predicate(&mut self, attr_name: &str, p_type: &str, value: i32) -> Result<(), IndyCryptoError> {
+    pub fn add_predicate(&mut self, attr_name: &str, p_type: &str, value: i32) -> Result<(), HLCryptoError> {
         let p_type = match p_type {
             "GE" => PredicateType::GE,
-            p_type => return Err(IndyCryptoError::InvalidStructure(format!("Invalid predicate type: {:?}", p_type)))
+            p_type => return Err(HLCryptoError::InvalidStructure(format!("Invalid predicate type: {:?}", p_type)))
         };
 
         let predicate = Predicate {
@@ -762,7 +762,7 @@ impl SubProofRequestBuilder {
         Ok(())
     }
 
-    pub fn finalize(self) -> Result<SubProofRequest, IndyCryptoError> {
+    pub fn finalize(self) -> Result<SubProofRequest, HLCryptoError> {
         Ok(self.value)
     }
 }
@@ -894,7 +894,7 @@ pub struct PrimaryInitProof {
 }
 
 impl PrimaryInitProof {
-    pub fn as_c_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_c_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         let mut c_list: Vec<Vec<u8>> = self.eq_proof.as_list()?;
         for ge_proof in self.ge_proofs.iter() {
             c_list.append_vec(ge_proof.as_list()?)?;
@@ -902,7 +902,7 @@ impl PrimaryInitProof {
         Ok(c_list)
     }
 
-    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         let mut tau_list: Vec<Vec<u8>> = self.eq_proof.as_tau_list()?;
         for ge_proof in self.ge_proofs.iter() {
             tau_list.append_vec(ge_proof.as_tau_list()?)?;
@@ -920,12 +920,12 @@ pub struct NonRevocInitProof {
 }
 
 impl NonRevocInitProof {
-    pub fn as_c_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_c_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         let vec = self.c_list.as_list()?;
         Ok(vec)
     }
 
-    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         let vec = self.tau_list.as_slice()?;
         Ok(vec)
     }
@@ -945,11 +945,11 @@ pub struct PrimaryEqualInitProof {
 }
 
 impl PrimaryEqualInitProof {
-    pub fn as_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         Ok(vec![self.a_prime.to_bytes()?])
     }
 
-    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_tau_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         Ok(vec![self.t.to_bytes()?])
     }
 }
@@ -968,11 +968,11 @@ pub struct PrimaryPredicateGEInitProof {
 }
 
 impl PrimaryPredicateGEInitProof {
-    pub fn as_list(&self) -> Result<&Vec<BigNumber>, IndyCryptoError> {
+    pub fn as_list(&self) -> Result<&Vec<BigNumber>, HLCryptoError> {
         Ok(&self.c_list)
     }
 
-    pub fn as_tau_list(&self) -> Result<&Vec<BigNumber>, IndyCryptoError> {
+    pub fn as_tau_list(&self) -> Result<&Vec<BigNumber>, HLCryptoError> {
         Ok(&self.tau_list)
     }
 }
@@ -996,7 +996,7 @@ pub struct NonRevocProofXList {
 }
 
 impl NonRevocProofXList {
-    pub fn as_list(&self) -> Result<Vec<GroupOrderElement>, IndyCryptoError> {
+    pub fn as_list(&self) -> Result<Vec<GroupOrderElement>, HLCryptoError> {
         Ok(vec![
             self.rho,
             self.o,
@@ -1047,7 +1047,7 @@ pub struct NonRevocProofCList {
 }
 
 impl NonRevocProofCList {
-    pub fn as_list(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_list(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         Ok(vec![
             self.e.to_bytes()?,
             self.d.to_bytes()?,
@@ -1073,7 +1073,7 @@ pub struct NonRevocProofTauList {
 }
 
 impl NonRevocProofTauList {
-    pub fn as_slice(&self) -> Result<Vec<Vec<u8>>, IndyCryptoError> {
+    pub fn as_slice(&self) -> Result<Vec<Vec<u8>>, HLCryptoError> {
         Ok(vec![
             self.t1.to_bytes()?,
             self.t2.to_bytes()?,
@@ -1101,39 +1101,39 @@ pub struct VerifiableCredential {
 }
 
 trait BytesView {
-    fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError>;
+    fn to_bytes(&self) -> Result<Vec<u8>, HLCryptoError>;
 }
 
 impl BytesView for BigNumber {
-    fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, HLCryptoError> {
         Ok(self.to_bytes()?)
     }
 }
 
 impl BytesView for PointG1 {
-    fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, HLCryptoError> {
         Ok(self.to_bytes()?)
     }
 }
 
 impl BytesView for GroupOrderElement {
-    fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, HLCryptoError> {
         Ok(self.to_bytes()?)
     }
 }
 
 impl BytesView for Pair {
-    fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError> {
+    fn to_bytes(&self) -> Result<Vec<u8>, HLCryptoError> {
         Ok(self.to_bytes()?)
     }
 }
 
 trait AppendByteArray {
-    fn append_vec<T: BytesView>(&mut self, other: &Vec<T>) -> Result<(), IndyCryptoError>;
+    fn append_vec<T: BytesView>(&mut self, other: &Vec<T>) -> Result<(), HLCryptoError>;
 }
 
 impl AppendByteArray for Vec<Vec<u8>> {
-    fn append_vec<T: BytesView>(&mut self, other: &Vec<T>) -> Result<(), IndyCryptoError> {
+    fn append_vec<T: BytesView>(&mut self, other: &Vec<T>) -> Result<(), HLCryptoError> {
         for el in other.iter() {
             self.push(el.to_bytes()?);
         }
@@ -1141,7 +1141,7 @@ impl AppendByteArray for Vec<Vec<u8>> {
     }
 }
 
-fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>) -> Result<HashMap<K, BigNumber>, IndyCryptoError> {
+fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>) -> Result<HashMap<K, BigNumber>, HLCryptoError> {
     let mut res = HashMap::new();
     for (k, v) in other.iter() {
         res.insert(k.clone(), v.clone()?);
@@ -1150,7 +1150,7 @@ fn clone_bignum_map<K: Clone + Eq + Hash>(other: &HashMap<K, BigNumber>) -> Resu
 }
 
 
-fn clone_credential_value_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, CredentialValue>) -> Result<BTreeMap<K, CredentialValue>, IndyCryptoError> {
+fn clone_credential_value_map<K: Clone + Eq + Ord>(other: &BTreeMap<K, CredentialValue>) -> Result<BTreeMap<K, CredentialValue>, HLCryptoError> {
     let mut res = BTreeMap::new();
     for (k, v) in other {
         res.insert(k.clone(), v.clone()?);

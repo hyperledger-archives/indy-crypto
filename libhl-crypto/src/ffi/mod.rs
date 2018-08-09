@@ -70,6 +70,6 @@ pub enum ErrorCode
 }
 
 #[no_mangle]
-pub extern fn indy_crypto_init_logger() {
+pub extern fn hl_crypto_init_logger() {
     env_logger::init().unwrap();
 }
