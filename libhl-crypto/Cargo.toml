@@ -1,5 +1,5 @@
 [package]
-name = "crypto-lib"
+name = "crypto_lib"
 version = "0.1.0"
 authors = ["Michael Lodder <redmike7@gmail.com>"]
 description = "This is the shared crypto library for Hyperledger components."
