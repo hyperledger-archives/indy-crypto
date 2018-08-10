@@ -2,6 +2,7 @@ use errors::IndyCryptoError;
 use pair::{GroupOrderElement, PointG2, PointG1, Pair};
 
 use sha2::{Sha256, Digest};
+use sha3::Keccak256;
 
 /// BLS generator point.
 /// BLS algorithm requires choosing of generator point that must be known to all parties.
@@ -173,6 +174,68 @@ impl VerKey {
     }
 }
 
+
+/// Proof of possession for BLS verification key.
+#[derive(Debug, Clone)]
+pub struct ProofOfPossession {
+    point: PointG1,
+    bytes: Vec<u8>
+}
+
+impl ProofOfPossession {
+    /// Creates and returns BLS proof of possession that corresponds to ver key.
+    ///
+    /// # Arguments
+    ///
+    /// * `ver_key` - Ver key
+    /// * `sign_key` - Sign key
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use indy_crypto::bls::{Generator, SignKey, VerKey, ProofOfPossession};
+    /// let gen = Generator::new().unwrap();
+    /// let sign_key = SignKey::new(None).unwrap();
+    /// let ver_key = VerKey::new(&gen, &sign_key).unwrap();
+    /// ProofOfPossession::new(&ver_key, &sign_key).unwrap();
+    /// ```
+    pub fn new(ver_key: &VerKey, sign_key: &SignKey) -> Result<ProofOfPossession, IndyCryptoError> {
+        let point = Bls::_gen_signature(&ver_key.bytes, sign_key, Keccak256::default())?;
+
+        Ok(ProofOfPossession {
+            point: point,
+            bytes: point.to_bytes()?
+        })
+    }
+
+    /// Returns BLS proof of possession to bytes representation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// //TODO: Provide an example!
+    /// ```
+    pub fn as_bytes(&self) -> &[u8] {
+        self.bytes.as_slice()
+    }
+
+    /// Creates and returns BLS proof of possession from bytes representation.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// //TODO: Provide an example!
+    /// ```
+    pub fn from_bytes(bytes: &[u8]) -> Result<ProofOfPossession, IndyCryptoError> {
+        let point = PointG1::from_bytes(bytes)?;
+        Ok(ProofOfPossession {
+            point,
+            bytes: bytes.to_vec()
+        })
+    }
+}
+
+
 /// BLS signature.
 #[derive(Debug)]
 pub struct Signature {
@@ -288,7 +351,6 @@ impl MultiSignature {
 pub struct Bls {}
 
 impl Bls {
-
     /// Signs the message and returns signature.
     ///
     /// # Arguments
@@ -305,7 +367,8 @@ impl Bls {
     /// Bls::sign(&message, &sign_key).unwrap();
     /// ```
     pub fn sign(message: &[u8], sign_key: &SignKey) -> Result<Signature, IndyCryptoError> {
-        let point = Bls::_hash(message)?.mul(&sign_key.group_order_element)?;
+        let point = Bls::_gen_signature(message, sign_key, Sha256::default())?;
+
         Ok(Signature {
             point,
             bytes: point.to_bytes()?
@@ -335,8 +398,31 @@ impl Bls {
     /// assert!(valid);
     /// ```
     pub fn verify(signature: &Signature, message: &[u8], ver_key: &VerKey, gen: &Generator) -> Result<bool, IndyCryptoError> {
-        let h = Bls::_hash(message)?;
-        Ok(Pair::pair(&signature.point, &gen.point)?.eq(&Pair::pair(&h, &ver_key.point)?))
+        Bls::_verify_signature(&signature.point, message, &ver_key.point, gen, Sha256::default())
+    }
+
+    /// Verifies the proof of possession and returns true - if valid or false otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `pop` - Proof of possession
+    /// * `ver_key` - Verification key
+    /// * `gen` - Generator point
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use indy_crypto::bls::*;
+    /// let gen = Generator::new().unwrap();
+    /// let sign_key = SignKey::new(None).unwrap();
+    /// let ver_key = VerKey::new(&gen, &sign_key).unwrap();
+    /// let pop = ProofOfPossession::new(&ver_key, &sign_key).unwrap();
+    ///
+    /// let valid = Bls::verify_proof_of_posession(&pop, &ver_key, &gen).unwrap();
+    /// assert!(valid);
+    /// ```
+    pub fn verify_proof_of_posession(pop: &ProofOfPossession, ver_key: &VerKey, gen: &Generator) -> Result<bool, IndyCryptoError> {
+        Bls::_verify_signature(&pop.point, &ver_key.bytes, &ver_key.point, gen, Keccak256::default())
     }
 
     /// Verifies the message multi signature and returns true - if signature valid or false otherwise.
@@ -390,18 +476,20 @@ impl Bls {
         // the C API. Verifiers can thus cache the aggregated verkey and avoid several EC point additions.
         // The code below should be moved to such method.
 
-        let msg_hash = Bls::_hash(message)?;
-
-        let lhs = Pair::pair(&multi_sig.point, &gen.point)?;
-        let rhs = Pair::pair(&msg_hash, &aggregated_verkey)?;
-
-        Ok(lhs.eq(&rhs))
+        Bls::_verify_signature(&multi_sig.point, message, &aggregated_verkey, gen, Sha256::default())
     }
 
-    fn _hash(message: &[u8]) -> Result<PointG1, IndyCryptoError> {
-        let mut hasher = Sha256::default();
-        hasher.input(message);
+    fn _gen_signature<T>(message: &[u8], sign_key: &SignKey, hasher: T) -> Result<PointG1, IndyCryptoError> where T: Digest {
+        Bls::_hash(message, hasher)?.mul(&sign_key.group_order_element)
+    }
 
+    pub fn _verify_signature<T>(signature: &PointG1, message: &[u8], ver_key: &PointG2, gen: &Generator, hasher: T) -> Result<bool, IndyCryptoError> where T: Digest {
+        let h = Bls::_hash(message, hasher)?;
+        Ok(Pair::pair(&signature, &gen.point)?.eq(&Pair::pair(&h, &ver_key)?))
+    }
+
+    fn _hash<T>(message: &[u8], mut hasher: T) -> Result<PointG1, IndyCryptoError> where T: Digest {
+        hasher.input(message);
         Ok(PointG1::from_hash(hasher.result().as_slice())?)
     }
 }
@@ -431,6 +519,14 @@ mod tests {
         let gen = Generator::new().unwrap();
         let sign_key = SignKey::new(None).unwrap();
         VerKey::new(&gen, &sign_key).unwrap();
+    }
+
+    #[test]
+    fn pop_new_works() {
+        let gen = Generator::new().unwrap();
+        let sign_key = SignKey::new(None).unwrap();
+        let ver_key = VerKey::new(&gen, &sign_key).unwrap();
+        ProofOfPossession::new(&ver_key, &sign_key).unwrap();
     }
 
     #[test]
@@ -469,6 +565,17 @@ mod tests {
         let signature = Bls::sign(&message, &sign_key).unwrap();
 
         let valid = Bls::verify(&signature, &message, &ver_key, &gen).unwrap();
+        assert!(valid)
+    }
+
+    #[test]
+    fn verify_pop_works() {
+        let gen = Generator::new().unwrap();
+        let sign_key = SignKey::new(None).unwrap();
+        let ver_key = VerKey::new(&gen, &sign_key).unwrap();
+        let pop = ProofOfPossession::new(&ver_key, &sign_key).unwrap();
+
+        let valid = Bls::verify_proof_of_posession(&pop, &ver_key, &gen).unwrap();
         assert!(valid)
     }
 
@@ -583,8 +690,8 @@ mod tests {
             &signature2
         ];
 
-        let multi_signature_invalud = MultiSignature::new(&signatures).unwrap();
-        let valid = Bls::verify_multi_sig(&multi_signature_invalud, &message, &ver_keys, &gen).unwrap();
+        let multi_signature_invalid = MultiSignature::new(&signatures).unwrap();
+        let valid = Bls::verify_multi_sig(&multi_signature_invalid, &message, &ver_keys, &gen).unwrap();
 
         assert!(!valid)
     }
