@@ -1,3 +1,6 @@
+0.4.4
+- Python wrapper deb now depends on fixed version of libindy-crypto deb
+
 0.4.3
 - BLS: add proof of possession functionality
 - Remove custom JsonEncodable/Decodable trait from API
