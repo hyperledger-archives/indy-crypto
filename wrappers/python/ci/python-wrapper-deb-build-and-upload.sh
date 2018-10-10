@@ -21,6 +21,7 @@ sed -i -E "s/version='([0-9,.]+).*/version='\\1$suffix',/" setup.py
 
 PACKAGE_NAME=$(grep -Po "(?<=name=').[^\']*" setup.py)
 LICENSE=$(grep -Po "(?<=license=').[^\']*" setup.py)
+VERSION=$(grep -Po "(?<=version=').[^\']*" setup.py)
 
 mkdir debs
 
@@ -30,7 +31,7 @@ fpm --input-type "python" \
     --architecture "amd64" \
     --name python3-${PACKAGE_NAME} \
     --license ${LICENSE} \
-    --depends libindy-crypto \
+    --depends "libindy-crypto = ${VERSION}" \
     --python-package-name-prefix "python3" \
     --python-bin "/usr/bin/python3" \
     --exclude "*.pyc" \
