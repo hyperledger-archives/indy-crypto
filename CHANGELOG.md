@@ -1,4 +1,4 @@
-0.4.4
+0.4.4, 0.4.5
 - Python wrapper deb now depends on fixed version of libindy-crypto deb
 
 0.4.3
