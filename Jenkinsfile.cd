@@ -409,7 +409,7 @@ def publishPythonWrapperDebRCtoStable(testEnv, version) {
         rcFullVersion = "${version}~${env.BUILD_NUMBER}"
 
         unstash name: 'PythonWrapperDebs'
-        sh "fakeroot deb-reversion -v $version debs/python3-indy-crypto_\"$rcFullVersion\"_amd64.deb"
+        sh "fpm -s deb -t deb --version $version --no-auto-depends --depends 'libindy-crypto = $version' debs/python3-indy-crypto_\"${rcFullVersion}\"_amd64.deb"
 
         uploadDebianFilesToStable()
     }
