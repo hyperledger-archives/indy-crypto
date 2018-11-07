@@ -20,8 +20,8 @@ use amcl::fp2::FP2;
 use amcl::pair::{ate, g1mul, g2mul, gtpow, fexp};
 use amcl::rand::RAND;
 
-use rand::os::OsRng;
-use rand::Rng;
+use rand::rngs::OsRng;
+use rand::RngCore;
 use std::fmt::{Debug, Formatter, Error};
 
 #[cfg(feature = "serialization")]
@@ -654,7 +654,7 @@ impl<'a> Deserialize<'a> for Pair {
 mod tests {
     use super::*;
     use errors::ToErrorCode;
-    use ffi::ErrorCode;
+    use errors::ErrorCode;
 
     #[test]
     fn group_order_element_new_from_seed_works_for_invalid_seed_len() {

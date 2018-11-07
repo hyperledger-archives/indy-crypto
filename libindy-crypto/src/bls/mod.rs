@@ -7,14 +7,14 @@ use sha3::Keccak256;
 /// BLS generator point.
 /// BLS algorithm requires choosing of generator point that must be known to all parties.
 /// The most of BLS methods require generator to be provided.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Generator {
     point: PointG2,
     bytes: Vec<u8>
 }
 
 impl Generator {
-    /// Creates and returns random generator point that satisfy BLS algorithm requirements.
+    /// Creates and returns random generator point that satisfies BLS algorithm requirements.
     ///
     /// # Example
     ///
@@ -65,7 +65,7 @@ impl Generator {
 }
 
 /// BLS sign key.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SignKey {
     group_order_element: GroupOrderElement,
     bytes: Vec<u8>
@@ -77,8 +77,8 @@ impl SignKey {
     /// # Example
     ///
     /// ```
-    /// use indy_crypto::bls::Generator;
-    /// Generator::new().unwrap();
+    /// use indy_crypto::bls::SignKey;
+    /// SignKey::new(None).unwrap();
     /// ```
     pub fn new(seed: Option<&[u8]>) -> Result<SignKey, IndyCryptoError> {
         let group_order_element = match seed {
@@ -121,7 +121,7 @@ impl SignKey {
 }
 
 /// BLS verification key.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VerKey {
     point: PointG2,
     bytes: Vec<u8>
@@ -134,7 +134,11 @@ impl VerKey {
     ///
     /// ```
     /// use indy_crypto::bls::Generator;
-    /// Generator::new().unwrap();
+    /// use indy_crypto::bls::SignKey;
+    /// use indy_crypto::bls::VerKey;
+    /// let gen = Generator::new().unwrap();
+    /// let sign_key = SignKey::new(None).unwrap();
+    /// VerKey::new(&gen, &sign_key).unwrap();
     /// ```
     pub fn new(gen: &Generator, sign_key: &SignKey) -> Result<VerKey, IndyCryptoError> {
         let point = gen.point.mul(&sign_key.group_order_element)?;
@@ -176,7 +180,7 @@ impl VerKey {
 
 
 /// Proof of possession for BLS verification key.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProofOfPossession {
     point: PointG1,
     bytes: Vec<u8>
@@ -235,9 +239,8 @@ impl ProofOfPossession {
     }
 }
 
-
 /// BLS signature.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Signature {
     point: PointG1,
     bytes: Vec<u8>,
@@ -274,14 +277,14 @@ impl Signature {
 }
 
 /// BLS multi signature.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MultiSignature {
     point: PointG1,
     bytes: Vec<u8>,
 }
 
 impl MultiSignature {
-    /// Creates and returns multi signature for provided list of signatures.
+   /// Creates and returns multi signature for provided list of signatures.
    ///
    /// # Arguments
    ///
