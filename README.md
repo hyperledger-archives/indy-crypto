@@ -62,6 +62,7 @@ API documentation is now available as rust doc in code. See:
 ## Wrappers documentation
 
 * [Python](wrappers/python/README.md)
+* [JavaScript](wrappers/javascript/README.md)
 
 ## Binaries
 
@@ -80,4 +81,3 @@ sudo add-apt-repository "deb https://repo.sovrin.org/sdk/deb xenial stable"
 sudo apt-get update
 sudo apt-get install -y libindy-crypto
 ```
-
