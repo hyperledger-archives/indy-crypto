@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 from indy_crypto.bls import Bls, Generator, SignKey, VerKey, ProofOfPossession, Signature, MultiSignature
+=======
+from indy_crypto.bls import Bls, Generator, SignKey, VerKey, Signature, MultiSignature
+>>>>>>> jovfer/master
 
 import pytest
 
@@ -75,6 +79,7 @@ def signature2(message: bytes, sign_key2: SignKey) -> Signature:
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def pop(ver_key1: VerKey, sign_key1: SignKey) -> ProofOfPossession:
     pop = ProofOfPossession.new(ver_key1, sign_key1)
 
@@ -84,6 +89,8 @@ def pop(ver_key1: VerKey, sign_key1: SignKey) -> ProofOfPossession:
 
 
 @pytest.fixture
+=======
+>>>>>>> jovfer/master
 def multi_sig(signature1: Signature, signature2: Signature) -> MultiSignature:
     multi_sig = MultiSignature.new([signature1, signature2])
 

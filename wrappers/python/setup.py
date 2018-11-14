@@ -2,7 +2,11 @@ from distutils.core import setup
 
 setup(
     name='indy_crypto',
+<<<<<<< HEAD
     version='0.4.2',
+=======
+    version='0.4.1',
+>>>>>>> jovfer/master
     packages=['indy_crypto'],
     url='https://github.com/hyperledger/indy-crypto',
     license='MIT/Apache-2.0',

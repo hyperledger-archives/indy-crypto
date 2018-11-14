@@ -148,6 +148,7 @@ class VerKey(BlsEntity):
         return res
 
 
+<<<<<<< HEAD
 class ProofOfPossession(BlsEntity):
     """
     BLS proof of possession.
@@ -177,6 +178,8 @@ class ProofOfPossession(BlsEntity):
         return res
 
 
+=======
+>>>>>>> jovfer/master
 class Signature(BlsEntity):
     """
     BLS signature.
@@ -278,6 +281,7 @@ class Bls:
         return res
 
     @staticmethod
+<<<<<<< HEAD
     def verify_pop(pop: ProofOfPossession, ver_key: VerKey, gen: Generator) -> bool:
         """
         Verifies the proof of possession and returns true - if signature valid or false otherwise.
@@ -306,6 +310,8 @@ class Bls:
         return res
 
     @staticmethod
+=======
+>>>>>>> jovfer/master
     def verify_multi_sig(multi_sig: MultiSignature, message: bytes, ver_keys: [VerKey], gen: Generator) -> bool:
         """
         Verifies the message multi signature and returns true - if signature valid or false otherwise.

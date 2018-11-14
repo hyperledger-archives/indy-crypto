@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Lab Name
 crypto-lib
 
@@ -16,6 +17,8 @@ hartm
 # Sponsor
 Hart Montgomery
 
+=======
+>>>>>>> jovfer/master
 
 ## Before you Continue
 

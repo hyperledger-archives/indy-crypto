@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 from indy_crypto.bls import Bls, Generator, SignKey, VerKey, ProofOfPossession, Signature, MultiSignature
+=======
+from indy_crypto.bls import Bls, Generator, SignKey, VerKey, Signature, MultiSignature
+>>>>>>> jovfer/master
 
 
 def test_sign(signature1: Signature):
@@ -14,11 +18,14 @@ def test_verify(generator: Generator, message: bytes, ver_key1: VerKey, signatur
     assert valid
 
 
+<<<<<<< HEAD
 def test_verify_pop(generator: Generator, ver_key1: VerKey, pop: ProofOfPossession):
     valid = Bls.verify_pop(pop, ver_key1, generator)
     assert valid
 
 
+=======
+>>>>>>> jovfer/master
 def test_verify_for_seed(generator: Generator, message: bytes, ver_key2: VerKey, signature2: Signature):
     valid = Bls.verify(signature2, message, ver_key2, generator)
     assert valid
