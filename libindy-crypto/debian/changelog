@@ -1,4 +1,4 @@
-libindy-crypto (0.4.3) unstable; urgency=medium
+libindy-crypto (0.4.5) unstable; urgency=medium
 
   [ Indy Crypto ]
   * BLS: add proof of possession functionality
