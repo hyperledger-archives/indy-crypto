@@ -25,24 +25,14 @@ RUN pip3 install -U \
 	setuptools \
 	virtualenv
 
-ENV RUST_ARCHIVE=rust-1.25.0-x86_64-unknown-linux-gnu.tar.gz
-ENV RUST_DOWNLOAD_URL=https://static.rust-lang.org/dist/$RUST_ARCHIVE
-
-RUN mkdir -p /rust
-WORKDIR /rust
-
-RUN curl -fsOSL $RUST_DOWNLOAD_URL \
-    && curl -s $RUST_DOWNLOAD_URL.sha256 | sha256sum -c - \
-    && tar -C /rust -xzf $RUST_ARCHIVE --strip-components=1 \
-    && rm $RUST_ARCHIVE \
-    && ./install.sh
-
-ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/.cargo/bin"
-
-RUN apt-get install -y zip
+RUN apt-get update && \
+    apt-get install -y zip
 
 RUN useradd -ms /bin/bash -u $uid indy
 USER indy
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.31.0
+ENV PATH /home/indy/.cargo/bin:$PATH
 
 RUN cargo install --git https://github.com/DSRCorporation/cargo-test-xunit
 
@@ -59,5 +49,6 @@ RUN ln -sf /home/indy/test/bin/python /usr/local/bin/python3
 RUN ln -sf /home/indy/test/bin/pip /usr/local/bin/pip3
 
 RUN pip3 install -U pip plumbum deb-pkg-tools
-RUN apt-get install -y ruby-dev
+RUN apt-get update && \
+    apt-get install -y ruby-dev
 RUN gem install fpm

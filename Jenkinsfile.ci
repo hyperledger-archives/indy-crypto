@@ -74,6 +74,9 @@ def linuxTesting(file, env_name) {
             testEnv.inside {
                 echo "${env_name} Test: Test"
 
+                echo "${env_name} Libindy-Crypto: Build"
+                sh "RUST_BACKTRACE=1 cargo build"
+
                 echo "${env_name} Test: Build"
                 sh "RUST_BACKTRACE=1 cargo test --no-run"
 
@@ -104,5 +107,5 @@ def getUserUid() {
 }
 
 def setupRust() {
-    sh "rustup default 1.25.0"
+    sh "rustup default 1.31.0"
 }
