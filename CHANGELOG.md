@@ -1,3 +1,6 @@
+0.6.0
+- Moved to latest version of AMCL (version 3). NOTE: revocations from older indy-crypto versions will be no longer supported and older versions are not supporting new serialization. Migration is possible, see IS-1097
+
 0.5.0
 -  Added new indy_crypto_set_logger endpoint that allows application to register custom log handler. To register default logger application can use indy_crypto_set_default_logger endpoint.
 - Incorporated platform-independent serialization of BIG in AMCL to fix a bug with serialization on 32 and 64 bit platforms. NOTE: revocations from older indy-crypto versions will be no longer supported and older versions are not supporting new serialization. Migration is possible, see [IS-1097](https://jira.hyperledger.org/browse/IS-1097)
