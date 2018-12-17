@@ -74,7 +74,7 @@ def linuxTesting(file, env_name) {
             testEnv.inside {
                 echo "${env_name} Test: Test"
 
-                echo "${env_name} Libindy-Crypto: Build"
+                echo "${env_name} Indy-Crypto: Build"
                 sh "RUST_BACKTRACE=1 cargo build"
 
                 echo "${env_name} Test: Build"
