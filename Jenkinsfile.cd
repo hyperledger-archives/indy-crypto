@@ -95,7 +95,7 @@ def linuxTesting(file, env_name) {
                 echo "${env_name} Test: Test"
                 try {
                     echo "${env_name} Libindy-Crypto: Build"
-                    sh "RUST_BACKTRACE=1 cargo build"
+                    sh "RUST_BACKTRACE=1 cargo build --release"
 
                     echo "${env_name} Test: Build"
                     sh "RUST_BACKTRACE=1 cargo test --release --no-run"
