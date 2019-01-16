@@ -402,8 +402,10 @@ impl BigNumber {
     }
 
     pub fn clone(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut openssl_bn = BigNum::from_slice(&self.openssl_bn.to_vec()[..])?;
+        openssl_bn.set_negative(self.is_negative());
         Ok(BigNumber {
-            openssl_bn: BigNum::from_slice(&self.openssl_bn.to_vec()[..])?
+            openssl_bn
         })
     }
 
