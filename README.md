@@ -1,5 +1,6 @@
 ## Before you Continue
 
+
 If you haven't done so already, please visit the main resource for all things "Indy" to get acquainted with the code base, helpful resources, and up-to-date information: [Hyperledger Wiki-Indy](https://wiki.hyperledger.org/projects/indy).
 
 # Indy Crypto
