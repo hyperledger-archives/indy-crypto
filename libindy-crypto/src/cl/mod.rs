@@ -1237,7 +1237,6 @@ mod test {
         assert_eq!(two, one);
     }
 
-
     #[test]
     fn demo() {
         let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();

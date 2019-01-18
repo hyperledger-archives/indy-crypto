@@ -402,8 +402,10 @@ impl BigNumber {
     }
 
     pub fn clone(&self) -> Result<BigNumber, IndyCryptoError> {
+        let mut openssl_bn = BigNum::from_slice(&self.openssl_bn.to_vec()[..])?;
+        openssl_bn.set_negative(self.is_negative());
         Ok(BigNumber {
-            openssl_bn: BigNum::from_slice(&self.openssl_bn.to_vec()[..])?
+            openssl_bn
         })
     }
 
@@ -595,6 +597,13 @@ mod tests {
     fn lshift1_works() {
         let num = BigNumber::from_u32(1000).unwrap();
         assert_eq!(num.lshift1().unwrap(), BigNumber::from_u32(2000).unwrap());
+    }
+
+    #[test]
+    fn clone_negative_works() {
+        let num = BigNumber::from_dec("-1").unwrap();
+        let num_cloned = num.clone().unwrap();
+        assert_eq!(num, num_cloned);
     }
 
     #[cfg(feature = "serialization")]
