@@ -17,6 +17,7 @@ mod test {
     use super::*;
     use indy_crypto::ffi::ErrorCode;
     use indy_crypto::errors::ToErrorCode;
+    use indy_crypto::cl::NonCredentialSchemaBuilder;
 
     #[test]
     fn anoncreds_demo() {
@@ -289,7 +290,8 @@ mod test {
                                              None,
                                              None).unwrap();
 
-        let sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
+        let mut sub_proof_request_builder = Verifier::new_sub_proof_request_builder().unwrap();
+        sub_proof_request_builder.add_predicate("height", "GE", -2).unwrap();
         let sub_proof_request = sub_proof_request_builder.finalize().unwrap();
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
