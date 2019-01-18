@@ -1,7 +1,7 @@
 use cl::verifier::*;
 use cl::*;
-use errors::ToErrorCode;
 use ffi::ErrorCode;
+use errors::prelude::*;
 
 use std::os::raw::c_void;
 
@@ -27,7 +27,7 @@ pub extern fn indy_crypto_cl_verifier_new_proof_verifier(proof_verifier_p: *mut 
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_verifier_new_proof_verifier: <<< res: {:?}", res);
@@ -70,7 +70,7 @@ pub extern fn indy_crypto_cl_proof_verifier_add_sub_proof_request(proof_verifier
                                                          rev_key_pub,
                                                          rev_reg) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_proof_verifier_add_sub_proof_request: <<< res: {:?}", res);
@@ -110,7 +110,7 @@ pub extern fn indy_crypto_cl_proof_verifier_verify(proof_verifier: *const c_void
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_proof_verifier_verify: <<< res: {:?}", res);
@@ -134,9 +134,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -190,9 +190,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -251,9 +251,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -309,9 +309,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
 

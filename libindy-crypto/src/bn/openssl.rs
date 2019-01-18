@@ -1,4 +1,4 @@
-use errors::IndyCryptoError;
+use errors::prelude::*;
 
 use int_traits::IntTraits;
 
@@ -12,7 +12,6 @@ use serde::ser::{Serialize, Serializer, Error as SError};
 #[cfg(feature = "serialization")]
 use serde::de::{Deserialize, Deserializer, Visitor, Error as DError};
 
-use std::error::Error;
 use std::fmt;
 use std::cmp::Ord;
 use std::cmp::Ordering;
@@ -27,33 +26,33 @@ pub struct BigNumber {
 }
 
 impl BigNumber {
-    pub fn new_context() -> Result<BigNumberContext, IndyCryptoError> {
+    pub fn new_context() -> IndyCryptoResult<BigNumberContext> {
         let ctx = BigNumContext::new()?;
         Ok(BigNumberContext {
             openssl_bn_context: ctx
         })
     }
 
-    pub fn new() -> Result<BigNumber, IndyCryptoError> {
+    pub fn new() -> IndyCryptoResult<BigNumber> {
         let bn = BigNum::new()?;
         Ok(BigNumber {
             openssl_bn: bn
         })
     }
 
-    pub fn generate_prime(size: usize) -> Result<BigNumber, IndyCryptoError> {
+    pub fn generate_prime(size: usize) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::generate_prime(&mut bn.openssl_bn, size as i32, false, None, None)?;
         Ok(bn)
     }
 
-    pub fn generate_safe_prime(size: usize) -> Result<BigNumber, IndyCryptoError> {
+    pub fn generate_safe_prime(size: usize) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::generate_prime(&mut bn.openssl_bn, (size + 1) as i32, true, None, None)?;
         Ok(bn)
     }
 
-    pub fn generate_prime_in_range(start: &BigNumber, end: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    pub fn generate_prime_in_range(start: &BigNumber, end: &BigNumber) -> IndyCryptoResult<BigNumber> {
         let mut prime;
         let mut iteration = 0;
         let mut bn_ctx = BigNumber::new_context()?;
@@ -73,7 +72,7 @@ impl BigNumber {
         Ok(prime)
     }
 
-    pub fn is_prime(&self, ctx: Option<&mut BigNumberContext>) -> Result<bool, IndyCryptoError> {
+    pub fn is_prime(&self, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<bool> {
         let prime_len = self.to_dec()?.len();
         let checks = prime_len.log2() as i32;
         match ctx {
@@ -85,7 +84,7 @@ impl BigNumber {
         }
     }
 
-    pub fn is_safe_prime(&self, ctx: Option<&mut BigNumberContext>) -> Result<bool, IndyCryptoError> {
+    pub fn is_safe_prime(&self, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<bool> {
 
         match ctx {
             Some(c) => {
@@ -107,90 +106,90 @@ impl BigNumber {
         }
     }
 
-    pub fn rand(size: usize) -> Result<BigNumber, IndyCryptoError> {
+    pub fn rand(size: usize) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::rand(&mut bn.openssl_bn, size as i32, MsbOption::MAYBE_ZERO, false)?;
         Ok(bn)
     }
 
-    pub fn rand_range(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn rand_range(&self) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::rand_range(&self.openssl_bn, &mut bn.openssl_bn)?;
         Ok(bn)
     }
 
-    pub fn num_bits(&self) -> Result<i32, IndyCryptoError> {
+    pub fn num_bits(&self) -> IndyCryptoResult<i32> {
         Ok(self.openssl_bn.num_bits())
     }
 
-    pub fn is_bit_set(&self, n: i32) -> Result<bool, IndyCryptoError> {
+    pub fn is_bit_set(&self, n: i32) -> IndyCryptoResult<bool> {
         Ok(self.openssl_bn.is_bit_set(n))
     }
 
-    pub fn set_bit(&mut self, n: i32) -> Result<&mut BigNumber, IndyCryptoError> {
+    pub fn set_bit(&mut self, n: i32) -> IndyCryptoResult<&mut BigNumber> {
         BigNumRef::set_bit(&mut self.openssl_bn, n)?;
         Ok(self)
     }
 
-    pub fn from_u32(n: usize) -> Result<BigNumber, IndyCryptoError> {
+    pub fn from_u32(n: usize) -> IndyCryptoResult<BigNumber> {
         let bn = BigNum::from_u32(n as u32)?;
         Ok(BigNumber {
             openssl_bn: bn
         })
     }
 
-    pub fn from_dec(dec: &str) -> Result<BigNumber, IndyCryptoError> {
+    pub fn from_dec(dec: &str) -> IndyCryptoResult<BigNumber> {
         let bn = BigNum::from_dec_str(dec)?;
         Ok(BigNumber {
             openssl_bn: bn
         })
     }
 
-    pub fn from_hex(hex: &str) -> Result<BigNumber, IndyCryptoError> {
+    pub fn from_hex(hex: &str) -> IndyCryptoResult<BigNumber> {
         let bn = BigNum::from_hex_str(hex)?;
         Ok(BigNumber {
             openssl_bn: bn
         })
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<BigNumber, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<BigNumber> {
         let bn = BigNum::from_slice(bytes)?;
         Ok(BigNumber {
             openssl_bn: bn
         })
     }
 
-    pub fn to_dec(&self) -> Result<String, IndyCryptoError> {
+    pub fn to_dec(&self) -> IndyCryptoResult<String> {
         let result = self.openssl_bn.to_dec_str()?;
         Ok(result.to_string())
     }
 
-    pub fn to_hex(&self) -> Result<String, IndyCryptoError> {
+    pub fn to_hex(&self) -> IndyCryptoResult<String> {
         let result = self.openssl_bn.to_hex_str()?;
         Ok(result.to_string())
     }
 
-    pub fn to_bytes(&self) -> Result<Vec<u8>, IndyCryptoError> {
+    pub fn to_bytes(&self) -> IndyCryptoResult<Vec<u8>> {
         Ok(self.openssl_bn.to_vec())
     }
 
-    pub fn hash(data: &[u8]) -> Result<Vec<u8>, IndyCryptoError> {
+    pub fn hash(data: &[u8]) -> IndyCryptoResult<Vec<u8>> {
         Ok(hash(MessageDigest::sha256(), data)?.to_vec())
     }
 
-    pub fn add(&self, a: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    pub fn add(&self, a: &BigNumber) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::checked_add(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn)?;
         Ok(bn)
     }
 
-    pub fn sub(&self, a: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    pub fn sub(&self, a: &BigNumber) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::checked_sub(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn)?;
         Ok(bn)
     }
 
-    pub fn sqr(&self, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn sqr(&self, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::sqr(&mut bn.openssl_bn, &self.openssl_bn, &mut context.openssl_bn_context)?,
@@ -202,7 +201,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn mul(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn mul(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::checked_mul(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &mut context.openssl_bn_context)?,
@@ -214,7 +213,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn mod_mul(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn mod_mul(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::mod_mul(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut context.openssl_bn_context)?,
@@ -226,7 +225,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn mod_sub(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn mod_sub(&self, a: &BigNumber, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::mod_sub(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &n.openssl_bn, &mut context.openssl_bn_context)?,
@@ -238,7 +237,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn div(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn div(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::checked_div(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &mut context.openssl_bn_context)?,
@@ -250,27 +249,27 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn add_word(&mut self, w: u32) -> Result<&mut BigNumber, IndyCryptoError> {
+    pub fn add_word(&mut self, w: u32) -> IndyCryptoResult<&mut BigNumber> {
         BigNumRef::add_word(&mut self.openssl_bn, w)?;
         Ok(self)
     }
 
-    pub fn sub_word(&mut self, w: u32) -> Result<&mut BigNumber, IndyCryptoError> {
+    pub fn sub_word(&mut self, w: u32) -> IndyCryptoResult<&mut BigNumber> {
         BigNumRef::sub_word(&mut self.openssl_bn, w)?;
         Ok(self)
     }
 
-    pub fn mul_word(&mut self, w: u32) -> Result<&mut BigNumber, IndyCryptoError> {
+    pub fn mul_word(&mut self, w: u32) -> IndyCryptoResult<&mut BigNumber> {
         BigNumRef::mul_word(&mut self.openssl_bn, w)?;
         Ok(self)
     }
 
-    pub fn div_word(&mut self, w: u32) -> Result<&mut BigNumber, IndyCryptoError> {
+    pub fn div_word(&mut self, w: u32) -> IndyCryptoResult<&mut BigNumber> {
         BigNumRef::div_word(&mut self.openssl_bn, w)?;
         Ok(self)
     }
 
-    pub fn mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         match ctx {
             Some(context) => self._mod_exp(a, b, context),
             None => {
@@ -280,7 +279,7 @@ impl BigNumber {
         }
     }
 
-    fn _mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: &mut BigNumberContext) -> Result<BigNumber, IndyCryptoError> {
+    fn _mod_exp(&self, a: &BigNumber, b: &BigNumber, ctx: &mut BigNumberContext) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
 
         if a.openssl_bn.is_negative() {
@@ -291,7 +290,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn modulus(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn modulus(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::nnmod(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &mut context.openssl_bn_context)?,
@@ -303,7 +302,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn exp(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn exp(&self, a: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::exp(&mut bn.openssl_bn, &self.openssl_bn, &a.openssl_bn, &mut context.openssl_bn_context)?,
@@ -315,7 +314,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn inverse(&self, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn inverse(&self, n: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         match ctx {
             Some(context) => BigNumRef::mod_inverse(&mut bn.openssl_bn, &self.openssl_bn, &n.openssl_bn, &mut context.openssl_bn_context)?,
@@ -327,7 +326,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn set_negative(&self, negative: bool) -> Result<BigNumber, IndyCryptoError> {
+    pub fn set_negative(&self, negative: bool) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
         bn.set_negative(negative);
         Ok(BigNumber {
@@ -339,7 +338,7 @@ impl BigNumber {
         self.openssl_bn.is_negative()
     }
 
-    pub fn increment(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn increment(&self) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
         bn.add_word(1)?;
         Ok(BigNumber {
@@ -347,7 +346,7 @@ impl BigNumber {
         })
     }
 
-    pub fn decrement(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn decrement(&self) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNum::from_slice(&self.openssl_bn.to_vec())?;
         bn.sub_word(1)?;
         Ok(BigNumber {
@@ -355,25 +354,25 @@ impl BigNumber {
         })
     }
 
-    pub fn lshift1(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn lshift1(&self) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::lshift1(&mut bn.openssl_bn, &self.openssl_bn)?;
         Ok(bn)
     }
 
-    pub fn rshift1(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn rshift1(&self) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::rshift1(&mut bn.openssl_bn, &self.openssl_bn)?;
         Ok(bn)
     }
 
-    pub fn rshift(&self, n: i32) -> Result<BigNumber, IndyCryptoError> {
+    pub fn rshift(&self, n: i32) -> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::rshift(&mut bn.openssl_bn, &self.openssl_bn, n)?;
         Ok(bn)
     }
 
-    pub fn mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: Option<&mut BigNumberContext>) -> Result<BigNumber, IndyCryptoError> {
+    pub fn mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: Option<&mut BigNumberContext>) -> IndyCryptoResult<BigNumber> {
         //(a * (1/b mod p) mod p)
         match ctx {
             Some(mut context) => self._mod_div(b, p, &mut context),
@@ -385,7 +384,7 @@ impl BigNumber {
     }
 
     ///(a * (1/b mod p) mod p)
-    fn _mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: &mut BigNumberContext)-> Result<BigNumber, IndyCryptoError> {
+    fn _mod_div(&self, b: &BigNumber, p: &BigNumber, ctx: &mut BigNumberContext)-> IndyCryptoResult<BigNumber> {
         let mut bn = BigNumber::new()?;
         BigNumRef::mod_mul(&mut bn.openssl_bn, &self.openssl_bn,
                            &b.inverse(p, Some(ctx))?.openssl_bn,
@@ -393,7 +392,7 @@ impl BigNumber {
         Ok(bn)
     }
 
-    pub fn random_qr(n: &BigNumber) -> Result<BigNumber, IndyCryptoError> {
+    pub fn random_qr(n: &BigNumber) -> IndyCryptoResult<BigNumber> {
         let qr = n
             .rand_range()?
             .sqr(None)?
@@ -401,13 +400,13 @@ impl BigNumber {
         Ok(qr)
     }
 
-    pub fn clone(&self) -> Result<BigNumber, IndyCryptoError> {
+    pub fn clone(&self) -> IndyCryptoResult<BigNumber> {
         Ok(BigNumber {
             openssl_bn: BigNum::from_slice(&self.openssl_bn.to_vec()[..])?
         })
     }
 
-    pub fn hash_array(nums: &Vec<Vec<u8>>) -> Result<Vec<u8>, IndyCryptoError> {
+    pub fn hash_array(nums: &Vec<Vec<u8>>) -> IndyCryptoResult<Vec<u8>> {
         let mut sha256 = Hasher::new(MessageDigest::sha256())?;
 
         for num in nums.iter() {
@@ -469,9 +468,9 @@ impl<'a> Deserialize<'a> for BigNumber {
 }
 
 impl From<ErrorStack> for IndyCryptoError {
-    fn from(err: ErrorStack) -> IndyCryptoError {
+    fn from(err: ErrorStack) -> Self {
         // TODO: FIXME: Analyze ErrorStack and split invalid structure errors from other errors
-        IndyCryptoError::InvalidStructure(err.description().to_string())
+        err.to_indy(IndyCryptoErrorKind::InvalidState, "Internal OpenSSL error")
     }
 }
 

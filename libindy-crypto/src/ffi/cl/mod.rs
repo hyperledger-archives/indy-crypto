@@ -1,7 +1,7 @@
 use cl::*;
 use cl::issuer::Issuer;
 use cl::verifier::Verifier;
-use errors::{IndyCryptoError, ToErrorCode};
+use errors::prelude::*;
 use ffi::ErrorCode;
 use utils::ctypes::CTypesUtils;
 
@@ -38,7 +38,7 @@ pub extern fn indy_crypto_cl_tails_generator_next(rev_tails_generator: *const c_
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code(),
+        Err(err) => err.into(),
     };
 
     trace!("indy_crypto_cl_tails_generator_next: <<< {:?}", res);
@@ -104,7 +104,7 @@ pub extern fn indy_crypto_cl_witness_new(rev_idx: u32,
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_witness_new: <<< res: {:?}", res);
@@ -128,7 +128,7 @@ pub extern fn indy_crypto_cl_witness_update(rev_idx: u32,
     let rta = FFITailsAccessor::new(ctx_tails, take_tail, put_tail);
     let res = match witness.update(rev_idx, max_cred_num, rev_reg_delta, &rta) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_witness_update: <<< res: {:?}", res);
@@ -175,7 +175,7 @@ pub extern fn indy_crypto_cl_credential_schema_builder_new(credential_schema_bui
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_schema_builder_new: <<< res: {:?}", res);
@@ -199,7 +199,7 @@ pub extern fn indy_crypto_cl_credential_schema_builder_add_attr(credential_schem
 
     let res = match credential_schema_builder.add_attr(&attr) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_schema_builder_add_attr: <<< res: {:?}", res);
@@ -235,7 +235,7 @@ pub extern fn indy_crypto_cl_credential_schema_builder_finalize(credential_schem
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_schema_builder_finalize: <<< res: {:?}", res);
@@ -286,7 +286,7 @@ pub extern fn indy_crypto_cl_non_credential_schema_builder_new(non_credential_sc
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_non_credential_schema_builder_new: <<< res: {:?}", res);
@@ -310,7 +310,7 @@ pub extern fn indy_crypto_cl_non_credential_schema_builder_add_attr(non_credenti
 
     let res = match non_credential_schema_builder.add_attr(&attr) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_non_credential_schema_builder_add_attr: <<< res: {:?}", res);
@@ -346,7 +346,7 @@ pub extern fn indy_crypto_cl_non_credential_schema_builder_finalize(non_credenti
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_non_credential_schema_builder_finalize: <<< res: {:?}", res);
@@ -397,7 +397,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_new(credential_values_bui
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_values_builder_new: <<< res: {:?}", res);
@@ -412,8 +412,8 @@ pub extern fn indy_crypto_cl_credential_values_builder_new(credential_values_bui
 /// * `dec_value` - Credential attr dec_value. Decimal BigNum representation as null terminated string.
 #[no_mangle]
 pub extern fn indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder: *const c_void,
-                                                                 attr: *const c_char,
-                                                                 dec_value: *const c_char) -> ErrorCode {
+                                                                     attr: *const c_char,
+                                                                     dec_value: *const c_char) -> ErrorCode {
     trace!("indy_crypto_cl_credential_values_builder_add_dec_known: >>> credential_values_builder: {:?}, attr: {:?}, dec_value: {:?}",
            credential_values_builder, attr, dec_value);
 
@@ -425,7 +425,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_add_dec_known(credential_
 
     let res = match credential_values_builder.add_dec_known(&attr, &dec_value) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_values_builder_add_dec_known: <<< res: {:?}", res);
@@ -453,7 +453,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_add_dec_hidden(credential
 
     let res = match credential_values_builder.add_dec_hidden(&attr, &dec_value) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_values_builder_add_dec_hidden: <<< res: {:?}", res);
@@ -484,7 +484,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_add_dec_commitment(creden
 
     let res = match credential_values_builder.add_dec_commitment(&attr, &dec_value, &dec_blinding_factor) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_values_builder_add_dec_commitment: <<< res: {:?}", res);
@@ -520,7 +520,7 @@ pub extern fn indy_crypto_cl_credential_values_builder_finalize(credential_value
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_credential_values_builder_finalize: <<< res: {:?}", res);
@@ -571,7 +571,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_new(sub_proof_request_bui
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_sub_proof_request_builder_new: <<< res: {:?}", res);
@@ -597,7 +597,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_add_revealed_attr(sub_pro
 
     let res = match sub_proof_request_builder.add_revealed_attr(&attr) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_sub_proof_request_builder_add_revealed_attr: <<< res: {:?}", res);
@@ -628,7 +628,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_add_predicate(sub_proof_r
 
     let res = match sub_proof_request_builder.add_predicate(&attr_name, &p_type, value) {
         Ok(_) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_sub_proof_request_builder_add_predicate: <<< res: {:?}", res);
@@ -665,7 +665,7 @@ pub extern fn indy_crypto_cl_sub_proof_request_builder_finalize(sub_proof_reques
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_sub_proof_request_builder_finalize: <<< res: {:?}", res);
@@ -712,7 +712,7 @@ pub extern fn indy_crypto_cl_new_nonce(nonce_p: *mut *const c_void) -> ErrorCode
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_new_nonce: <<< res: {:?}", res);
@@ -744,7 +744,9 @@ pub extern fn indy_crypto_cl_nonce_to_json(nonce: *const c_void,
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize nonce as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_nonce_to_json: <<< res: {:?}", res);
@@ -777,7 +779,9 @@ pub extern fn indy_crypto_cl_nonce_from_json(nonce_json: *const c_char,
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize nonce from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_nonce_from_json: <<< res: {:?}", res);
@@ -822,9 +826,9 @@ impl RevocationTailsAccessor for FFITailsAccessor {
 
         let res = (self.take)(self.ctx, tail_id, &mut tail_p);
         if res != ErrorCode::Success || tail_p.is_null() {
-            return Err(IndyCryptoError::InvalidState(
-                format!("FFI call take_tail {:?} (ctx {:?}, id {}) failed: tail_p {:?}, returned error code {:?}",
-                        self.take, self.ctx, tail_id, tail_p, res)));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidState,
+                               format!("FFI call take_tail {:?} (ctx {:?}, id {}) failed: tail_p {:?}, returned error code {:?}",
+                                       self.take, self.ctx, tail_id, tail_p, res)));
         }
         let tail: *const Tail = tail_p as *const Tail;
 
@@ -832,9 +836,9 @@ impl RevocationTailsAccessor for FFITailsAccessor {
 
         let res = (self.put)(self.ctx, tail_p);
         if res != ErrorCode::Success {
-            return Err(IndyCryptoError::InvalidState(
-                format!("FFI call put_tail {:?} (ctx {:?}, tail_p {:?}) failed: returned error code {:?}",
-                        self.take, self.ctx, tail_p, res)));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidState,
+                               format!("FFI call put_tail {:?} (ctx {:?}, tail_p {:?}) failed: returned error code {:?}",
+                                       self.take, self.ctx, tail_p, res)));
         }
 
         Ok(())
@@ -1278,32 +1282,32 @@ pub mod mocks {
         let attr = CString::new("name").unwrap();
         let dec_value = CString::new("1139481716457488690172217916278103335").unwrap();
         let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
-                                                                          attr.as_ptr(),
-                                                                          dec_value.as_ptr());
+                                                                              attr.as_ptr(),
+                                                                              dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 
         let attr = CString::new("sex").unwrap();
         let dec_value = CString::new("5944657099558967239210949258394887428692050081607692519917050011144233115103").unwrap();
         let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
-                                                                          attr.as_ptr(),
-                                                                          dec_value.as_ptr());
+                                                                              attr.as_ptr(),
+                                                                              dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 
         let attr = CString::new("age").unwrap();
         let dec_value = CString::new("28").unwrap();
         let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
-                                                                          attr.as_ptr(),
-                                                                          dec_value.as_ptr());
+                                                                              attr.as_ptr(),
+                                                                              dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 
         let attr = CString::new("height").unwrap();
         let dec_value = CString::new("175").unwrap();
         let err_code = indy_crypto_cl_credential_values_builder_add_dec_known(credential_values_builder,
-                                                                          attr.as_ptr(),
-                                                                          dec_value.as_ptr());
+                                                                              attr.as_ptr(),
+                                                                              dec_value.as_ptr());
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!credential_values_builder.is_null());
 

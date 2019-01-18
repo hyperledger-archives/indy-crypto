@@ -8,7 +8,7 @@ use std::env;
 use std::io::Write;
 use log::{Record, Metadata};
 
-use errors::IndyCryptoError;
+use errors::prelude::*;
 
 use self::libc::{c_void, c_char};
 use std::ffi::CString;
@@ -87,7 +87,7 @@ unsafe impl Sync for IndyCryptoLogger {}
 unsafe impl Send for IndyCryptoLogger {}
 
 impl IndyCryptoLogger {
-    pub fn init(context: *const c_void, enabled: Option<EnabledCB>, log: LogCB, flush: Option<FlushCB>) -> Result<(), IndyCryptoError> {
+    pub fn init(context: *const c_void, enabled: Option<EnabledCB>, log: LogCB, flush: Option<FlushCB>) -> IndyCryptoResult<()> {
         let logger = IndyCryptoLogger::new(context, enabled, log, flush);
 
         log::set_boxed_logger(Box::new(logger))?;
@@ -100,7 +100,7 @@ impl IndyCryptoLogger {
 pub struct IndyCryptoDefaultLogger;
 
 impl IndyCryptoDefaultLogger {
-    pub fn init(pattern: Option<String>) -> Result<(), IndyCryptoError> {
+    pub fn init(pattern: Option<String>) -> IndyCryptoResult<()> {
         let pattern = pattern.or(env::var("RUST_LOG").ok());
 
         Builder::new()

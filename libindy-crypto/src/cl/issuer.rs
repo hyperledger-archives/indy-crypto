@@ -1,6 +1,6 @@
 use bn::BigNumber;
 use cl::*;
-use errors::IndyCryptoError;
+use errors::prelude::*;
 use pair::*;
 use cl::constants::*;
 use cl::helpers::*;
@@ -27,12 +27,12 @@ impl Issuer {
     /// credential_schema_builder.add_attr("name").unwrap();
     /// let _credential_schema = credential_schema_builder.finalize().unwrap();
     /// ```
-    pub fn new_credential_schema_builder() -> Result<CredentialSchemaBuilder, IndyCryptoError> {
+    pub fn new_credential_schema_builder() -> IndyCryptoResult<CredentialSchemaBuilder> {
         let res = CredentialSchemaBuilder::new()?;
         Ok(res)
     }
 
-    pub fn new_non_credential_schema_builder() -> Result<NonCredentialSchemaBuilder, IndyCryptoError> {
+    pub fn new_non_credential_schema_builder() -> IndyCryptoResult<NonCredentialSchemaBuilder> {
         NonCredentialSchemaBuilder::new()
     }
 
@@ -59,9 +59,9 @@ impl Issuer {
     /// ```
     pub fn new_credential_def(credential_schema: &CredentialSchema,
                               non_credential_schema: &NonCredentialSchema,
-                              support_revocation: bool) -> Result<(CredentialPublicKey,
-                                                                   CredentialPrivateKey,
-                                                                   CredentialKeyCorrectnessProof), IndyCryptoError> {
+                              support_revocation: bool) -> IndyCryptoResult<(CredentialPublicKey,
+                                                                             CredentialPrivateKey,
+                                                                             CredentialKeyCorrectnessProof)> {
         trace!("Issuer::new_credential_def: >>> credential_schema: {:?}, support_revocation: {:?}", credential_schema, support_revocation);
 
         let (p_pub_key, p_priv_key, p_key_meta) =
@@ -115,16 +115,16 @@ impl Issuer {
     /// ```
     pub fn new_revocation_registry_def(credential_pub_key: &CredentialPublicKey,
                                        max_cred_num: u32,
-                                       issuance_by_default: bool) -> Result<(RevocationKeyPublic,
-                                                                             RevocationKeyPrivate,
-                                                                             RevocationRegistry,
-                                                                             RevocationTailsGenerator), IndyCryptoError> {
+                                       issuance_by_default: bool) -> IndyCryptoResult<(RevocationKeyPublic,
+                                                                                       RevocationKeyPrivate,
+                                                                                       RevocationRegistry,
+                                                                                       RevocationTailsGenerator)> {
         trace!("Issuer::new_revocation_registry_def: >>> credential_pub_key: {:?}, max_cred_num: {:?}, issuance_by_default: {:?}",
                credential_pub_key, max_cred_num, issuance_by_default);
 
         let cred_rev_pub_key: &CredentialRevocationPublicKey = credential_pub_key.r_key
             .as_ref()
-            .ok_or(IndyCryptoError::InvalidStructure(format!("There are not revocation keys in the credential public key.")))?;
+            .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, "There are not revocation keys in the credential public key."))?;
 
         let (rev_key_pub, rev_key_priv) = Issuer::_new_revocation_registry_keys(cred_rev_pub_key, max_cred_num)?;
 
@@ -158,7 +158,7 @@ impl Issuer {
     /// credential_values_builder.add_dec_known("name", "1139481716457488690172217916278103335").unwrap();
     /// let _credential_values = credential_values_builder.finalize().unwrap();
     /// ```
-    pub fn new_credential_values_builder() -> Result<CredentialValuesBuilder, IndyCryptoError> {
+    pub fn new_credential_values_builder() -> IndyCryptoResult<CredentialValuesBuilder> {
         let res = CredentialValuesBuilder::new()?;
         Ok(res)
     }
@@ -221,7 +221,7 @@ impl Issuer {
                            credential_issuance_nonce: &Nonce,
                            credential_values: &CredentialValues,
                            credential_pub_key: &CredentialPublicKey,
-                           credential_priv_key: &CredentialPrivateKey) -> Result<(CredentialSignature, SignatureCorrectnessProof), IndyCryptoError> {
+                           credential_priv_key: &CredentialPrivateKey) -> IndyCryptoResult<(CredentialSignature, SignatureCorrectnessProof)> {
         trace!("Issuer::sign_credential: >>> prover_id: {:?}\n \
                                              blinded_credential_secrets: {:?}\n \
                                              blinded_credential_secrets_correctness_proof: {:?}\n \
@@ -230,19 +230,19 @@ impl Issuer {
                                              credential_values: {:?}\n \
                                              credential_pub_key: {:?}\n \
                                              credential_priv_key: {:?}",
-                                            prover_id,
-                                            blinded_credential_secrets,
-                                            blinded_credential_secrets_correctness_proof,
-                                            credential_nonce,
-                                            credential_issuance_nonce,
-                                            secret!(credential_values),
-                                            credential_pub_key,
-                                            secret!(credential_priv_key));
+               prover_id,
+               blinded_credential_secrets,
+               blinded_credential_secrets_correctness_proof,
+               credential_nonce,
+               credential_issuance_nonce,
+               secret!(credential_values),
+               credential_pub_key,
+               secret!(credential_priv_key));
 
         Issuer::_check_blinded_credential_secrets_correctness_proof(blinded_credential_secrets,
-                                                               blinded_credential_secrets_correctness_proof,
-                                                               credential_nonce,
-                                                               &credential_pub_key.p_key)?;
+                                                                    blinded_credential_secrets_correctness_proof,
+                                                                    credential_nonce,
+                                                                    &credential_pub_key.p_key)?;
 
         // In the anoncreds whitepaper, `credential context` is denoted by `m2`
         let cred_context = Issuer::_gen_credential_context(prover_id, None)?;
@@ -350,8 +350,9 @@ impl Issuer {
                                            rev_reg: &mut RevocationRegistry,
                                            rev_key_priv: &RevocationKeyPrivate,
                                            rev_tails_accessor: &RTA)
-                                           -> Result<(CredentialSignature, SignatureCorrectnessProof, Option<RevocationRegistryDelta>),
-                                               IndyCryptoError> where RTA: RevocationTailsAccessor {
+                                           -> IndyCryptoResult<(CredentialSignature,
+                                                                SignatureCorrectnessProof,
+                                                                Option<RevocationRegistryDelta>)> where RTA: RevocationTailsAccessor {
         trace!("Issuer::sign_credential: >>> prover_id: {:?}, blinded_credential_secrets: {:?}, blinded_credential_secrets_correctness_proof: {:?},\
         credential_nonce: {:?}, credential_issuance_nonce: {:?}, credential_values: {:?}, credential_pub_key: {:?}, credential_priv_key: {:?}, \
         rev_idx: {:?}, max_cred_num: {:?}, rev_reg: {:?}, rev_key_priv: {:?}",
@@ -461,7 +462,7 @@ impl Issuer {
     pub fn revoke_credential<RTA>(rev_reg: &mut RevocationRegistry,
                                   max_cred_num: u32,
                                   rev_idx: u32,
-                                  rev_tails_accessor: &RTA) -> Result<RevocationRegistryDelta, IndyCryptoError> where RTA: RevocationTailsAccessor {
+                                  rev_tails_accessor: &RTA) -> IndyCryptoResult<RevocationRegistryDelta> where RTA: RevocationTailsAccessor {
         trace!("Issuer::revoke_credential: >>> rev_reg: {:?}, max_cred_num: {:?}, rev_idx: {:?}", rev_reg, max_cred_num, secret!(rev_idx));
 
         let prev_accum = rev_reg.accum.clone();
@@ -549,7 +550,7 @@ impl Issuer {
     pub fn recovery_credential<RTA>(rev_reg: &mut RevocationRegistry,
                                     max_cred_num: u32,
                                     rev_idx: u32,
-                                    rev_tails_accessor: &RTA) -> Result<RevocationRegistryDelta, IndyCryptoError> where RTA: RevocationTailsAccessor {
+                                    rev_tails_accessor: &RTA) -> IndyCryptoResult<RevocationRegistryDelta> where RTA: RevocationTailsAccessor {
         trace!("Issuer::recovery_credential: >>> rev_reg: {:?}, max_cred_num: {:?}, rev_idx: {:?}", rev_reg, max_cred_num, secret!(rev_idx));
 
         let prev_accum = rev_reg.accum.clone();
@@ -574,15 +575,15 @@ impl Issuer {
 
     fn _new_credential_primary_keys(credential_schema: &CredentialSchema,
                                     non_credential_schema: &NonCredentialSchema) ->
-                                                                          Result<(CredentialPrimaryPublicKey,
-                                                                                  CredentialPrimaryPrivateKey,
-                                                                                  CredentialPrimaryPublicKeyMetadata), IndyCryptoError> {
+                                    IndyCryptoResult<(CredentialPrimaryPublicKey,
+                                                      CredentialPrimaryPrivateKey,
+                                                      CredentialPrimaryPublicKeyMetadata)> {
         trace!("Issuer::_new_credential_primary_keys: >>> credential_schema: {:?}", credential_schema);
 
         let mut ctx = BigNumber::new_context()?;
 
         if credential_schema.attrs.len() == 0 {
-            return Err(IndyCryptoError::InvalidStructure(format!("List of attributes is empty")));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, "List of attributes is empty"));
         }
 
         let p_safe = generate_safe_prime(LARGE_PRIME)?;
@@ -623,8 +624,8 @@ impl Issuer {
         Ok((cred_pr_pub_key, cred_pr_priv_key, cred_pr_pub_key_metadata))
     }
 
-    fn _new_credential_revocation_keys() -> Result<(CredentialRevocationPublicKey,
-                                                    CredentialRevocationPrivateKey), IndyCryptoError> {
+    fn _new_credential_revocation_keys() -> IndyCryptoResult<(CredentialRevocationPublicKey,
+                                                              CredentialRevocationPrivateKey)> {
         trace!("Issuer::_new_credential_revocation_keys: >>>");
 
         let h = PointG1::new()?;
@@ -654,7 +655,7 @@ impl Issuer {
 
     fn _new_credential_key_correctness_proof(cred_pr_pub_key: &CredentialPrimaryPublicKey,
                                              cred_pr_priv_key: &CredentialPrimaryPrivateKey,
-                                             cred_pr_pub_key_meta: &CredentialPrimaryPublicKeyMetadata) -> Result<CredentialKeyCorrectnessProof, IndyCryptoError> {
+                                             cred_pr_pub_key_meta: &CredentialPrimaryPublicKeyMetadata) -> IndyCryptoResult<CredentialKeyCorrectnessProof> {
         trace!("Issuer::_new_credential_key_correctness_proof: >>> cred_pr_pub_key: {:?}, cred_pr_priv_key: {:?}, cred_pr_pub_key_meta: {:?}",
                cred_pr_pub_key, secret!(cred_pr_priv_key), cred_pr_pub_key_meta);
 
@@ -712,7 +713,7 @@ impl Issuer {
     fn _new_revocation_registry(cred_rev_pub_key: &CredentialRevocationPublicKey,
                                 rev_key_priv: &RevocationKeyPrivate,
                                 max_cred_num: u32,
-                                issuance_by_default: bool) -> Result<RevocationRegistry, IndyCryptoError> {
+                                issuance_by_default: bool) -> IndyCryptoResult<RevocationRegistry> {
         trace!("Issuer::_new_revocation_registry: >>> cred_rev_pub_key: {:?}, rev_key_priv: {:?}, max_cred_num: {:?}, issuance_by_default: {:?}",
                cred_rev_pub_key, secret!(rev_key_priv), max_cred_num, issuance_by_default);
 
@@ -735,7 +736,7 @@ impl Issuer {
     }
 
     fn _new_revocation_registry_keys(cred_rev_pub_key: &CredentialRevocationPublicKey,
-                                     max_cred_num: u32) -> Result<(RevocationKeyPublic, RevocationKeyPrivate), IndyCryptoError> {
+                                     max_cred_num: u32) -> IndyCryptoResult<(RevocationKeyPublic, RevocationKeyPrivate)> {
         trace!("Issuer::_new_revocation_registry_keys: >>> cred_rev_pub_key: {:?}, max_cred_num: {:?}",
                cred_rev_pub_key, max_cred_num);
 
@@ -757,7 +758,7 @@ impl Issuer {
     fn _check_blinded_credential_secrets_correctness_proof(blinded_cred_secrets: &BlindedCredentialSecrets,
                                                            blinded_cred_secrets_correctness_proof: &BlindedCredentialSecretsCorrectnessProof,
                                                            nonce: &Nonce,
-                                                           cred_pr_pub_key: &CredentialPrimaryPublicKey) -> Result<(), IndyCryptoError> {
+                                                           cred_pr_pub_key: &CredentialPrimaryPublicKey) -> IndyCryptoResult<()> {
         trace!("Issuer::_check_blinded_credential_secrets_correctness_proof: >>> blinded_cred_secrets: {:?}, blinded_cred_secrets_correctness_proof: {:?},\
          nonce: {:?}, cred_pr_pub_key: {:?}", blinded_cred_secrets, blinded_cred_secrets_correctness_proof, nonce, cred_pr_pub_key);
 
@@ -765,32 +766,32 @@ impl Issuer {
         let mut ctx = BigNumber::new_context()?;
 
         let u_cap = blinded_cred_secrets.hidden_attributes
-                                        .iter()
-                                        .fold(blinded_cred_secrets.u
-                                                    .inverse(&cred_pr_pub_key.n, Some(&mut ctx))?
-                                                    .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
-                                                    .mod_mul(
-                                                        &cred_pr_pub_key.s.mod_exp(&blinded_cred_secrets_correctness_proof.v_dash_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
-                                                        &cred_pr_pub_key.n,
-                                                        Some(&mut ctx)
-                                                    ),
-                                              |acc, attr| {
-                                                  let pk_r = cred_pr_pub_key.r
-                                                                    .get(&attr.clone())
-                                                                    .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in cred_pr_pub_key.r", attr)))?;
-                                                  let m_cap = &blinded_cred_secrets_correctness_proof.m_caps[attr];
-                                                  acc?.mod_mul(&pk_r.mod_exp(&m_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
-                                                               &cred_pr_pub_key.n, Some(&mut ctx))
-                                              })?;
+            .iter()
+            .fold(blinded_cred_secrets.u
+                      .inverse(&cred_pr_pub_key.n, Some(&mut ctx))?
+                      .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
+                      .mod_mul(
+                          &cred_pr_pub_key.s.mod_exp(&blinded_cred_secrets_correctness_proof.v_dash_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
+                          &cred_pr_pub_key.n,
+                          Some(&mut ctx)
+                      ),
+                  |acc, attr| {
+                      let pk_r = cred_pr_pub_key.r
+                          .get(&attr.clone())
+                          .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, format!("Value by key '{}' not found in cred_pr_pub_key.r", attr)))?;
+                      let m_cap = &blinded_cred_secrets_correctness_proof.m_caps[attr];
+                      acc?.mod_mul(&pk_r.mod_exp(&m_cap, &cred_pr_pub_key.n, Some(&mut ctx))?,
+                                   &cred_pr_pub_key.n, Some(&mut ctx))
+                  })?;
 
         for (key, value) in &blinded_cred_secrets.committed_attributes {
             let m_cap = &blinded_cred_secrets_correctness_proof.m_caps[key];
             let comm_att_cap = value.inverse(&cred_pr_pub_key.n, Some(&mut ctx))?
-                                    .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
-                                    .mod_mul(&get_pedersen_commitment(&cred_pr_pub_key.z, &m_cap,
-                                                                      &cred_pr_pub_key.s, &blinded_cred_secrets_correctness_proof.r_caps[key],
-                                                                      &cred_pr_pub_key.n, &mut ctx)?,
-                                             &cred_pr_pub_key.n, Some(&mut ctx))?;
+                .mod_exp(&blinded_cred_secrets_correctness_proof.c, &cred_pr_pub_key.n, Some(&mut ctx))?
+                .mod_mul(&get_pedersen_commitment(&cred_pr_pub_key.z, &m_cap,
+                                                  &cred_pr_pub_key.s, &blinded_cred_secrets_correctness_proof.r_caps[key],
+                                                  &cred_pr_pub_key.n, &mut ctx)?,
+                         &cred_pr_pub_key.n, Some(&mut ctx))?;
 
             values.extend_from_slice(&comm_att_cap.to_bytes()?);
             values.extend_from_slice(&value.to_bytes()?);
@@ -806,7 +807,7 @@ impl Issuer {
         let valid = blinded_cred_secrets_correctness_proof.c.eq(&c);
 
         if !valid {
-            return Err(IndyCryptoError::InvalidStructure(format!("Invalid BlindedCredentialSecrets correctness proof")));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, "Invalid BlindedCredentialSecrets correctness proof"));
         }
 
         trace!("Issuer::_check_blinded_credential_secrets_correctness_proof: <<<");
@@ -815,7 +816,7 @@ impl Issuer {
     }
 
     // In the anoncreds whitepaper, `credential context` is denoted by `m2`
-    fn _gen_credential_context(prover_id: &str, rev_idx: Option<u32>) -> Result<BigNumber, IndyCryptoError> {
+    fn _gen_credential_context(prover_id: &str, rev_idx: Option<u32>) -> IndyCryptoResult<BigNumber> {
         trace!("Issuer::_calc_m2: >>> prover_id: {:?}, rev_idx: {:?}", prover_id, secret!(rev_idx));
 
         let rev_idx = rev_idx.map(|i| i as i32).unwrap_or(-1);
@@ -838,7 +839,7 @@ impl Issuer {
                                cred_pub_key: &CredentialPublicKey,
                                cred_priv_key: &CredentialPrivateKey,
                                blinded_credential_secrets: &BlindedCredentialSecrets,
-                               cred_values: &CredentialValues) -> Result<(PrimaryCredentialSignature, BigNumber), IndyCryptoError> {
+                               cred_values: &CredentialValues) -> IndyCryptoResult<(PrimaryCredentialSignature, BigNumber)> {
         trace!("Issuer::_new_primary_credential: >>> credential_context: {:?}, cred_pub_key: {:?}, cred_priv_key: {:?}, blinded_ms: {:?},\
          cred_values: {:?}", secret!(credential_context), cred_pub_key, secret!(cred_priv_key), blinded_credential_secrets, secret!(cred_values));
 
@@ -860,7 +861,7 @@ impl Issuer {
                                 cred_values: &CredentialValues,
                                 v: &BigNumber,
                                 blinded_cred_secrets: &BlindedCredentialSecrets,
-                                e: &BigNumber) -> Result<(BigNumber, BigNumber), IndyCryptoError> {
+                                e: &BigNumber) -> IndyCryptoResult<(BigNumber, BigNumber)> {
         trace!("Issuer::_sign_primary_credential: >>> cred_pub_key: {:?}, \
                                                       cred_priv_key: {:?}, \
                                                       cred_context: {:?}, \
@@ -868,7 +869,7 @@ impl Issuer {
                                                       v: {:?},\
                                                       blinded_cred_secrets: {:?}, \
                                                       e: {:?}", cred_pub_key, secret!(cred_priv_key), secret!(cred_context), secret!(cred_values),
-                                                                secret!(v), blinded_cred_secrets, secret!(e));
+               secret!(v), blinded_cred_secrets, secret!(e));
 
         let p_pub_key = &cred_pub_key.p_key;
         let p_priv_key = &cred_priv_key.p_key;
@@ -886,10 +887,10 @@ impl Issuer {
         for (key, attr) in cred_values.attrs_values.iter().filter(|&(_, v)| v.is_known()) {
             let pk_r = p_pub_key.r
                 .get(key)
-                .ok_or(IndyCryptoError::InvalidStructure(format!("Value by key '{}' not found in pk.r", key)))?;
+                .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, format!("Value by key '{}' not found in pk.r", key)))?;
 
             rx = pk_r.mod_exp(attr.value(), &p_pub_key.n, Some(&mut context))?
-                     .mod_mul(&rx, &p_pub_key.n, Some(&mut context))?;
+                .mod_mul(&rx, &p_pub_key.n, Some(&mut context))?;
         }
 
         let q = p_pub_key.z.mod_div(&rx, &p_pub_key.n, Some(&mut context))?;
@@ -908,7 +909,7 @@ impl Issuer {
                                         p_priv_key: &CredentialPrimaryPrivateKey,
                                         p_cred_signature: &PrimaryCredentialSignature,
                                         q: &BigNumber,
-                                        nonce: &BigNumber) -> Result<SignatureCorrectnessProof, IndyCryptoError> {
+                                        nonce: &BigNumber) -> IndyCryptoResult<SignatureCorrectnessProof> {
         trace!("Issuer::_new_signature_correctness_proof: >>> p_pub_key: {:?}, p_priv_key: {:?}, p_cred_signature: {:?}, q: {:?}, nonce: {:?}",
                p_pub_key, secret!(p_priv_key), secret!(p_cred_signature), secret!(q), nonce);
 
@@ -954,22 +955,22 @@ impl Issuer {
                                       rev_reg: &mut RevocationRegistry,
                                       rev_key_priv: &RevocationKeyPrivate,
                                       rev_tails_accessor: &RevocationTailsAccessor)
-                                      -> Result<(NonRevocationCredentialSignature, Option<RevocationRegistryDelta>), IndyCryptoError> {
+                                      -> IndyCryptoResult<(NonRevocationCredentialSignature, Option<RevocationRegistryDelta>)> {
         trace!("Issuer::_new_non_revocation_credential: >>> rev_idx: {:?}, cred_context: {:?}, blinded_ms: {:?}, cred_pub_key: {:?}, cred_priv_key: {:?}, \
         max_cred_num: {:?}, issuance_by_default: {:?}, rev_reg: {:?}, rev_key_priv: {:?}",
                secret!(rev_idx), secret!(cred_context), blinded_credential_secrets, cred_pub_key, secret!(cred_priv_key), max_cred_num,
                issuance_by_default, rev_reg, secret!(rev_key_priv));
 
         let ur = blinded_credential_secrets.ur
-            .ok_or(IndyCryptoError::InvalidStructure(format!("No revocation part present in blinded master secret.")))?;
+            .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, "No revocation part present in blinded master secret."))?;
 
         let r_pub_key: &CredentialRevocationPublicKey = cred_pub_key.r_key
             .as_ref()
-            .ok_or(IndyCryptoError::InvalidStructure(format!("No revocation part present in credential revocation public key.")))?;
+            .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, "No revocation part present in credential revocation public key.er secret."))?;
 
         let r_priv_key: &CredentialRevocationPrivateKey = cred_priv_key.r_key
             .as_ref()
-            .ok_or(IndyCryptoError::InvalidStructure(format!("No revocation part present in credential revocation private key.")))?;
+            .ok_or(err_msg(IndyCryptoErrorKind::InvalidStructure, "No revocation part present in credential revocation private key."))?;
 
         let vr_prime_prime = GroupOrderElement::new()?;
         let c = GroupOrderElement::new()?;
@@ -1151,13 +1152,13 @@ mod tests {
 
         let credential_issuance_nonce = mocks::credential_issuance_nonce();
         let (credential_signature, signature_correctness_proof) = Issuer::sign_credential(prover_mocks::PROVER_DID,
-                                                                                        &blinded_credential_secrets,
-                                                                                        &blinded_credential_secrets_correctness_proof,
-                                                                                        &blinded_credential_secrets_nonce,
-                                                                                        &credential_issuance_nonce,
-                                                                                        &mocks::credential_values(),
-                                                                                        &pub_key,
-                                                                                        &priv_key).unwrap();
+                                                                                          &blinded_credential_secrets,
+                                                                                          &blinded_credential_secrets_correctness_proof,
+                                                                                          &blinded_credential_secrets_nonce,
+                                                                                          &credential_issuance_nonce,
+                                                                                          &mocks::credential_values(),
+                                                                                          &pub_key,
+                                                                                          &priv_key).unwrap();
         let expected_credential_signature = PrimaryCredentialSignature {
             m_2: BigNumber::from_dec("69277050336954731912953999596899794023422356864020449587821228635678593076726").unwrap(),
             a: BigNumber::from_dec("55719771527635648642663059873751548110003729526149768023348858761822676000319120364271506409606539553745362391988089712782860839380068362174882980970881205548257443324903474770234925851710931167775881095664795219486517097171157739892044533499307580918474233127480498002931380124437871288479961391946733518111263194694163949838217942811760487772894297581985192342667648521402217438775092084212936876662889013332343946485295171338468571445265090484223332117189032952075382194564086833180320161752685274392741586927843333240045100816206184612454596135115597095225936094775557087900195330393833903341104420421910270703292").unwrap(),
@@ -1177,7 +1178,7 @@ mod tests {
     #[test]
     #[ignore]
     fn generate_mocks() {
-//        MockHelper::inject();
+        //        MockHelper::inject();
 
         let mut credential_schema_builder = Issuer::new_credential_schema_builder().unwrap();
         credential_schema_builder.add_attr("name").unwrap();
@@ -1212,10 +1213,10 @@ mod tests {
         println!("credential_nonce={:#?}", credential_nonce);
 
         let (blinded_credential_secrets, credential_secrets_blinding_factors, blinded_credential_secrets_correctness_proof) =
-                    Prover::blind_credential_secrets(&cred_pub_key,
-                                                     &cred_key_correctness_proof,
-                                                     &cred_values,
-                                                     &credential_nonce).unwrap();
+            Prover::blind_credential_secrets(&cred_pub_key,
+                                             &cred_key_correctness_proof,
+                                             &cred_values,
+                                             &credential_nonce).unwrap();
 
         println!("blinded_credential_secrets={:#?}", blinded_credential_secrets);
         println!("credential_secrets_blinding_factors={:#?}", credential_secrets_blinding_factors);
@@ -1236,20 +1237,20 @@ mod tests {
 
         let rev_idx = 1;
         let (mut cred_signature, signature_correctness_proof, rev_reg_delta) =
-                Issuer::sign_credential_with_revoc(prover_mocks::PROVER_DID,
-                                                   &blinded_credential_secrets,
-                                                   &blinded_credential_secrets_correctness_proof,
-                                                   &credential_nonce,
-                                                   &credential_issuance_nonce,
-                                                   &cred_values,
-                                                   &cred_pub_key,
-                                                   &cred_priv_key,
-                                                   rev_idx,
-                                                   max_cred_num,
-                                                   issuance_by_default,
-                                                   &mut rev_reg,
-                                                   &rev_key_priv,
-                                                   &simple_tail_accessor).unwrap();
+            Issuer::sign_credential_with_revoc(prover_mocks::PROVER_DID,
+                                               &blinded_credential_secrets,
+                                               &blinded_credential_secrets_correctness_proof,
+                                               &credential_nonce,
+                                               &credential_issuance_nonce,
+                                               &cred_values,
+                                               &cred_pub_key,
+                                               &cred_priv_key,
+                                               rev_idx,
+                                               max_cred_num,
+                                               issuance_by_default,
+                                               &mut rev_reg,
+                                               &rev_key_priv,
+                                               &simple_tail_accessor).unwrap();
 
         println!("before prover cred_signature={:#?}", cred_signature);
         println!("signature_correctness_proof={:#?}", signature_correctness_proof);
@@ -1383,7 +1384,7 @@ pub mod mocks {
     }
 
     pub fn signature_correctness_proof() -> SignatureCorrectnessProof {
-       SignatureCorrectnessProof {
+        SignatureCorrectnessProof {
             se: BigNumber::from_dec("3334734537522595512130255204133576712888755832249176083829428441939484521962804521556620094862929027472521530337737372127156982501631895923027581299032722136993626472436312493350606297392721442916460565303530477182166558150689207096881806903677798289757210986840223117805945763699774384181290561808002946169805087348964132559339873177551439262849906217425469248654905829499247516863359675175822562426801635372672443279878805810021594383745145548507699220260239027982287123656569649154121094723210761036335764581415392051068843187248254772717213818807839122116342319394224327812228224419041726224950128546006908776081").unwrap(),
             c: BigNumber::from_dec("107139004283129840615455074936926563695810744359362642795914598982169317704824").unwrap()
         }
@@ -1398,14 +1399,14 @@ pub mod mocks {
             g_i: PointG1::from_string("1 15A85746D992E2E8E63447D76E63681DE743CB462817D7FA39B8A039A309E618 1 08271151A4DF81C629EE8E468968DDB4D3CD35D22342F7CEC6698A99317E892F 1 095E45DDF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8").unwrap(),
             i: 1,
             m2: GroupOrderElement::from_string("099A79BA1F6D7DD6247DBE701CAE80805BED79B043B875CBB37D412BFCA6D402").unwrap(),
-            }
+        }
     }
 
     fn witness_signature() -> WitnessSignature {
         WitnessSignature {
             sigma_i: PointG2::from_string("1 02680D6A364915CE54A5E1DA89E7F1530B9394D2756312D6D97F776B0F39CC6F 1 15DE23D8864E2703884B81CB93EC5E8EE75D59BF2A8957F1C853C7407A3AF9AC 1 06B72EAC18E9FF42298D7B9B7F220E00A944FFC1864755EBB79A70E82C370335 1 116BF610CC4368D001D9F0BE121EE8DF2C7F0BEE2F1B3FE954EAF36C13DFD06F 1 095E45DDF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8 1 0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-                u_i: PointG2::from_string("1 076EF2B88CFA0A0F9F6C0D64E2F4BFEEC60695568C8E8157E5D540513002E157 1 03D08363B8658101B730333849E25048B145260E33A289B8933AF7BD1F488386 1 19C0C5E9F4A319CD5C8066EAE01A470A6B1689449BA919077B04A7D1682403EB 1 1A521BBD8C9E9B456163E87CA6B06B0F55C616E3494EE75A089881CB0EA6BCE9 1 095E45DDF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8 1 0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
-                g_i: PointG1::from_string("1 15A85746D992E2E8E63447D76E63681DE743CB462817D7FA39B8A039A309E618 1 08271151A4DF81C629EE8E468968DDB4D3CD35D22342F7CEC6698A99317E892F 1 0095E45DF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8").unwrap()
+            u_i: PointG2::from_string("1 076EF2B88CFA0A0F9F6C0D64E2F4BFEEC60695568C8E8157E5D540513002E157 1 03D08363B8658101B730333849E25048B145260E33A289B8933AF7BD1F488386 1 19C0C5E9F4A319CD5C8066EAE01A470A6B1689449BA919077B04A7D1682403EB 1 1A521BBD8C9E9B456163E87CA6B06B0F55C616E3494EE75A089881CB0EA6BCE9 1 095E45DDF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8 1 0000000000000000000000000000000000000000000000000000000000000000").unwrap(),
+            g_i: PointG1::from_string("1 15A85746D992E2E8E63447D76E63681DE743CB462817D7FA39B8A039A309E618 1 08271151A4DF81C629EE8E468968DDB4D3CD35D22342F7CEC6698A99317E892F 1 0095E45DF417D05FB10933FFC63D474548B7FFFF7888802F07FFFFFF7D07A8A8").unwrap()
         }
     }
 

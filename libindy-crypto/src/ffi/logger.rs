@@ -3,11 +3,10 @@ extern crate libc;
 use self::libc::{c_void, c_char};
 
 use ffi::ErrorCode;
+use errors::prelude::*;
 
 extern crate time;
 extern crate log;
-
-use errors::ToErrorCode;
 
 use utils::logger::{EnabledCB, LogCB, FlushCB, IndyCryptoLogger, IndyCryptoDefaultLogger};
 use utils::ctypes::CTypesUtils;
@@ -35,7 +34,7 @@ pub extern fn indy_crypto_set_logger(context: *const c_void,
 
     let res = match IndyCryptoLogger::init(context, enabled, log, flush) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_set_logger: <<< res: {:?}", res);
@@ -65,7 +64,7 @@ pub extern fn indy_crypto_set_default_logger(pattern: *const c_char) -> ErrorCod
 
     let res = match IndyCryptoDefaultLogger::init(pattern) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_set_default_logger: <<< res: {:?}", res);

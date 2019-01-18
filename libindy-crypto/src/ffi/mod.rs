@@ -2,6 +2,10 @@ pub mod cl;
 pub mod bls;
 pub mod logger;
 
+use errors::prelude::*;
+
+use libc::c_char;
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 #[repr(usize)]
 pub enum ErrorCode
@@ -66,4 +70,57 @@ pub enum ErrorCode
 
     // Proof rejected
     AnoncredsProofRejected = 118,
+}
+
+/// Get details for last occurred error.
+///
+/// NOTE: Error is stored until the next one occurs.
+///       Returning pointer has the same lifetime.
+///
+/// #Params
+/// * `error_json_p` - Reference that will contain error details (if any error has occurred before)
+///  in the format:
+/// {
+///     "backtrace": Optional<str> - error backtrace.
+///         Collecting of backtrace can be enabled by setting environment variable `RUST_BACKTRACE=1`
+///     "message": str - human-readable error description
+/// }
+///
+#[no_mangle]
+pub extern fn indy_crypto_get_current_error(error_json_p: *mut *const c_char) {
+    trace!("indy_crypto_get_current_error >>> error_json_p: {:?}", error_json_p);
+
+    let error = get_current_error_c_json();
+    unsafe { *error_json_p = error };
+
+    trace!("indy_crypto_get_current_error: <<<");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::ptr;
+    use ffi::cl::issuer::indy_crypto_cl_credential_private_key_from_json;
+    use utils::ctypes::CTypesUtils;
+
+    #[test]
+    fn indy_crypto_get_current_error_works() {
+        let mut error_json_p: *const c_char = ptr::null();
+
+        indy_crypto_cl_credential_private_key_from_json(ptr::null(), &mut ptr::null());
+
+        indy_crypto_get_current_error(&mut error_json_p);
+        let error_json_1 = CTypesUtils::c_str_to_string(error_json_p).unwrap();
+        assert!(error_json_1.is_some());
+
+        let credential_priv_key = CTypesUtils::string_to_cstring("some wrong data".to_string());
+        indy_crypto_cl_credential_private_key_from_json(credential_priv_key.as_ptr(), &mut ptr::null());
+
+        indy_crypto_get_current_error(&mut error_json_p);
+        let error_json_2 = CTypesUtils::c_str_to_string(error_json_p).unwrap();
+        assert!(error_json_2.is_some());
+
+        assert_ne!(error_json_1.unwrap(), error_json_2.unwrap());
+    }
 }
