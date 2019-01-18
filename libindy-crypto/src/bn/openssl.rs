@@ -599,6 +599,13 @@ mod tests {
         assert_eq!(num.lshift1().unwrap(), BigNumber::from_u32(2000).unwrap());
     }
 
+    #[test]
+    fn clone_negative_works() {
+        let num = BigNumber::from_dec("-1").unwrap();
+        let num_cloned = num.clone().unwrap();
+        assert_eq!(num, num_cloned);
+    }
+
     #[cfg(feature = "serialization")]
     #[derive(Serialize, Deserialize)]
     struct Test {
