@@ -2,7 +2,7 @@ use cl::issuer::*;
 use cl::*;
 use ffi::ErrorCode;
 use ffi::cl::{FFITailTake, FFITailPut, FFITailsAccessor};
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
 use libc::c_char;
 use errors::prelude::*;
 
@@ -102,7 +102,7 @@ pub extern fn indy_crypto_cl_credential_public_key_to_json(credential_pub_key: *
         Ok(credential_pub_key_json) => {
             trace!("indy_crypto_cl_credential_public_key_to_json: credential_pub_key_json: {:?}", credential_pub_key_json);
             unsafe {
-                let issuer_pub_key_json = CTypesUtils::string_to_cstring(credential_pub_key_json);
+                let issuer_pub_key_json = string_to_cstring(credential_pub_key_json);
                 *credential_pub_key_json_p = issuer_pub_key_json.into_raw();
                 trace!("indy_crypto_cl_credential_private_key_to_json: credential_pub_key_json_p: {:?}", *credential_pub_key_json_p);
             }
@@ -191,7 +191,7 @@ pub extern fn indy_crypto_cl_credential_private_key_to_json(credential_priv_key:
         Ok(credential_priv_key_json) => {
             trace!("indy_crypto_cl_credential_private_key_to_json: credential_priv_key_json: {:?}", secret!(&credential_priv_key_json));
             unsafe {
-                let credential_priv_key_json = CTypesUtils::string_to_cstring(credential_priv_key_json);
+                let credential_priv_key_json = string_to_cstring(credential_priv_key_json);
                 *credential_priv_key_json_p = credential_priv_key_json.into_raw();
                 trace!("indy_crypto_cl_credential_private_key_to_json: credential_priv_key_json_p: {:?}", *credential_priv_key_json_p);
             }
@@ -234,7 +234,7 @@ pub extern fn indy_crypto_cl_credential_private_key_from_json(credential_priv_ke
             ErrorCode::Success
         }
         Err(err) => {
-            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential public key from json").into()
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential private key from json").into()
         }
     };
 
@@ -281,14 +281,14 @@ pub extern fn indy_crypto_cl_credential_key_correctness_proof_to_json(credential
         Ok(credential_key_correctness_proof_json) => {
             trace!("indy_crypto_cl_credential_key_correctness_proof_to_json: credential_key_correctness_proof_json: {:?}", credential_key_correctness_proof_json);
             unsafe {
-                let credential_key_correctness_proof_json = CTypesUtils::string_to_cstring(credential_key_correctness_proof_json);
+                let credential_key_correctness_proof_json = string_to_cstring(credential_key_correctness_proof_json);
                 *credential_key_correctness_proof_json_p = credential_key_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_credential_key_correctness_proof_to_json: credential_key_correctness_proof_json_p: {:?}", *credential_key_correctness_proof_json_p);
             }
             ErrorCode::Success
         }
         Err(err) => {
-            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential correctness proof as json").into()
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential key correctness proof as json").into()
         }
     };
 
@@ -435,14 +435,14 @@ pub extern fn indy_crypto_cl_revocation_key_public_to_json(rev_key_pub: *const c
         Ok(rev_key_pub_json) => {
             trace!("indy_crypto_cl_revocation_key_public_to_json: rev_key_pub_json: {:?}", rev_key_pub_json);
             unsafe {
-                let rev_reg_def_pub_json = CTypesUtils::string_to_cstring(rev_key_pub_json);
+                let rev_reg_def_pub_json = string_to_cstring(rev_key_pub_json);
                 *rev_key_pub_json_p = rev_reg_def_pub_json.into_raw();
                 trace!("indy_crypto_cl_revocation_key_public_to_json: rev_key_pub_json_p: {:?}", *rev_key_pub_json_p);
             }
             ErrorCode::Success
         }
         Err(err) => {
-            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation public key as json").into()
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation key public as json").into()
         }
     };
 
@@ -524,14 +524,14 @@ pub extern fn indy_crypto_cl_revocation_key_private_to_json(rev_key_priv: *const
         Ok(rev_key_priv_json) => {
             trace!("indy_crypto_cl_revocation_key_private_to_json: rev_key_priv_json: {:?}", secret!(&rev_key_priv_json));
             unsafe {
-                let rev_reg_def_priv_json = CTypesUtils::string_to_cstring(rev_key_priv_json);
+                let rev_reg_def_priv_json = string_to_cstring(rev_key_priv_json);
                 *rev_key_priv_json_p = rev_reg_def_priv_json.into_raw();
                 trace!("indy_crypto_cl_revocation_key_private_to_json: rev_key_priv_json_p: {:?}", *rev_key_priv_json_p);
             }
             ErrorCode::Success
         }
         Err(err) => {
-            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation private key as json").into()
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation key private as json").into()
         }
     };
 
@@ -615,7 +615,7 @@ pub extern fn indy_crypto_cl_revocation_registry_to_json(rev_reg: *const c_void,
         Ok(rev_reg_json) => {
             trace!("indy_crypto_cl_revocation_registry_to_json: rev_reg_json: {:?}", rev_reg_json);
             unsafe {
-                let rev_reg_json = CTypesUtils::string_to_cstring(rev_reg_json);
+                let rev_reg_json = string_to_cstring(rev_reg_json);
                 *rev_reg_json_p = rev_reg_json.into_raw();
                 trace!("indy_crypto_cl_revocation_registry_to_json: rev_reg_json_p: {:?}", *rev_reg_json_p);
             }
@@ -706,7 +706,7 @@ pub extern fn indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_genera
         Ok(rev_tails_generator_json) => {
             trace!("indy_crypto_cl_revocation_tails_generator_to_json: rev_tails_generator_json: {:?}", rev_tails_generator_json);
             unsafe {
-                let rev_tails_generator_json = CTypesUtils::string_to_cstring(rev_tails_generator_json);
+                let rev_tails_generator_json = string_to_cstring(rev_tails_generator_json);
                 *rev_tails_generator_json_p = rev_tails_generator_json.into_raw();
                 trace!("indy_crypto_cl_revocation_tails_generator_to_json: rev_tails_generator_json_p: {:?}", *rev_tails_generator_json_p);
             }
@@ -984,7 +984,7 @@ pub extern fn indy_crypto_cl_credential_signature_to_json(credential_signature: 
         Ok(credential_signature_json) => {
             trace!("indy_crypto_cl_credential_signature_to_json: credential_signature_json: {:?}", secret!(&credential_signature_json));
             unsafe {
-                let credential_signature_json = CTypesUtils::string_to_cstring(credential_signature_json);
+                let credential_signature_json = string_to_cstring(credential_signature_json);
                 *credential_signature_json_p = credential_signature_json.into_raw();
                 trace!("indy_crypto_cl_credential_signature_to_json: credential_signature_json_p: {:?}", *credential_signature_json_p);
             }
@@ -1074,7 +1074,7 @@ pub extern fn indy_crypto_cl_signature_correctness_proof_to_json(signature_corre
         Ok(signature_correctness_proof_json) => {
             trace!("indy_crypto_cl_signature_correctness_proof_to_json: signature_correctness_proof_json: {:?}", signature_correctness_proof_json);
             unsafe {
-                let signature_correctness_proof_json = CTypesUtils::string_to_cstring(signature_correctness_proof_json);
+                let signature_correctness_proof_json = string_to_cstring(signature_correctness_proof_json);
                 *signature_correctness_proof_json_p = signature_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_signature_correctness_proof_to_json: signature_correctness_proof_json_p: {:?}", *signature_correctness_proof_json_p);
             }
@@ -1164,14 +1164,14 @@ pub extern fn indy_crypto_cl_revocation_registry_delta_to_json(revocation_regist
         Ok(revocation_registry_delta_json) => {
             trace!("indy_crypto_cl_revocation_registry_delta_to_json: revocation_registry_delta_json: {:?}", revocation_registry_delta_json);
             unsafe {
-                let revocation_registry_delta_json = CTypesUtils::string_to_cstring(revocation_registry_delta_json);
+                let revocation_registry_delta_json = string_to_cstring(revocation_registry_delta_json);
                 *revocation_registry_delta_json_p = revocation_registry_delta_json.into_raw();
                 trace!("indy_crypto_cl_revocation_registry_delta_to_json: revocation_registry_delta_json_p: {:?}", *revocation_registry_delta_json_p);
             }
             ErrorCode::Success
         }
         Err(err) => {
-            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential public key as json").into()
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation registry delta as json").into()
         }
     };
 

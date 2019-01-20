@@ -4,25 +4,21 @@ use std::ffi::CStr;
 use std::str::Utf8Error;
 use std::ffi::CString;
 
-pub struct CTypesUtils {}
-
-impl CTypesUtils {
-    pub fn c_str_to_string(cstr: *const c_char) -> Result<Option<String>, Utf8Error> {
-        if cstr.is_null() {
-            return Ok(None);
-        }
-
-        unsafe {
-            match CStr::from_ptr(cstr).to_str() {
-                Ok(str) => Ok(Some(str.to_string())),
-                Err(err) => Err(err)
-            }
-        }
+pub fn c_str_to_string(cstr: *const c_char) -> Result<Option<String>, Utf8Error> {
+    if cstr.is_null() {
+        return Ok(None);
     }
 
-    pub fn string_to_cstring(s: String) -> CString {
-        CString::new(s).unwrap()
+    unsafe {
+        match CStr::from_ptr(cstr).to_str() {
+            Ok(str) => Ok(Some(str.to_string())),
+            Err(err) => Err(err)
+        }
     }
+}
+
+pub fn string_to_cstring(s: String) -> CString {
+    CString::new(s).unwrap()
 }
 
 macro_rules! check_useful_c_byte_array {
@@ -130,7 +126,7 @@ macro_rules! check_useful_c_ptr {
 
 macro_rules! check_useful_c_str {
     ($x:ident, $e:expr) => {
-        let $x = match CTypesUtils::c_str_to_string($x) {
+        let $x = match c_str_to_string($x) {
             Ok(Some(val)) => val,
             _ => {
                 set_current_error(&err_msg($e.into(), "Invalid pointer has been passed"));
@@ -147,7 +143,7 @@ macro_rules! check_useful_c_str {
 
 macro_rules! check_useful_opt_c_str {
     ($x:ident, $e:expr) => {
-        let $x = match CTypesUtils::c_str_to_string($x) {
+        let $x = match c_str_to_string($x) {
             Ok(opt_val) => opt_val,
             Err(_) => {
                 set_current_error(&err_msg($e.into(), "Invalid pointer has been passed"));

@@ -9,7 +9,7 @@ extern crate time;
 extern crate log;
 
 use utils::logger::{EnabledCB, LogCB, FlushCB, IndyCryptoLogger, IndyCryptoDefaultLogger};
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
 
 /// Set custom logger implementation.
 ///

@@ -3,7 +3,7 @@ use cl::issuer::Issuer;
 use cl::verifier::Verifier;
 use errors::prelude::*;
 use ffi::ErrorCode;
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
 
 use serde_json;
 use std::ptr;
@@ -738,7 +738,7 @@ pub extern fn indy_crypto_cl_nonce_to_json(nonce: *const c_void,
         Ok(nonce_json) => {
             trace!("indy_crypto_cl_nonce_to_json: nonce_json: {:?}", nonce_json);
             unsafe {
-                let nonce_json = CTypesUtils::string_to_cstring(nonce_json);
+                let nonce_json = string_to_cstring(nonce_json);
                 *nonce_json_p = nonce_json.into_raw();
                 trace!("indy_crypto_cl_nonce_to_json: nonce_json_p: {:?}", *nonce_json_p);
             }

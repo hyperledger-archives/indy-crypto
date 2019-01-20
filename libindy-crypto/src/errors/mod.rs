@@ -187,7 +187,7 @@ pub fn set_current_error(err: &IndyCryptoError) {
             "message": err.to_string(),
             "backtrace": err.backtrace().map(|bt| bt.to_string())
         }).to_string();
-        error.replace(Some(ctypes::CTypesUtils::string_to_cstring(error_json)));
+        error.replace(Some(ctypes::string_to_cstring(error_json)));
     });
 }
 

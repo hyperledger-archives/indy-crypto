@@ -102,23 +102,25 @@ mod tests {
 
     use std::ptr;
     use ffi::cl::issuer::indy_crypto_cl_credential_private_key_from_json;
-    use utils::ctypes::CTypesUtils;
+    use utils::ctypes::*;
 
     #[test]
     fn indy_crypto_get_current_error_works() {
-        let mut error_json_p: *const c_char = ptr::null();
 
         indy_crypto_cl_credential_private_key_from_json(ptr::null(), &mut ptr::null());
 
+        let mut error_json_p: *const c_char = ptr::null();
         indy_crypto_get_current_error(&mut error_json_p);
-        let error_json_1 = CTypesUtils::c_str_to_string(error_json_p).unwrap();
+
+        let error_json_1 = c_str_to_string(error_json_p).unwrap();
         assert!(error_json_1.is_some());
 
-        let credential_priv_key = CTypesUtils::string_to_cstring("some wrong data".to_string());
+        let credential_priv_key = string_to_cstring("some wrong data".to_string());
         indy_crypto_cl_credential_private_key_from_json(credential_priv_key.as_ptr(), &mut ptr::null());
 
         indy_crypto_get_current_error(&mut error_json_p);
-        let error_json_2 = CTypesUtils::c_str_to_string(error_json_p).unwrap();
+
+        let error_json_2 = c_str_to_string(error_json_p).unwrap();
         assert!(error_json_2.is_some());
 
         assert_ne!(error_json_1.unwrap(), error_json_2.unwrap());

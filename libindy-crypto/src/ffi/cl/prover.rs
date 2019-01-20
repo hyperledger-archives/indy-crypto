@@ -1,7 +1,7 @@
 use cl::prover::*;
 use cl::*;
 use ffi::ErrorCode;
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
 use errors::prelude::*;
 
 use serde_json;
@@ -56,7 +56,7 @@ pub extern fn indy_crypto_cl_master_secret_to_json(master_secret: *const c_void,
         Ok(master_secret_json) => {
             trace!("indy_crypto_cl_master_secret_to_json: master_secret_json: {:?}", master_secret_json);
             unsafe {
-                let master_secret_json = CTypesUtils::string_to_cstring(master_secret_json);
+                let master_secret_json = string_to_cstring(master_secret_json);
                 *master_secret_json_p = master_secret_json.into_raw();
                 trace!("indy_crypto_cl_master_secret_to_json: master_secret_json_p: {:?}", *master_secret_json_p);
             }
@@ -236,7 +236,7 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_to_json(blinded_credenti
         Ok(blinded_credential_secrets_json) => {
             trace!("indy_crypto_cl_blinded_credential_secrets_to_json: blinded_credential_secrets_json: {:?}", blinded_credential_secrets_json);
             unsafe {
-                let blinded_credential_secrets_json = CTypesUtils::string_to_cstring(blinded_credential_secrets_json);
+                let blinded_credential_secrets_json = string_to_cstring(blinded_credential_secrets_json);
                 *blinded_credential_secrets_json_p = blinded_credential_secrets_json.into_raw();
 
                 trace!("indy_crypto_cl_blinded_credential_secrets_to_json: blinded_credential_secrets_json_p: {:?}", *blinded_credential_secrets_json_p);
@@ -327,7 +327,7 @@ pub extern fn indy_crypto_cl_credential_secrets_blinding_factors_to_json(credent
         Ok(credential_secrets_blinding_factors_json) => {
             trace!("indy_crypto_cl_credential_secret_blinding_factors_to_json: credential_secrets_blinding_factors_json: {:?}", credential_secrets_blinding_factors_json);
             unsafe {
-                let credential_secrets_blinding_factors_json = CTypesUtils::string_to_cstring(credential_secrets_blinding_factors_json);
+                let credential_secrets_blinding_factors_json = string_to_cstring(credential_secrets_blinding_factors_json);
                 *credential_secrets_blinding_factors_json_p = credential_secrets_blinding_factors_json.into_raw();
                 trace!("indy_crypto_cl_credential_secret_blinding_factors_to_json: credential_secrets_blinding_factors_json_p: {:?}", *credential_secrets_blinding_factors_json_p);
             }
@@ -420,7 +420,7 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_jso
             trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json: blinded_credential_secrets_correctness_proof: {:?}",
                    blinded_credential_secrets_correctness_proof_json);
             unsafe {
-                let blinded_credential_secrets_correctness_proof_json = CTypesUtils::string_to_cstring(blinded_credential_secrets_correctness_proof_json);
+                let blinded_credential_secrets_correctness_proof_json = string_to_cstring(blinded_credential_secrets_correctness_proof_json);
                 *blinded_credential_secrets_correctness_proof_json_p = blinded_credential_secrets_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json: blinded_credential_secrets_correctness_proof_json_p: {:?}",
                        *blinded_credential_secrets_correctness_proof_json_p);
@@ -594,7 +594,9 @@ pub extern fn indy_crypto_cl_prover_get_credential_revocation_index(credential_s
             trace!("indy_crypto_cl_prover_get_credential_revocation_index: *cred_rev_indx: {:?}", cred_rev_indx);
             ErrorCode::Success
         }
-        None => ErrorCode::CommonInvalidState
+        None => {
+            err_msg(IndyCryptoErrorKind::InvalidState, "Unable to extract credential revocation index").into()
+        }
     };
 
     trace!("indy_crypto_cl_prover_get_credential_revocation_index: <<< res: {:?}", res);
@@ -779,7 +781,7 @@ pub extern fn indy_crypto_cl_proof_to_json(proof: *const c_void,
         Ok(proof_json) => {
             trace!("indy_crypto_cl_proof_to_json: proof_json: {:?}", proof_json);
             unsafe {
-                let proof_json = CTypesUtils::string_to_cstring(proof_json);
+                let proof_json = string_to_cstring(proof_json);
                 *proof_json_p = proof_json.into_raw();
                 trace!("indy_crypto_cl_proof_to_json: proof_json_p: {:?}", *proof_json_p);
             }
