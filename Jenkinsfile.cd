@@ -149,9 +149,10 @@ def windowsTesting() {
                         echo "Windows Test: Build"
                         withEnv([
                                 "OPENSSL_DIR=$WORKSPACE\\libindy-crypto\\prebuilt",
-                                "INDY_CRYPTO_PREBUILT_DEPS_DIR=$WORKSPACE\\libindy-crypto\\prebuilt",
+                                "PATH=$WORKSPACE\\libindy-crypto\\prebuilt\\lib;$PATH",
                                 "RUST_BACKTRACE=1"
                         ]) {
+                            bat "cargo build --release"
                             bat "cargo test --release --no-run"
 
                             echo "Windows Test: Run tests"
@@ -159,7 +160,7 @@ def windowsTesting() {
                                 bat "cargo test --release"
                             }
                         }
-                        stash includes: 'target/release/*.dll', name: 'LibindyCryptoWindowsBuildResult'
+                        stash includes: 'target/release/*.dll,prebuilt/lib/*.dll', name: 'LibindyCryptoWindowsBuildResult'
                     }
 
                     //TODO wrappers testing
@@ -240,7 +241,7 @@ def windowsPublishArtifact(testEnv, stashName) {
         unstash name: stashName
 
         withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
-            sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER"
+            sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER ./prebuilt"
         }
     }
 }

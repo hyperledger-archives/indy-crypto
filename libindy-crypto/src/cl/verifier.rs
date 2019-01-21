@@ -2,7 +2,7 @@ use bn::BigNumber;
 use cl::*;
 use cl::constants::{LARGE_E_START_VALUE, ITERATION};
 use cl::helpers::*;
-use errors::IndyCryptoError;
+use errors::prelude::*;
 
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
@@ -27,7 +27,7 @@ impl Verifier {
     /// sub_proof_request_builder.add_predicate("age", "GE", 18).unwrap();
     /// let _sub_proof_request = sub_proof_request_builder.finalize().unwrap();
     /// ```
-    pub fn new_sub_proof_request_builder() -> Result<SubProofRequestBuilder, IndyCryptoError> {
+    pub fn new_sub_proof_request_builder() -> IndyCryptoResult<SubProofRequestBuilder> {
         let res = SubProofRequestBuilder::new()?;
         Ok(res)
     }
@@ -42,7 +42,7 @@ impl Verifier {
     ///
     /// let _proof_verifier = Verifier::new_proof_verifier().unwrap();
     /// ```
-    pub fn new_proof_verifier() -> Result<ProofVerifier, IndyCryptoError> {
+    pub fn new_proof_verifier() -> IndyCryptoResult<ProofVerifier> {
         Ok(ProofVerifier {
             credentials: Vec::new(),
         })
@@ -102,7 +102,7 @@ impl ProofVerifier {
                                  non_credential_schema: &NonCredentialSchema,
                                  credential_pub_key: &CredentialPublicKey,
                                  rev_key_pub: Option<&RevocationKeyPublic>,
-                                 rev_reg: Option<&RevocationRegistry>) -> Result<(), IndyCryptoError> {
+                                 rev_reg: Option<&RevocationRegistry>) -> IndyCryptoResult<()> {
         ProofVerifier::_check_add_sub_proof_request_params_consistency(sub_proof_request, credential_schema)?;
 
         self.credentials.push(VerifiableCredential {
@@ -202,7 +202,7 @@ impl ProofVerifier {
     /// ```
     pub fn verify(&self,
                   proof: &Proof,
-                  nonce: &Nonce) -> Result<bool, IndyCryptoError> {
+                  nonce: &Nonce) -> IndyCryptoResult<bool> {
         trace!("ProofVerifier::verify: >>> proof: {:?}, nonce: {:?}", proof, nonce);
 
         ProofVerifier::_check_verify_params_consistency(&self.credentials, proof)?;
@@ -253,11 +253,11 @@ impl ProofVerifier {
     }
 
     fn _check_add_sub_proof_request_params_consistency(sub_proof_request: &SubProofRequest,
-                                                       cred_schema: &CredentialSchema) -> Result<(), IndyCryptoError> {
+                                                       cred_schema: &CredentialSchema) -> IndyCryptoResult<()> {
         trace!("ProofVerifier::_check_add_sub_proof_request_params_consistency: >>> sub_proof_request: {:?}, cred_schema: {:?}", sub_proof_request, cred_schema);
 
         if sub_proof_request.revealed_attrs.difference(&cred_schema.attrs).count() != 0 {
-            return Err(IndyCryptoError::InvalidStructure(format!("Credential doesn't contain requested attribute")));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, "Credential doesn't contain requested attribute"));
         }
 
         let predicates_attrs =
@@ -266,7 +266,7 @@ impl ProofVerifier {
                 .collect::<BTreeSet<String>>();
 
         if predicates_attrs.difference(&cred_schema.attrs).count() != 0 {
-            return Err(IndyCryptoError::InvalidStructure(format!("Credential doesn't contain attribute requested in predicate")));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, "Credential doesn't contain attribute requested in predicate"));
         }
 
         trace!("ProofVerifier::_check_add_sub_proof_request_params_consistency: <<<");
@@ -275,7 +275,7 @@ impl ProofVerifier {
     }
 
     fn _check_verify_params_consistency(credentials: &Vec<VerifiableCredential>,
-                                        proof: &Proof) -> Result<(), IndyCryptoError> {
+                                        proof: &Proof) -> IndyCryptoResult<()> {
         trace!("ProofVerifier::_check_verify_params_consistency: >>> credentials: {:?}, proof: {:?}", credentials, proof);
 
         assert_eq!(proof.proofs.len(), credentials.len()); //FIXME return error
@@ -286,7 +286,7 @@ impl ProofVerifier {
             let proof_revealed_attrs = BTreeSet::from_iter(proof_for_credential.primary_proof.eq_proof.revealed_attrs.keys().cloned());
 
             if proof_revealed_attrs != credential.sub_proof_request.revealed_attrs {
-                return Err(IndyCryptoError::AnoncredsProofRejected(format!("Proof revealed attributes not correspond to requested attributes")));
+                return Err(err_msg(IndyCryptoErrorKind::ProofRejected, "Proof revealed attributes not correspond to requested attributes"));
             }
 
             let proof_predicates =
@@ -295,7 +295,7 @@ impl ProofVerifier {
                     .collect::<BTreeSet<Predicate>>();
 
             if proof_predicates != credential.sub_proof_request.predicates {
-                return Err(IndyCryptoError::AnoncredsProofRejected(format!("Proof predicates not correspond to requested predicates")));
+                return Err(err_msg(IndyCryptoErrorKind::ProofRejected, "Proof predicates not correspond to requested predicates"));
             }
         }
 
@@ -309,7 +309,7 @@ impl ProofVerifier {
                              primary_proof: &PrimaryProof,
                              cred_schema: &CredentialSchema,
                              non_cred_schema: &NonCredentialSchema,
-                             sub_proof_request: &SubProofRequest) -> Result<Vec<BigNumber>, IndyCryptoError> {
+                             sub_proof_request: &SubProofRequest) -> IndyCryptoResult<Vec<BigNumber>> {
         trace!("ProofVerifier::_verify_primary_proof: >>> p_pub_key: {:?}, c_hash: {:?}, primary_proof: {:?}, cred_schema: {:?}, sub_proof_request: {:?}",
                p_pub_key, c_hash, primary_proof, cred_schema, sub_proof_request);
 
@@ -334,7 +334,7 @@ impl ProofVerifier {
                         c_hash: &BigNumber,
                         cred_schema: &CredentialSchema,
                         non_cred_schema: &NonCredentialSchema,
-                        sub_proof_request: &SubProofRequest) -> Result<Vec<BigNumber>, IndyCryptoError> {
+                        sub_proof_request: &SubProofRequest) -> IndyCryptoResult<Vec<BigNumber>> {
         trace!("ProofVerifier::_verify_equality: >>> p_pub_key: {:?}, proof: {:?}, c_hash: {:?}, cred_schema: {:?}, sub_proof_request: {:?}",
                p_pub_key, proof, c_hash, cred_schema, sub_proof_request);
 
@@ -356,7 +356,7 @@ impl ProofVerifier {
 
         for (attr, encoded_value) in &proof.revealed_attrs {
             let cur_r = p_pub_key.r.get(attr)
-                .ok_or(IndyCryptoError::AnoncredsProofRejected(format!("Value by key '{}' not found in pk.r", attr)))?;
+                .ok_or(err_msg(IndyCryptoErrorKind::ProofRejected, format!("Value by key '{}' not found in pk.r", attr)))?;
 
             rar = cur_r
                 .mod_exp(encoded_value, &p_pub_key.n, Some(&mut ctx))?
@@ -377,16 +377,17 @@ impl ProofVerifier {
 
     fn _verify_ge_predicate(p_pub_key: &CredentialPrimaryPublicKey,
                             proof: &PrimaryPredicateGEProof,
-                            c_hash: &BigNumber) -> Result<Vec<BigNumber>, IndyCryptoError> {
+                            c_hash: &BigNumber) -> IndyCryptoResult<Vec<BigNumber>> {
         trace!("ProofVerifier::_verify_ge_predicate: >>> p_pub_key: {:?}, proof: {:?}, c_hash: {:?}", p_pub_key, proof, c_hash);
 
         let mut ctx = BigNumber::new_context()?;
+
         let mut tau_list = calc_tge(&p_pub_key, &proof.u, &proof.r, &proof.mj,
                                     &proof.alpha, &proof.t)?;
 
         for i in 0..ITERATION {
             let cur_t = proof.t.get(&i.to_string())
-                .ok_or(IndyCryptoError::AnoncredsProofRejected(format!("Value by key '{}' not found in proof.t", i)))?;
+                .ok_or(err_msg(IndyCryptoErrorKind::ProofRejected, format!("Value by key '{}' not found in proof.t", i)))?;
 
             tau_list[i] = cur_t
                 .mod_exp(&c_hash, &p_pub_key.n, Some(&mut ctx))?
@@ -395,7 +396,7 @@ impl ProofVerifier {
         }
 
         let delta = proof.t.get("DELTA")
-            .ok_or(IndyCryptoError::AnoncredsProofRejected(format!("Value by key '{}' not found in proof.t", "DELTA")))?;
+            .ok_or(err_msg(IndyCryptoErrorKind::ProofRejected, format!("Value by key '{}' not found in proof.t", "DELTA")))?;
 
         tau_list[ITERATION] = p_pub_key.z
             .mod_exp(&BigNumber::from_dec(&proof.predicate.value.to_string())?,
@@ -418,7 +419,7 @@ impl ProofVerifier {
     fn _verify_non_revocation_proof(r_pub_key: &CredentialRevocationPublicKey,
                                     rev_reg: &RevocationRegistry,
                                     rev_key_pub: &RevocationKeyPublic,
-                                    c_hash: &BigNumber, proof: &NonRevocProof) -> Result<NonRevocProofTauList, IndyCryptoError> {
+                                    c_hash: &BigNumber, proof: &NonRevocProof) -> IndyCryptoResult<NonRevocProofTauList> {
         trace!("ProofVerifier::_verify_non_revocation_proof: >>> r_pub_key: {:?}, rev_reg: {:?}, rev_key_pub: {:?}, c_hash: {:?}",
                r_pub_key, rev_reg, rev_key_pub, c_hash);
 

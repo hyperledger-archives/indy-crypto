@@ -3,131 +3,200 @@ extern crate log;
 
 use ffi::ErrorCode;
 
-use std::error::Error;
-use std::{fmt, io};
+use std::fmt;
+use std::cell::RefCell;
+use std::ptr;
+use std::ffi::CString;
 
-pub trait ToErrorCode {
-    fn to_error_code(&self) -> ErrorCode;
+use failure::{Backtrace, Context, Fail};
+use libc::c_char;
+
+use utils::ctypes;
+
+pub mod prelude {
+    pub use super::{err_msg, IndyCryptoError, IndyCryptoErrorExt, IndyCryptoErrorKind, IndyCryptoResult, set_current_error, get_current_error_c_json};
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
+pub enum IndyCryptoErrorKind {
+    // Common errors
+    #[fail(display = "Invalid library state")]
+    InvalidState,
+    #[fail(display = "Invalid structure")]
+    InvalidStructure,
+    #[fail(display = "Invalid parameter {}", 0)]
+    InvalidParam(u32),
+    #[fail(display = "IO error")]
+    IOError,
+    // CL errors
+    #[fail(display = "Proof rejected")]
+    ProofRejected,
+    #[fail(display = "Revocation accumulator is full")]
+    RevocationAccumulatorIsFull,
+    #[fail(display = "Invalid revocation id")]
+    InvalidRevocationAccumulatorIndex,
+    #[fail(display = "Credential revoked")]
+    CredentialRevoked,
 }
 
 #[derive(Debug)]
-pub enum IndyCryptoError {
-    InvalidParam1(String),
-    InvalidParam2(String),
-    InvalidParam3(String),
-    InvalidParam4(String),
-    InvalidParam5(String),
-    InvalidParam6(String),
-    InvalidParam7(String),
-    InvalidParam8(String),
-    InvalidParam9(String),
-    InvalidState(String),
-    InvalidStructure(String),
-    IOError(io::Error),
-    AnoncredsRevocationAccumulatorIsFull(String),
-    AnoncredsInvalidRevocationAccumulatorIndex(String),
-    AnoncredsCredentialRevoked(String),
-    AnoncredsProofRejected(String),
+pub struct IndyCryptoError {
+    inner: Context<IndyCryptoErrorKind>
+}
+
+impl Fail for IndyCryptoError {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
+    }
+}
+
+impl IndyCryptoError {
+    pub fn from_msg<D>(kind: IndyCryptoErrorKind, msg: D) -> IndyCryptoError
+        where D: fmt::Display + fmt::Debug + Send + Sync + 'static {
+        IndyCryptoError { inner: Context::new(msg).context(kind) }
+    }
+
+    pub fn kind(&self) -> IndyCryptoErrorKind {
+        *self.inner.get_context()
+    }
 }
 
 impl fmt::Display for IndyCryptoError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            IndyCryptoError::InvalidParam1(ref description) => write!(f, "Invalid param 1: {}", description),
-            IndyCryptoError::InvalidParam2(ref description) => write!(f, "Invalid param 2: {}", description),
-            IndyCryptoError::InvalidParam3(ref description) => write!(f, "Invalid param 3: {}", description),
-            IndyCryptoError::InvalidParam4(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidParam5(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidParam6(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidParam7(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidParam8(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidParam9(ref description) => write!(f, "Invalid param 4: {}", description),
-            IndyCryptoError::InvalidState(ref description) => write!(f, "Invalid library state: {}", description),
-            IndyCryptoError::InvalidStructure(ref description) => write!(f, "Invalid structure: {}", description),
-            IndyCryptoError::IOError(ref err) => err.fmt(f),
-            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(ref description) => write!(f, "Revocation accumulator is full: {}", description),
-            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(ref description) => write!(f, "Invalid revocation accumulator index: {}", description),
-            IndyCryptoError::AnoncredsCredentialRevoked(ref description) => write!(f, "Credential revoked: {}", description),
-            IndyCryptoError::AnoncredsProofRejected(ref description) => write!(f, "Proof rejected: {}", description),
+        let mut first = true;
+
+        for cause in Fail::iter_chain(&self.inner) {
+            if first {
+                first = false;
+                writeln!(f, "Error: {}", cause)?;
+            } else {
+                writeln!(f, "Caused by: {}", cause)?;
+            }
         }
+
+        Ok(())
     }
 }
 
-impl Error for IndyCryptoError {
-    fn description(&self) -> &str {
-        match *self {
-            IndyCryptoError::InvalidParam1(ref description) => description,
-            IndyCryptoError::InvalidParam2(ref description) => description,
-            IndyCryptoError::InvalidParam3(ref description) => description,
-            IndyCryptoError::InvalidParam4(ref description) => description,
-            IndyCryptoError::InvalidParam5(ref description) => description,
-            IndyCryptoError::InvalidParam6(ref description) => description,
-            IndyCryptoError::InvalidParam7(ref description) => description,
-            IndyCryptoError::InvalidParam8(ref description) => description,
-            IndyCryptoError::InvalidParam9(ref description) => description,
-            IndyCryptoError::InvalidState(ref description) => description,
-            IndyCryptoError::InvalidStructure(ref description) => description,
-            IndyCryptoError::IOError(ref err) => err.description(),
-            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(ref description) => description,
-            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(ref description) => description,
-            IndyCryptoError::AnoncredsCredentialRevoked(ref description) => description,
-            IndyCryptoError::AnoncredsProofRejected(ref description) => description,
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            IndyCryptoError::InvalidParam1(_) |
-            IndyCryptoError::InvalidParam2(_) |
-            IndyCryptoError::InvalidParam3(_) |
-            IndyCryptoError::InvalidParam4(_) |
-            IndyCryptoError::InvalidParam5(_) |
-            IndyCryptoError::InvalidParam6(_) |
-            IndyCryptoError::InvalidParam7(_) |
-            IndyCryptoError::InvalidParam8(_) |
-            IndyCryptoError::InvalidParam9(_) |
-            IndyCryptoError::InvalidState(_) |
-            IndyCryptoError::InvalidStructure(_) => None,
-            IndyCryptoError::IOError(ref err) => Some(err),
-            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(_) => None,
-            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(_) => None,
-            IndyCryptoError::AnoncredsCredentialRevoked(_) => None,
-            IndyCryptoError::AnoncredsProofRejected(_) => None,
-        }
-    }
+pub fn err_msg<D>(kind: IndyCryptoErrorKind, msg: D) -> IndyCryptoError
+    where D: fmt::Display + fmt::Debug + Send + Sync + 'static {
+    IndyCryptoError::from_msg(kind, msg)
 }
 
-impl ToErrorCode for IndyCryptoError {
-    fn to_error_code(&self) -> ErrorCode {
-        match *self {
-            IndyCryptoError::InvalidParam1(_) => ErrorCode::CommonInvalidParam1,
-            IndyCryptoError::InvalidParam2(_) => ErrorCode::CommonInvalidParam2,
-            IndyCryptoError::InvalidParam3(_) => ErrorCode::CommonInvalidParam3,
-            IndyCryptoError::InvalidParam4(_) => ErrorCode::CommonInvalidParam4,
-            IndyCryptoError::InvalidParam5(_) => ErrorCode::CommonInvalidParam5,
-            IndyCryptoError::InvalidParam6(_) => ErrorCode::CommonInvalidParam6,
-            IndyCryptoError::InvalidParam7(_) => ErrorCode::CommonInvalidParam7,
-            IndyCryptoError::InvalidParam8(_) => ErrorCode::CommonInvalidParam8,
-            IndyCryptoError::InvalidParam9(_) => ErrorCode::CommonInvalidParam9,
-            IndyCryptoError::InvalidState(_) => ErrorCode::CommonInvalidState,
-            IndyCryptoError::InvalidStructure(_) => ErrorCode::CommonInvalidStructure,
-            IndyCryptoError::IOError(_) => ErrorCode::CommonIOError,
-            IndyCryptoError::AnoncredsRevocationAccumulatorIsFull(_) => ErrorCode::AnoncredsRevocationAccumulatorIsFull,
-            IndyCryptoError::AnoncredsInvalidRevocationAccumulatorIndex(_) => ErrorCode::AnoncredsInvalidRevocationAccumulatorIndex,
-            IndyCryptoError::AnoncredsCredentialRevoked(_) => ErrorCode::AnoncredsCredentialRevoked,
-            IndyCryptoError::AnoncredsProofRejected(_) => ErrorCode::AnoncredsProofRejected,
-        }
-    }
-}
-
-impl From<serde_json::Error> for IndyCryptoError {
-    fn from(err: serde_json::Error) -> IndyCryptoError {
-        IndyCryptoError::InvalidStructure(err.to_string())
+impl From<Context<IndyCryptoErrorKind>> for IndyCryptoError {
+    fn from(inner: Context<IndyCryptoErrorKind>) -> IndyCryptoError {
+        IndyCryptoError { inner }
     }
 }
 
 impl From<log::SetLoggerError> for IndyCryptoError {
-    fn from(err: log::SetLoggerError) -> IndyCryptoError{
-        IndyCryptoError::InvalidState(err.description().to_owned())
+    fn from(err: log::SetLoggerError) -> IndyCryptoError {
+        err.context(IndyCryptoErrorKind::InvalidState).into()
     }
+}
+
+impl From<IndyCryptoErrorKind> for ErrorCode {
+    fn from(code: IndyCryptoErrorKind) -> ErrorCode {
+        match code {
+            IndyCryptoErrorKind::InvalidState => ErrorCode::CommonInvalidState,
+            IndyCryptoErrorKind::InvalidStructure => ErrorCode::CommonInvalidStructure,
+            IndyCryptoErrorKind::InvalidParam(num) =>
+                match num {
+                    1 => ErrorCode::CommonInvalidParam1,
+                    2 => ErrorCode::CommonInvalidParam2,
+                    3 => ErrorCode::CommonInvalidParam3,
+                    4 => ErrorCode::CommonInvalidParam4,
+                    5 => ErrorCode::CommonInvalidParam5,
+                    6 => ErrorCode::CommonInvalidParam6,
+                    7 => ErrorCode::CommonInvalidParam7,
+                    8 => ErrorCode::CommonInvalidParam8,
+                    9 => ErrorCode::CommonInvalidParam9,
+                    10 => ErrorCode::CommonInvalidParam10,
+                    11 => ErrorCode::CommonInvalidParam11,
+                    12 => ErrorCode::CommonInvalidParam12,
+                    _ => ErrorCode::CommonInvalidState
+                },
+            IndyCryptoErrorKind::IOError => ErrorCode::CommonIOError,
+            IndyCryptoErrorKind::ProofRejected => ErrorCode::AnoncredsProofRejected,
+            IndyCryptoErrorKind::RevocationAccumulatorIsFull => ErrorCode::AnoncredsRevocationAccumulatorIsFull,
+            IndyCryptoErrorKind::InvalidRevocationAccumulatorIndex => ErrorCode::AnoncredsInvalidRevocationAccumulatorIndex,
+            IndyCryptoErrorKind::CredentialRevoked => ErrorCode::AnoncredsCredentialRevoked,
+        }
+    }
+}
+
+impl From<ErrorCode> for IndyCryptoErrorKind {
+    fn from(err: ErrorCode) -> IndyCryptoErrorKind {
+        match err {
+            ErrorCode::CommonInvalidState => IndyCryptoErrorKind::InvalidState,
+            ErrorCode::CommonInvalidStructure => IndyCryptoErrorKind::InvalidStructure,
+            ErrorCode::CommonInvalidParam1 => IndyCryptoErrorKind::InvalidParam(1),
+            ErrorCode::CommonInvalidParam2 => IndyCryptoErrorKind::InvalidParam(2),
+            ErrorCode::CommonInvalidParam3 => IndyCryptoErrorKind::InvalidParam(3),
+            ErrorCode::CommonInvalidParam4 => IndyCryptoErrorKind::InvalidParam(4),
+            ErrorCode::CommonInvalidParam5 => IndyCryptoErrorKind::InvalidParam(5),
+            ErrorCode::CommonInvalidParam6 => IndyCryptoErrorKind::InvalidParam(6),
+            ErrorCode::CommonInvalidParam7 => IndyCryptoErrorKind::InvalidParam(7),
+            ErrorCode::CommonInvalidParam8 => IndyCryptoErrorKind::InvalidParam(8),
+            ErrorCode::CommonInvalidParam9 => IndyCryptoErrorKind::InvalidParam(9),
+            ErrorCode::CommonInvalidParam10 => IndyCryptoErrorKind::InvalidParam(10),
+            ErrorCode::CommonInvalidParam11 => IndyCryptoErrorKind::InvalidParam(11),
+            ErrorCode::CommonInvalidParam12 => IndyCryptoErrorKind::InvalidParam(12),
+            ErrorCode::CommonIOError => IndyCryptoErrorKind::IOError,
+            ErrorCode::AnoncredsProofRejected => IndyCryptoErrorKind::ProofRejected,
+            ErrorCode::AnoncredsRevocationAccumulatorIsFull => IndyCryptoErrorKind::RevocationAccumulatorIsFull,
+            ErrorCode::AnoncredsInvalidRevocationAccumulatorIndex => IndyCryptoErrorKind::InvalidRevocationAccumulatorIndex,
+            ErrorCode::AnoncredsCredentialRevoked => IndyCryptoErrorKind::CredentialRevoked,
+            _code => IndyCryptoErrorKind::InvalidState
+        }
+    }
+}
+
+impl From<IndyCryptoError> for ErrorCode {
+    fn from(err: IndyCryptoError) -> ErrorCode {
+        set_current_error(&err);
+        err.kind().into()
+    }
+}
+
+pub type IndyCryptoResult<T> = Result<T, IndyCryptoError>;
+
+/// Extension methods for `Error`.
+pub trait IndyCryptoErrorExt {
+    fn to_indy<D>(self, kind: IndyCryptoErrorKind, msg: D) -> IndyCryptoError where D: fmt::Display + Send + Sync + 'static;
+}
+
+impl<E> IndyCryptoErrorExt for E where E: Fail
+{
+    fn to_indy<D>(self, kind: IndyCryptoErrorKind, msg: D) -> IndyCryptoError where D: fmt::Display + Send + Sync + 'static {
+        self.context(msg).context(kind).into()
+    }
+}
+
+thread_local! {
+    pub static CURRENT_ERROR_C_JSON: RefCell<Option<CString>> = RefCell::new(None);
+}
+
+pub fn set_current_error(err: &IndyCryptoError) {
+    CURRENT_ERROR_C_JSON.with(|error| {
+        let error_json = json!({
+            "message": err.to_string(),
+            "backtrace": err.backtrace().map(|bt| bt.to_string())
+        }).to_string();
+        error.replace(Some(ctypes::string_to_cstring(error_json)));
+    });
+}
+
+pub fn get_current_error_c_json() -> *const c_char {
+    let mut value = ptr::null();
+
+    CURRENT_ERROR_C_JSON.with(|err|
+        err.borrow().as_ref().map(|err| value = err.as_ptr())
+    );
+
+    value
 }

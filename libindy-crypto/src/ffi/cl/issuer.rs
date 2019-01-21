@@ -1,10 +1,10 @@
 use cl::issuer::*;
 use cl::*;
-use errors::ToErrorCode;
 use ffi::ErrorCode;
 use ffi::cl::{FFITailTake, FFITailPut, FFITailsAccessor};
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
 use libc::c_char;
+use errors::prelude::*;
 
 use serde_json;
 use std::os::raw::c_void;
@@ -45,12 +45,12 @@ pub extern fn indy_crypto_cl_issuer_new_credential_def(credential_schema: *const
                                                           credential_pub_key_p: {:?}, \
                                                           credential_priv_key_p: {:?},\
                                                           credential_key_correctness_proof_p: {:?}",
-                            credential_schema,
-                            non_credential_schema,
-                            support_revocation,
-                            credential_pub_key_p,
-                            credential_priv_key_p,
-                            credential_key_correctness_proof_p);
+           credential_schema,
+           non_credential_schema,
+           support_revocation,
+           credential_pub_key_p,
+           credential_priv_key_p,
+           credential_key_correctness_proof_p);
 
     check_useful_c_reference!(credential_schema, CredentialSchema, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(non_credential_schema, NonCredentialSchema, ErrorCode::CommonInvalidParam2);
@@ -76,7 +76,7 @@ pub extern fn indy_crypto_cl_issuer_new_credential_def(credential_schema: *const
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_new_credential_def: <<< res: {:?}", res);
@@ -102,13 +102,15 @@ pub extern fn indy_crypto_cl_credential_public_key_to_json(credential_pub_key: *
         Ok(credential_pub_key_json) => {
             trace!("indy_crypto_cl_credential_public_key_to_json: credential_pub_key_json: {:?}", credential_pub_key_json);
             unsafe {
-                let issuer_pub_key_json = CTypesUtils::string_to_cstring(credential_pub_key_json);
+                let issuer_pub_key_json = string_to_cstring(credential_pub_key_json);
                 *credential_pub_key_json_p = issuer_pub_key_json.into_raw();
                 trace!("indy_crypto_cl_credential_private_key_to_json: credential_pub_key_json_p: {:?}", *credential_pub_key_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential public key as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_public_key_to_json: <<< res: {:?}", res);
@@ -142,7 +144,9 @@ pub extern fn indy_crypto_cl_credential_public_key_from_json(credential_pub_key_
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential public key from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_public_key_from_json: <<< res: {:?}", res);
@@ -187,13 +191,15 @@ pub extern fn indy_crypto_cl_credential_private_key_to_json(credential_priv_key:
         Ok(credential_priv_key_json) => {
             trace!("indy_crypto_cl_credential_private_key_to_json: credential_priv_key_json: {:?}", secret!(&credential_priv_key_json));
             unsafe {
-                let credential_priv_key_json = CTypesUtils::string_to_cstring(credential_priv_key_json);
+                let credential_priv_key_json = string_to_cstring(credential_priv_key_json);
                 *credential_priv_key_json_p = credential_priv_key_json.into_raw();
                 trace!("indy_crypto_cl_credential_private_key_to_json: credential_priv_key_json_p: {:?}", *credential_priv_key_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential private key as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_private_key_to_json: <<< res: {:?}", res);
@@ -227,7 +233,9 @@ pub extern fn indy_crypto_cl_credential_private_key_from_json(credential_priv_ke
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential private key from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_private_key_from_json: <<< res: {:?}", res);
@@ -273,13 +281,15 @@ pub extern fn indy_crypto_cl_credential_key_correctness_proof_to_json(credential
         Ok(credential_key_correctness_proof_json) => {
             trace!("indy_crypto_cl_credential_key_correctness_proof_to_json: credential_key_correctness_proof_json: {:?}", credential_key_correctness_proof_json);
             unsafe {
-                let credential_key_correctness_proof_json = CTypesUtils::string_to_cstring(credential_key_correctness_proof_json);
+                let credential_key_correctness_proof_json = string_to_cstring(credential_key_correctness_proof_json);
                 *credential_key_correctness_proof_json_p = credential_key_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_credential_key_correctness_proof_to_json: credential_key_correctness_proof_json_p: {:?}", *credential_key_correctness_proof_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential key correctness proof as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_key_correctness_proof_to_json: <<< res: {:?}", res);
@@ -314,7 +324,9 @@ pub extern fn indy_crypto_cl_credential_key_correctness_proof_from_json(credenti
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential key correctness proof from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_key_correctness_proof_from_json: <<< res: {:?}", res);
@@ -396,7 +408,7 @@ pub extern fn indy_crypto_cl_issuer_new_revocation_registry_def(credential_pub_k
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_new_revocation_registry_def: <<< res: {:?}", res);
@@ -423,13 +435,15 @@ pub extern fn indy_crypto_cl_revocation_key_public_to_json(rev_key_pub: *const c
         Ok(rev_key_pub_json) => {
             trace!("indy_crypto_cl_revocation_key_public_to_json: rev_key_pub_json: {:?}", rev_key_pub_json);
             unsafe {
-                let rev_reg_def_pub_json = CTypesUtils::string_to_cstring(rev_key_pub_json);
+                let rev_reg_def_pub_json = string_to_cstring(rev_key_pub_json);
                 *rev_key_pub_json_p = rev_reg_def_pub_json.into_raw();
                 trace!("indy_crypto_cl_revocation_key_public_to_json: rev_key_pub_json_p: {:?}", *rev_key_pub_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation key public as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_key_public_to_json: <<< res: {:?}", res);
@@ -463,7 +477,9 @@ pub extern fn indy_crypto_cl_revocation_key_public_from_json(rev_key_pub_json: *
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize revocation key public from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_key_public_from_json: <<< res: {:?}", res);
@@ -508,13 +524,15 @@ pub extern fn indy_crypto_cl_revocation_key_private_to_json(rev_key_priv: *const
         Ok(rev_key_priv_json) => {
             trace!("indy_crypto_cl_revocation_key_private_to_json: rev_key_priv_json: {:?}", secret!(&rev_key_priv_json));
             unsafe {
-                let rev_reg_def_priv_json = CTypesUtils::string_to_cstring(rev_key_priv_json);
+                let rev_reg_def_priv_json = string_to_cstring(rev_key_priv_json);
                 *rev_key_priv_json_p = rev_reg_def_priv_json.into_raw();
                 trace!("indy_crypto_cl_revocation_key_private_to_json: rev_key_priv_json_p: {:?}", *rev_key_priv_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation key private as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_key_private_to_json: <<< res: {:?}", res);
@@ -549,7 +567,9 @@ pub extern fn indy_crypto_cl_revocation_key_private_from_json(rev_key_priv_json:
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize revocation key private from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_key_private_from_json: <<< res: {:?}", res);
@@ -595,13 +615,15 @@ pub extern fn indy_crypto_cl_revocation_registry_to_json(rev_reg: *const c_void,
         Ok(rev_reg_json) => {
             trace!("indy_crypto_cl_revocation_registry_to_json: rev_reg_json: {:?}", rev_reg_json);
             unsafe {
-                let rev_reg_json = CTypesUtils::string_to_cstring(rev_reg_json);
+                let rev_reg_json = string_to_cstring(rev_reg_json);
                 *rev_reg_json_p = rev_reg_json.into_raw();
                 trace!("indy_crypto_cl_revocation_registry_to_json: rev_reg_json_p: {:?}", *rev_reg_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation registry as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_registry_to_json: <<< res: {:?}", res);
@@ -636,7 +658,9 @@ pub extern fn indy_crypto_cl_revocation_registry_from_json(rev_reg_json: *const 
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize revocation registry from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_registry_from_json: <<< res: {:?}", res);
@@ -682,13 +706,15 @@ pub extern fn indy_crypto_cl_revocation_tails_generator_to_json(rev_tails_genera
         Ok(rev_tails_generator_json) => {
             trace!("indy_crypto_cl_revocation_tails_generator_to_json: rev_tails_generator_json: {:?}", rev_tails_generator_json);
             unsafe {
-                let rev_tails_generator_json = CTypesUtils::string_to_cstring(rev_tails_generator_json);
+                let rev_tails_generator_json = string_to_cstring(rev_tails_generator_json);
                 *rev_tails_generator_json_p = rev_tails_generator_json.into_raw();
                 trace!("indy_crypto_cl_revocation_tails_generator_to_json: rev_tails_generator_json_p: {:?}", *rev_tails_generator_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation tails generator as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_tails_generator_to_json: <<< res: {:?}", res);
@@ -723,7 +749,9 @@ pub extern fn indy_crypto_cl_revocation_tails_generator_from_json(rev_tails_gene
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize revocation tails generator from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_tails_generator_from_json: <<< res: {:?}", res);
@@ -821,7 +849,7 @@ pub extern fn indy_crypto_cl_issuer_sign_credential(prover_id: *const c_char,
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_sign_credential: <<< res: {:?}", res);
@@ -929,7 +957,7 @@ pub extern fn indy_crypto_cl_issuer_sign_credential_with_revoc(prover_id: *const
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_sign_credential: <<< res: {:?}", res);
@@ -956,13 +984,15 @@ pub extern fn indy_crypto_cl_credential_signature_to_json(credential_signature: 
         Ok(credential_signature_json) => {
             trace!("indy_crypto_cl_credential_signature_to_json: credential_signature_json: {:?}", secret!(&credential_signature_json));
             unsafe {
-                let credential_signature_json = CTypesUtils::string_to_cstring(credential_signature_json);
+                let credential_signature_json = string_to_cstring(credential_signature_json);
                 *credential_signature_json_p = credential_signature_json.into_raw();
                 trace!("indy_crypto_cl_credential_signature_to_json: credential_signature_json_p: {:?}", *credential_signature_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize credential signature as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_signature_to_json: <<< res: {:?}", res);
@@ -997,7 +1027,9 @@ pub extern fn indy_crypto_cl_credential_signature_from_json(credential_signature
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize credential signature from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_signature_from_json: <<< res: {:?}", res);
@@ -1042,13 +1074,15 @@ pub extern fn indy_crypto_cl_signature_correctness_proof_to_json(signature_corre
         Ok(signature_correctness_proof_json) => {
             trace!("indy_crypto_cl_signature_correctness_proof_to_json: signature_correctness_proof_json: {:?}", signature_correctness_proof_json);
             unsafe {
-                let signature_correctness_proof_json = CTypesUtils::string_to_cstring(signature_correctness_proof_json);
+                let signature_correctness_proof_json = string_to_cstring(signature_correctness_proof_json);
                 *signature_correctness_proof_json_p = signature_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_signature_correctness_proof_to_json: signature_correctness_proof_json_p: {:?}", *signature_correctness_proof_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize signature correctness proof as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_signature_correctness_proof_to_json: <<< res: {:?}", res);
@@ -1083,7 +1117,9 @@ pub extern fn indy_crypto_cl_signature_correctness_proof_from_json(signature_cor
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize signature correctness proof from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_signature_correctness_proof_from_json: <<< res: {:?}", res);
@@ -1128,13 +1164,15 @@ pub extern fn indy_crypto_cl_revocation_registry_delta_to_json(revocation_regist
         Ok(revocation_registry_delta_json) => {
             trace!("indy_crypto_cl_revocation_registry_delta_to_json: revocation_registry_delta_json: {:?}", revocation_registry_delta_json);
             unsafe {
-                let revocation_registry_delta_json = CTypesUtils::string_to_cstring(revocation_registry_delta_json);
+                let revocation_registry_delta_json = string_to_cstring(revocation_registry_delta_json);
                 *revocation_registry_delta_json_p = revocation_registry_delta_json.into_raw();
                 trace!("indy_crypto_cl_revocation_registry_delta_to_json: revocation_registry_delta_json_p: {:?}", *revocation_registry_delta_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize revocation registry delta as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_registry_delta_to_json: <<< res: {:?}", res);
@@ -1169,7 +1207,9 @@ pub extern fn indy_crypto_cl_revocation_registry_delta_from_json(revocation_regi
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize revocation registry delta from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_revocation_registry_delta_from_json: <<< res: {:?}", res);
@@ -1259,7 +1299,7 @@ pub extern fn indy_crypto_cl_issuer_revoke_credential(rev_reg: *const c_void,
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_revoke_credential: <<< res: {:?}", res);
@@ -1297,7 +1337,7 @@ pub extern fn indy_crypto_cl_issuer_recovery_credential(rev_reg: *const c_void,
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_recovery_credential: <<< res: {:?}", res);
@@ -1326,7 +1366,7 @@ pub extern fn indy_crypto_cl_issuer_merge_revocation_registry_deltas(revoc_reg_d
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_issuer_merge_revocation_registry_deltas: <<< res: {:?}", res);
@@ -1635,9 +1675,9 @@ mod tests {
         let credential_issuance_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let rev_idx = 1;
         let max_cred_num = 5;
         let issuance_by_default = false;
@@ -1689,9 +1729,9 @@ mod tests {
         let credential_issuance_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let mut credential_signature_p: *const c_void = ptr::null();
         let mut credential_signature_correctness_proof_p: *const c_void = ptr::null();
@@ -1724,9 +1764,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1756,9 +1796,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1792,9 +1832,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1824,9 +1864,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1861,9 +1901,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1893,9 +1933,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
 
@@ -1966,9 +2006,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
 
@@ -2114,7 +2154,7 @@ pub mod mocks {
         assert!(!credential_signature_p.is_null());
         assert!(!credential_signature_correctness_proof_p.is_null());
 
-//        _free_credential_values(credential_values);
+        //        _free_credential_values(credential_values);
 
         (credential_signature_p, credential_signature_correctness_proof_p)
     }
@@ -2159,7 +2199,7 @@ pub mod mocks {
         assert!(!revocation_registry_delta_p.is_null());
         assert!(!credential_signature_correctness_proof_p.is_null());
 
-//        _free_credential_values(credential_values);
+        //        _free_credential_values(credential_values);
 
         (credential_signature_p, credential_signature_correctness_proof_p, revocation_registry_delta_p)
     }
