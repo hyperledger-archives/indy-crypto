@@ -107,6 +107,14 @@ def getUserUid() {
     return sh(returnStdout: true, script: 'id -u').trim()
 }
 
+def shell(command) {
+    if (isUnix()) {
+        sh command
+    } else {
+        bat command
+    }
+}
+
 def setupRust() {
-    sh "rustup default 1.31.0"
+    shell("rustup default 1.31.0")
 }
