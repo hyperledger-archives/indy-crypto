@@ -15,8 +15,7 @@ pub const PROVER_ID: &'static str = "CnEDk9HrMnmiHXEV1WFgbVCRteYnPqsJwrTdcZaNhFV
 
 mod test {
     use super::*;
-    use indy_crypto::ffi::ErrorCode;
-    use indy_crypto::errors::ToErrorCode;
+    use indy_crypto::errors::prelude::*;
     use indy_crypto::cl::NonCredentialSchemaBuilder;
 
     #[test]
@@ -2037,7 +2036,7 @@ mod test {
                                                      &mut rev_reg,
                                                      &rev_key_priv,
                                                      &simple_tail_accessor);
-        assert_eq!(ErrorCode::AnoncredsRevocationAccumulatorIsFull, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::RevocationAccumulatorIsFull, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2548,7 +2547,7 @@ mod test {
                                              &xyz_credential_pub_key,
                                              None, None).unwrap();
         let res = proof_verifier.verify(&proof, &nonce);
-        assert_eq!(ErrorCode::AnoncredsProofRejected, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::ProofRejected, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2562,7 +2561,7 @@ mod test {
 
         // 2. Issuer creates credential definition(with revocation keys)
         let res = Issuer::new_credential_def(&credential_schema, &non_credential_schema, false);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2579,7 +2578,7 @@ mod test {
         // 3. Issuer creates revocation registry
         let res =
             Issuer::new_revocation_registry_def(&credential_pub_key, 5, false);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2604,7 +2603,7 @@ mod test {
         // 4. Issuer tries revoke not not added index
         let rev_idx = 1;
         let res = Issuer::revoke_credential(&mut rev_reg, max_cred_num, rev_idx, &simple_tail_accessor);
-        assert_eq!(ErrorCode::AnoncredsInvalidRevocationAccumulatorIndex, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidRevocationAccumulatorIndex, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2647,7 +2646,7 @@ mod test {
                                           &credential_pub_key,
                                           &credential_priv_key);
 
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2713,7 +2712,7 @@ mod test {
                                                       &credential_pub_key,
                                                       None, None);
 
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2777,7 +2776,7 @@ mod test {
                                                       &credential_values,
                                                       &credential_pub_key,
                                                       None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2843,7 +2842,7 @@ mod test {
                                                       &credential_values,
                                                       &credential_pub_key,
                                                       None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2910,7 +2909,7 @@ mod test {
                                                       &credential_values,
                                                       &credential_pub_key,
                                                       None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2935,7 +2934,7 @@ mod test {
                                                        &non_credential_schema,
                                                        &credential_pub_key,
                                                        None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -2966,7 +2965,7 @@ mod test {
                                              &xyz_credential_key_correctness_proof,
                                              &credential_values,
                                              &gvt_credential_nonce);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3007,7 +3006,7 @@ mod test {
                                           &credential_values,
                                           &credential_pub_key,
                                           &credential_priv_key);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3049,7 +3048,7 @@ mod test {
                                           &xyz_credential_values,
                                           &xyz_credential_pub_key,
                                           &xyz_credential_priv_key);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3090,7 +3089,7 @@ mod test {
                                           &credential_values,
                                           &credential_pub_key,
                                           &credential_priv_key);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3140,7 +3139,7 @@ mod test {
                                                        &credential_pub_key,
                                                        &credential_issuance_nonce,
                                                        None, None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3200,7 +3199,7 @@ mod test {
                                                        &credential_pub_key,
                                                        &credential_issuance_nonce,
                                                        None, None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3252,7 +3251,7 @@ mod test {
                                                        &credential_pub_key,
                                                        &credential_issuance_nonce,
                                                        None, None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 
     #[test]
@@ -3302,7 +3301,7 @@ mod test {
                                                        &credential_pub_key,
                                                        &other_nonce,
                                                        None, None, None);
-        assert_eq!(ErrorCode::CommonInvalidStructure, res.unwrap_err().to_error_code());
+        assert_eq!(IndyCryptoErrorKind::InvalidStructure, res.unwrap_err().kind());
     }
 }
 

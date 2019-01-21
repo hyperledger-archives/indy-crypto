@@ -1,4 +1,4 @@
-use errors::IndyCryptoError;
+use errors::prelude::*;
 use pair::{GroupOrderElement, PointG2, PointG1, Pair};
 
 use sha2::{Sha256, Digest};
@@ -22,7 +22,7 @@ impl Generator {
     /// use indy_crypto::bls::Generator;
     /// Generator::new().unwrap();
     /// ```
-    pub fn new() -> Result<Generator, IndyCryptoError> {
+    pub fn new() -> IndyCryptoResult<Generator> {
         let point = PointG2::new()?;
         Ok(Generator {
             point: point,
@@ -54,7 +54,7 @@ impl Generator {
     /// let gen_bytes = gen.as_bytes();
     /// Generator::from_bytes(gen_bytes).unwrap();
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<Generator, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<Generator> {
         Ok(
             Generator {
                 point: PointG2::from_bytes(bytes)?,
@@ -80,7 +80,7 @@ impl SignKey {
     /// use indy_crypto::bls::Generator;
     /// Generator::new().unwrap();
     /// ```
-    pub fn new(seed: Option<&[u8]>) -> Result<SignKey, IndyCryptoError> {
+    pub fn new(seed: Option<&[u8]>) -> IndyCryptoResult<SignKey> {
         let group_order_element = match seed {
             Some(seed) => GroupOrderElement::new_from_seed(seed)?,
             _ => GroupOrderElement::new()?
@@ -110,7 +110,7 @@ impl SignKey {
     /// ```
     /// //TODO: Provide an example!
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<SignKey, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<SignKey> {
         Ok(
             SignKey {
                 group_order_element: GroupOrderElement::from_bytes(bytes)?,
@@ -136,7 +136,7 @@ impl VerKey {
     /// use indy_crypto::bls::Generator;
     /// Generator::new().unwrap();
     /// ```
-    pub fn new(gen: &Generator, sign_key: &SignKey) -> Result<VerKey, IndyCryptoError> {
+    pub fn new(gen: &Generator, sign_key: &SignKey) -> IndyCryptoResult<VerKey> {
         let point = gen.point.mul(&sign_key.group_order_element)?;
 
         Ok(VerKey {
@@ -163,7 +163,7 @@ impl VerKey {
     /// ```
     /// //TODO: Provide an example!
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<VerKey, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<VerKey> {
         let point = PointG2::from_bytes(bytes)?;
         Ok(
             VerKey {
@@ -199,7 +199,7 @@ impl ProofOfPossession {
     /// let ver_key = VerKey::new(&gen, &sign_key).unwrap();
     /// ProofOfPossession::new(&ver_key, &sign_key).unwrap();
     /// ```
-    pub fn new(ver_key: &VerKey, sign_key: &SignKey) -> Result<ProofOfPossession, IndyCryptoError> {
+    pub fn new(ver_key: &VerKey, sign_key: &SignKey) -> IndyCryptoResult<ProofOfPossession> {
         let point = Bls::_gen_signature(&ver_key.bytes, sign_key, Keccak256::default())?;
 
         Ok(ProofOfPossession {
@@ -226,7 +226,7 @@ impl ProofOfPossession {
     /// ```
     /// //TODO: Provide an example!
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<ProofOfPossession, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<ProofOfPossession> {
         let point = PointG1::from_bytes(bytes)?;
         Ok(ProofOfPossession {
             point,
@@ -262,7 +262,7 @@ impl Signature {
     /// ```
     /// //TODO: Provide an example!
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<Signature, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<Signature> {
         let point = PointG1::from_bytes(bytes)?;
         Ok(
             Signature {
@@ -306,7 +306,7 @@ impl MultiSignature {
    ///
    /// MultiSignature::new(&signatures).unwrap();
    /// ```
-    pub fn new(signatures: &[&Signature]) -> Result<MultiSignature, IndyCryptoError> {
+    pub fn new(signatures: &[&Signature]) -> IndyCryptoResult<MultiSignature> {
         let mut point = PointG1::new_inf()?;
 
         for signature in signatures {
@@ -337,7 +337,7 @@ impl MultiSignature {
     /// ```
     /// //TODO: Provide an example!
     /// ```
-    pub fn from_bytes(bytes: &[u8]) -> Result<MultiSignature, IndyCryptoError> {
+    pub fn from_bytes(bytes: &[u8]) -> IndyCryptoResult<MultiSignature> {
         let point = PointG1::from_bytes(bytes)?;
         Ok(
             MultiSignature {
@@ -366,7 +366,7 @@ impl Bls {
     /// let sign_key = SignKey::new(None).unwrap();
     /// Bls::sign(&message, &sign_key).unwrap();
     /// ```
-    pub fn sign(message: &[u8], sign_key: &SignKey) -> Result<Signature, IndyCryptoError> {
+    pub fn sign(message: &[u8], sign_key: &SignKey) -> IndyCryptoResult<Signature> {
         let point = Bls::_gen_signature(message, sign_key, Sha256::default())?;
 
         Ok(Signature {
@@ -397,7 +397,7 @@ impl Bls {
     /// let valid = Bls::verify(&signature, &message, &ver_key, &gen).unwrap();
     /// assert!(valid);
     /// ```
-    pub fn verify(signature: &Signature, message: &[u8], ver_key: &VerKey, gen: &Generator) -> Result<bool, IndyCryptoError> {
+    pub fn verify(signature: &Signature, message: &[u8], ver_key: &VerKey, gen: &Generator) -> IndyCryptoResult<bool> {
         Bls::_verify_signature(&signature.point, message, &ver_key.point, gen, Sha256::default())
     }
 
@@ -421,7 +421,7 @@ impl Bls {
     /// let valid = Bls::verify_proof_of_posession(&pop, &ver_key, &gen).unwrap();
     /// assert!(valid);
     /// ```
-    pub fn verify_proof_of_posession(pop: &ProofOfPossession, ver_key: &VerKey, gen: &Generator) -> Result<bool, IndyCryptoError> {
+    pub fn verify_proof_of_posession(pop: &ProofOfPossession, ver_key: &VerKey, gen: &Generator) -> IndyCryptoResult<bool> {
         Bls::_verify_signature(&pop.point, &ver_key.bytes, &ver_key.point, gen, Keccak256::default())
     }
 
@@ -464,7 +464,7 @@ impl Bls {
     /// let valid = Bls::verify_multi_sig(&multi_sig, &message, &ver_keys, &gen).unwrap();
     /// assert!(valid)
     /// ```
-    pub fn verify_multi_sig(multi_sig: &MultiSignature, message: &[u8], ver_keys: &[&VerKey], gen: &Generator) -> Result<bool, IndyCryptoError> {
+    pub fn verify_multi_sig(multi_sig: &MultiSignature, message: &[u8], ver_keys: &[&VerKey], gen: &Generator) -> IndyCryptoResult<bool> {
         // Since each signer (identified by a Verkey) has signed the same message, the public keys
         // can be added together to form the aggregated verkey
         let mut aggregated_verkey = PointG2::new_inf()?;
@@ -479,16 +479,16 @@ impl Bls {
         Bls::_verify_signature(&multi_sig.point, message, &aggregated_verkey, gen, Sha256::default())
     }
 
-    fn _gen_signature<T>(message: &[u8], sign_key: &SignKey, hasher: T) -> Result<PointG1, IndyCryptoError> where T: Digest {
+    fn _gen_signature<T>(message: &[u8], sign_key: &SignKey, hasher: T) -> IndyCryptoResult<PointG1> where T: Digest {
         Bls::_hash(message, hasher)?.mul(&sign_key.group_order_element)
     }
 
-    pub fn _verify_signature<T>(signature: &PointG1, message: &[u8], ver_key: &PointG2, gen: &Generator, hasher: T) -> Result<bool, IndyCryptoError> where T: Digest {
+    pub fn _verify_signature<T>(signature: &PointG1, message: &[u8], ver_key: &PointG2, gen: &Generator, hasher: T) -> IndyCryptoResult<bool> where T: Digest {
         let h = Bls::_hash(message, hasher)?;
         Ok(Pair::pair(&signature, &gen.point)?.eq(&Pair::pair(&h, &ver_key)?))
     }
 
-    fn _hash<T>(message: &[u8], mut hasher: T) -> Result<PointG1, IndyCryptoError> where T: Digest {
+    fn _hash<T>(message: &[u8], mut hasher: T) -> IndyCryptoResult<PointG1> where T: Digest {
         hasher.input(message);
         Ok(PointG1::from_hash(hasher.result().as_slice())?)
     }

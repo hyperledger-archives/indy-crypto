@@ -1,4 +1,5 @@
 from enum import IntEnum
+from typing import Optional
 
 
 class ErrorCode(IntEnum):
@@ -50,7 +51,13 @@ class ErrorCode(IntEnum):
 
 
 class IndyCryptoError(Exception):
-    #error_code: ErrorCode
+    # error_code: ErrorCode
+    # message: str - human-readable error description
+    # indy_crypto_backtrace: Optional[str] - error backtrace.
+    #         Collecting of backtrace can be enabled by:
+    #             1) setting environment variable `RUST_BACKTRACE=1`
 
-    def __init__(self, error_code: ErrorCode):
+    def __init__(self, error_code: ErrorCode, message: str, indy_crypto_backtrace: Optional[str]):
         self.error_code = error_code
+        self.message = message
+        self.indy_backtrace = indy_crypto_backtrace

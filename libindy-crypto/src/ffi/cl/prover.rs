@@ -1,8 +1,8 @@
 use cl::prover::*;
 use cl::*;
-use errors::ToErrorCode;
 use ffi::ErrorCode;
-use utils::ctypes::CTypesUtils;
+use utils::ctypes::*;
+use errors::prelude::*;
 
 use serde_json;
 use std::os::raw::c_void;
@@ -30,7 +30,7 @@ pub extern fn indy_crypto_cl_prover_new_master_secret(master_secret_p: *mut *con
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_prover_new_master_secret: <<< res: {:?}", res);
@@ -56,13 +56,15 @@ pub extern fn indy_crypto_cl_master_secret_to_json(master_secret: *const c_void,
         Ok(master_secret_json) => {
             trace!("indy_crypto_cl_master_secret_to_json: master_secret_json: {:?}", master_secret_json);
             unsafe {
-                let master_secret_json = CTypesUtils::string_to_cstring(master_secret_json);
+                let master_secret_json = string_to_cstring(master_secret_json);
                 *master_secret_json_p = master_secret_json.into_raw();
                 trace!("indy_crypto_cl_master_secret_to_json: master_secret_json_p: {:?}", *master_secret_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize master secret as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_master_secret_to_json: <<< res: {:?}", res);
@@ -96,7 +98,9 @@ pub extern fn indy_crypto_cl_master_secret_from_json(master_secret_json: *const 
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize master secret from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_master_secret_from_json: <<< res: {:?}", res);
@@ -156,13 +160,13 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
                                                                 blinded_credential_secrets_p: {:?}, \
                                                                 credential_secrets_blinding_factors_p: {:?}, \
                                                                 blinded_credential_secrets_correctness_proof_p: {:?}",
-                                                                credential_pub_key,
-                                                                credential_key_correctness_proof,
-                                                                credential_values,
-                                                                credential_nonce,
-                                                                blinded_credential_secrets_p,
-                                                                credential_secrets_blinding_factors_p,
-                                                                blinded_credential_secrets_correctness_proof_p);
+           credential_pub_key,
+           credential_key_correctness_proof,
+           credential_values,
+           credential_nonce,
+           blinded_credential_secrets_p,
+           credential_secrets_blinding_factors_p,
+           blinded_credential_secrets_correctness_proof_p);
 
     check_useful_c_reference!(credential_pub_key, CredentialPublicKey, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(credential_key_correctness_proof, CredentialKeyCorrectnessProof, ErrorCode::CommonInvalidParam2);
@@ -176,10 +180,10 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
                                                                     credential_key_correctness_proof: {:?}, \
                                                                     credential_values: {:?}, \
                                                                     credential_nonce: {:?}",
-                                                                    credential_pub_key,
-                                                                    credential_key_correctness_proof,
-                                                                    credential_values,
-                                                                    credential_nonce);
+           credential_pub_key,
+           credential_key_correctness_proof,
+           credential_values,
+           credential_nonce);
 
     let res = match Prover::blind_credential_secrets(credential_pub_key,
                                                      credential_key_correctness_proof,
@@ -189,9 +193,9 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
             trace!("indy_crypto_cl_prover_blind_credential_secrets: blinded_credential_secrets: {:?}, \
                                                                     credential_secrets_blinding_factors: {:?}, \
                                                                     blinded_credential_secrets_correctness_proof: {:?}",
-                                                                    blinded_credential_secrets,
-                                                                    credential_secrets_blinding_factors,
-                                                                    blinded_credential_secrets_correctness_proof);
+                   blinded_credential_secrets,
+                   credential_secrets_blinding_factors,
+                   blinded_credential_secrets_correctness_proof);
             unsafe {
                 *blinded_credential_secrets_p = Box::into_raw(Box::new(blinded_credential_secrets)) as *const c_void;
                 *credential_secrets_blinding_factors_p = Box::into_raw(Box::new(credential_secrets_blinding_factors)) as *const c_void;
@@ -199,13 +203,13 @@ pub extern fn indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key:
                 trace!("indy_crypto_cl_prover_blind_credential_secrets: *blinded_credential_secrets_p: {:?}, \
                                                                         *credential_secrets_blinding_factors_p: {:?}, \
                                                                         *blinded_credential_secrets_correctness_proof_p: {:?}",
-                                                                        *blinded_credential_secrets_p,
-                                                                        *credential_secrets_blinding_factors_p,
-                                                                        *blinded_credential_secrets_correctness_proof_p);
+                       *blinded_credential_secrets_p,
+                       *credential_secrets_blinding_factors_p,
+                       *blinded_credential_secrets_correctness_proof_p);
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_prover_blind_credential_secrets: <<< res: {:?}", res);
@@ -232,14 +236,16 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_to_json(blinded_credenti
         Ok(blinded_credential_secrets_json) => {
             trace!("indy_crypto_cl_blinded_credential_secrets_to_json: blinded_credential_secrets_json: {:?}", blinded_credential_secrets_json);
             unsafe {
-                let blinded_credential_secrets_json = CTypesUtils::string_to_cstring(blinded_credential_secrets_json);
+                let blinded_credential_secrets_json = string_to_cstring(blinded_credential_secrets_json);
                 *blinded_credential_secrets_json_p = blinded_credential_secrets_json.into_raw();
 
                 trace!("indy_crypto_cl_blinded_credential_secrets_to_json: blinded_credential_secrets_json_p: {:?}", *blinded_credential_secrets_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize blinded credential secret as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_blinded_credential_secrets_to_json: <<< res: {:?}", res);
@@ -273,7 +279,9 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_from_json(blinded_creden
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize blinded credential secret from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_blinded_credential_secrets_from_json: <<< res: {:?}", res);
@@ -319,13 +327,15 @@ pub extern fn indy_crypto_cl_credential_secrets_blinding_factors_to_json(credent
         Ok(credential_secrets_blinding_factors_json) => {
             trace!("indy_crypto_cl_credential_secret_blinding_factors_to_json: credential_secrets_blinding_factors_json: {:?}", credential_secrets_blinding_factors_json);
             unsafe {
-                let credential_secrets_blinding_factors_json = CTypesUtils::string_to_cstring(credential_secrets_blinding_factors_json);
+                let credential_secrets_blinding_factors_json = string_to_cstring(credential_secrets_blinding_factors_json);
                 *credential_secrets_blinding_factors_json_p = credential_secrets_blinding_factors_json.into_raw();
                 trace!("indy_crypto_cl_credential_secret_blinding_factors_to_json: credential_secrets_blinding_factors_json_p: {:?}", *credential_secrets_blinding_factors_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize blinded credential secret factors as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_secret_blinding_factors_to_json: <<< res: {:?}", res);
@@ -360,7 +370,9 @@ pub extern fn indy_crypto_cl_credential_secrets_blinding_factors_from_json(crede
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize blinded credential secret factors from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_credential_secrets_blinding_factors_from_json: <<< res: {:?}", res);
@@ -408,14 +420,16 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_jso
             trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json: blinded_credential_secrets_correctness_proof: {:?}",
                    blinded_credential_secrets_correctness_proof_json);
             unsafe {
-                let blinded_credential_secrets_correctness_proof_json = CTypesUtils::string_to_cstring(blinded_credential_secrets_correctness_proof_json);
+                let blinded_credential_secrets_correctness_proof_json = string_to_cstring(blinded_credential_secrets_correctness_proof_json);
                 *blinded_credential_secrets_correctness_proof_json_p = blinded_credential_secrets_correctness_proof_json.into_raw();
                 trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json: blinded_credential_secrets_correctness_proof_json_p: {:?}",
                        *blinded_credential_secrets_correctness_proof_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize blinded credential secrets correctness proof as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json: <<< res: {:?}", res);
@@ -453,7 +467,9 @@ pub extern fn indy_crypto_cl_blinded_credential_secrets_correctness_proof_from_j
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize blinded credential secret correctness proof from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_blinded_credential_secrets_correctness_proof_from_json: <<< res: {:?}", res);
@@ -531,15 +547,15 @@ pub extern fn indy_crypto_cl_prover_process_credential_signature(credential_sign
                                                                     credential_issuance_nonce: {:?}\n\
                                                                     rev_key_pub: {:?}\n\
                                                                     rev_reg {:?}, witness {:?}",
-                                                                    credential_signature,
-                                                                    credential_values,
-                                                                    signature_correctness_proof,
-                                                                    credential_secrets_blinding_factors,
-                                                                    credential_pub_key,
-                                                                    credential_issuance_nonce,
-                                                                    rev_key_pub,
-                                                                    rev_reg,
-                                                                    witness);
+           credential_signature,
+           credential_values,
+           signature_correctness_proof,
+           credential_secrets_blinding_factors,
+           credential_pub_key,
+           credential_issuance_nonce,
+           rev_key_pub,
+           rev_reg,
+           witness);
 
     let res = match Prover::process_credential_signature(credential_signature,
                                                          credential_values,
@@ -551,7 +567,7 @@ pub extern fn indy_crypto_cl_prover_process_credential_signature(credential_sign
                                                          rev_reg,
                                                          witness) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_prover_process_credential_signature: <<< res: {:?}", res);
@@ -578,7 +594,9 @@ pub extern fn indy_crypto_cl_prover_get_credential_revocation_index(credential_s
             trace!("indy_crypto_cl_prover_get_credential_revocation_index: *cred_rev_indx: {:?}", cred_rev_indx);
             ErrorCode::Success
         }
-        None => ErrorCode::CommonInvalidState
+        None => {
+            err_msg(IndyCryptoErrorKind::InvalidState, "Unable to extract credential revocation index").into()
+        }
     };
 
     trace!("indy_crypto_cl_prover_get_credential_revocation_index: <<< res: {:?}", res);
@@ -609,7 +627,7 @@ pub extern fn indy_crypto_cl_prover_new_proof_builder(proof_builder_p: *mut *con
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_prover_new_proof_builder: <<< res: {:?}", res);
@@ -647,15 +665,15 @@ pub extern fn indy_crypto_cl_proof_builder_add_sub_proof_request(proof_builder: 
                                                                     credential_pub_key: {:?}, \
                                                                     rev_reg: {:?}, \
                                                                     witness: {:?}",
-                    proof_builder,
-                    sub_proof_request,
-                    credential_schema,
-                    non_credential_schema,
-                    credential_signature,
-                    credential_values,
-                    credential_pub_key,
-                    rev_reg,
-                    witness);
+           proof_builder,
+           sub_proof_request,
+           credential_schema,
+           non_credential_schema,
+           credential_signature,
+           credential_values,
+           credential_pub_key,
+           rev_reg,
+           witness);
 
     check_useful_mut_c_reference!(proof_builder, ProofBuilder, ErrorCode::CommonInvalidParam1);
     check_useful_c_reference!(sub_proof_request, SubProofRequest, ErrorCode::CommonInvalidParam2);
@@ -695,7 +713,7 @@ pub extern fn indy_crypto_cl_proof_builder_add_sub_proof_request(proof_builder: 
                                                         rev_reg,
                                                         witness) {
         Ok(()) => ErrorCode::Success,
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_proof_builder_add_sub_proof_request: <<< res: {:?}", res);
@@ -737,7 +755,7 @@ pub extern fn indy_crypto_cl_proof_builder_finalize(proof_builder: *const c_void
             }
             ErrorCode::Success
         }
-        Err(err) => err.to_error_code()
+        Err(err) => err.into()
     };
 
     trace!("indy_crypto_cl_proof_builder_finalize: <<< res: {:?}", res);
@@ -763,13 +781,15 @@ pub extern fn indy_crypto_cl_proof_to_json(proof: *const c_void,
         Ok(proof_json) => {
             trace!("indy_crypto_cl_proof_to_json: proof_json: {:?}", proof_json);
             unsafe {
-                let proof_json = CTypesUtils::string_to_cstring(proof_json);
+                let proof_json = string_to_cstring(proof_json);
                 *proof_json_p = proof_json.into_raw();
                 trace!("indy_crypto_cl_proof_to_json: proof_json_p: {:?}", *proof_json_p);
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidState
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidState, "Unable to serialize proof as json").into()
+        }
     };
 
     trace!("indy_crypto_cl_proof_to_json: <<< res: {:?}", res);
@@ -802,7 +822,9 @@ pub extern fn indy_crypto_cl_proof_from_json(proof_json: *const c_char,
             }
             ErrorCode::Success
         }
-        Err(_) => ErrorCode::CommonInvalidStructure
+        Err(err) => {
+            err.to_indy(IndyCryptoErrorKind::InvalidStructure, "Unable to deserialize proof from json").into()
+        }
     };
 
     trace!("indy_crypto_cl_proof_from_json: <<< res: {:?}", res);
@@ -893,19 +915,19 @@ mod tests {
         let mut blinded_credential_secrets_correctness_proof_p: *const c_void = ptr::null();
 
         let err_code = indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key,
-                                                                     credential_key_correctness_proof,
-                                                                     credential_values,
-                                                                     credential_nonce,
-                                                                     &mut blinded_credential_secrets_p,
-                                                                     &mut credential_secrets_blinding_factors_p,
-                                                                     &mut blinded_credential_secrets_correctness_proof_p);
+                                                                      credential_key_correctness_proof,
+                                                                      credential_values,
+                                                                      credential_nonce,
+                                                                      &mut blinded_credential_secrets_p,
+                                                                      &mut credential_secrets_blinding_factors_p,
+                                                                      &mut blinded_credential_secrets_correctness_proof_p);
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!blinded_credential_secrets_p.is_null());
         assert!(!credential_secrets_blinding_factors_p.is_null());
 
         _free_blinded_credential_secrets(blinded_credential_secrets_p,
-                                    credential_secrets_blinding_factors_p,
-                                    blinded_credential_secrets_correctness_proof_p);
+                                         credential_secrets_blinding_factors_p,
+                                         blinded_credential_secrets_correctness_proof_p);
         _free_credential_values(credential_values);
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
         _free_nonce(credential_nonce);
@@ -918,9 +940,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let err_code = indy_crypto_cl_blinded_credential_secrets_free(blinded_credential_secrets);
         assert_eq!(err_code, ErrorCode::Success);
 
@@ -942,9 +964,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let mut blinded_credential_secrets_json_p: *const c_char = ptr::null();
         let err_code = indy_crypto_cl_blinded_credential_secrets_to_json(blinded_credential_secrets, &mut blinded_credential_secrets_json_p);
@@ -1031,7 +1053,7 @@ mod tests {
 
         let mut blinded_credential_secrets_p: *const c_void = ptr::null();
         let err_code = indy_crypto_cl_blinded_credential_secrets_from_json(blinded_credential_secrets_json_p,
-                                                                      &mut blinded_credential_secrets_p);
+                                                                           &mut blinded_credential_secrets_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1054,7 +1076,7 @@ mod tests {
 
         let mut credential_secrets_blinding_factors_json_p: *const c_char = ptr::null();
         let err_code = indy_crypto_cl_credential_secrets_blinding_factors_to_json(credential_secrets_blinding_factors,
-                                                                          &mut credential_secrets_blinding_factors_json_p);
+                                                                                  &mut credential_secrets_blinding_factors_json_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1070,18 +1092,18 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let mut credential_secrets_blinding_factors_json_p: *const c_char = ptr::null();
         let err_code = indy_crypto_cl_credential_secrets_blinding_factors_to_json(credential_secrets_blinding_factors,
-                                                                          &mut credential_secrets_blinding_factors_json_p);
+                                                                                  &mut credential_secrets_blinding_factors_json_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         let mut credential_secrets_blinding_factors_p: *const c_void = ptr::null();
         let err_code = indy_crypto_cl_credential_secrets_blinding_factors_from_json(credential_secrets_blinding_factors_json_p,
-                                                                            &mut credential_secrets_blinding_factors_p);
+                                                                                    &mut credential_secrets_blinding_factors_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1098,13 +1120,13 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                                   credential_key_correctness_proof,
-                                                                                   credential_values,
-                                                                                   credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let mut blinded_credential_secrets_correctness_proof_json_p: *const c_char = ptr::null();
         let err_code = indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json(blinded_credential_secrets_correctness_proof,
-                                                                                      &mut blinded_credential_secrets_correctness_proof_json_p);
+                                                                                           &mut blinded_credential_secrets_correctness_proof_json_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1121,18 +1143,18 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let mut blinded_credential_secrets_correctness_proof_json_p: *const c_char = ptr::null();
         let err_code = indy_crypto_cl_blinded_credential_secrets_correctness_proof_to_json(blinded_credential_secrets_correctness_proof,
-                                                                                      &mut blinded_credential_secrets_correctness_proof_json_p);
+                                                                                           &mut blinded_credential_secrets_correctness_proof_json_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         let mut blinded_credential_secrets_correctness_proof_p: *const c_void = ptr::null();
         let err_code = indy_crypto_cl_blinded_credential_secrets_correctness_proof_from_json(blinded_credential_secrets_correctness_proof_json_p,
-                                                                                        &mut blinded_credential_secrets_correctness_proof_p);
+                                                                                             &mut blinded_credential_secrets_correctness_proof_p);
         assert_eq!(err_code, ErrorCode::Success);
 
         _free_credential_def(credential_pub_key, credential_priv_key, credential_key_correctness_proof);
@@ -1149,9 +1171,9 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) =
@@ -1201,9 +1223,9 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
 
         let sub_proof_request = _sub_proof_request();
         let credential_schema = _credential_schema();
@@ -1265,9 +1287,9 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1315,9 +1337,9 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1369,9 +1391,9 @@ mod tests {
         let (blinded_credential_secrets,
             credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let (credential_signature, signature_correctness_proof) = _credential_signature(blinded_credential_secrets,
                                                                                         blinded_credential_secrets_correctness_proof,
@@ -1417,9 +1439,9 @@ mod tests {
         let credential_nonce = _nonce();
         let (blinded_credential_secrets, credential_secrets_blinding_factors,
             blinded_credential_secrets_correctness_proof) = _blinded_credential_secrets(credential_pub_key,
-                                                                              credential_key_correctness_proof,
-                                                                              credential_values,
-                                                                              credential_nonce);
+                                                                                        credential_key_correctness_proof,
+                                                                                        credential_values,
+                                                                                        credential_nonce);
         let credential_issuance_nonce = _nonce();
         let tail_storage = FFISimpleTailStorage::new(rev_tails_generator);
 
@@ -1479,12 +1501,12 @@ pub mod mocks {
         let mut blinded_credential_secrets_correctness_proof_p: *const c_void = ptr::null();
 
         let err_code = indy_crypto_cl_prover_blind_credential_secrets(credential_pub_key,
-                                                                 credential_key_correctness_proof,
-                                                                 credential_values,
-                                                                 credential_nonce,
-                                                                 &mut blinded_credential_secrets_p,
-                                                                 &mut credential_secrets_blinding_factors_p,
-                                                                 &mut blinded_credential_secrets_correctness_proof_p);
+                                                                      credential_key_correctness_proof,
+                                                                      credential_values,
+                                                                      credential_nonce,
+                                                                      &mut blinded_credential_secrets_p,
+                                                                      &mut credential_secrets_blinding_factors_p,
+                                                                      &mut blinded_credential_secrets_correctness_proof_p);
         assert_eq!(err_code, ErrorCode::Success);
         assert!(!blinded_credential_secrets_p.is_null());
         assert!(!credential_secrets_blinding_factors_p.is_null());
@@ -1513,7 +1535,6 @@ pub mod mocks {
                                          credential_pub_key: *const c_void,
                                          credential_issuance_nonce: *const c_void,
                                          rev_key_pub: *const c_void, rev_reg: *const c_void, witness: *const c_void) {
-
         let err_code = indy_crypto_cl_prover_process_credential_signature(credential_signature,
                                                                           credential_values,
                                                                           signature_correctness_proof,

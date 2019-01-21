@@ -6,7 +6,7 @@ pub mod prover;
 pub mod verifier;
 
 use bn::BigNumber;
-use errors::IndyCryptoError;
+use errors::prelude::*;
 use pair::*;
 
 use std::cmp::Ordering;
@@ -425,7 +425,7 @@ impl RevocationRegistryDelta {
 
     pub fn merge(&mut self, other_delta: &RevocationRegistryDelta) -> Result<(), IndyCryptoError> {
         if other_delta.prev_accum.is_none() || self.accum != other_delta.prev_accum.unwrap() {
-            return Err(IndyCryptoError::InvalidStructure(format!("Deltas can not be merged.")));
+            return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, "Deltas can not be merged."));
         }
 
         self.accum = other_delta.accum;
@@ -749,7 +749,7 @@ impl SubProofRequestBuilder {
     pub fn add_predicate(&mut self, attr_name: &str, p_type: &str, value: i32) -> Result<(), IndyCryptoError> {
         let p_type = match p_type {
             "GE" => PredicateType::GE,
-            p_type => return Err(IndyCryptoError::InvalidStructure(format!("Invalid predicate type: {:?}", p_type)))
+            p_type => return Err(err_msg(IndyCryptoErrorKind::InvalidStructure, format!("Invalid predicate type: {:?}", p_type)))
         };
 
         let predicate = Predicate {

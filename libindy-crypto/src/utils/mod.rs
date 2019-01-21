@@ -6,9 +6,9 @@ pub mod rsa;
 pub mod logger;
 
 use bn::BigNumber;
-use errors::IndyCryptoError;
+use errors::prelude::*;
 
-pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoError> {
+pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> IndyCryptoResult<BigNumber> {
     trace!("Helpers::get_hash_as_int: >>> nums: {:?}", nums);
 
     let hash = BigNumber::from_bytes(&BigNumber::hash_array(&nums)?);
@@ -18,7 +18,7 @@ pub fn get_hash_as_int(nums: &Vec<Vec<u8>>) -> Result<BigNumber, IndyCryptoError
     hash
 }
 
-pub fn clone_option_bignum(b: &Option<BigNumber>) -> Result<Option<BigNumber>, IndyCryptoError> {
+pub fn clone_option_bignum(b: &Option<BigNumber>) -> IndyCryptoResult<Option<BigNumber>> {
     match *b {
         Some(ref bn) => Ok(Some(bn.clone()?)),
         None => Ok(None)

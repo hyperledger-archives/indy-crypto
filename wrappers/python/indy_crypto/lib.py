@@ -2,6 +2,8 @@ import logging
 import sys
 from ctypes import *
 
+import json
+
 from .error import ErrorCode, IndyCryptoError
 
 from logging import ERROR, WARNING, INFO, DEBUG
@@ -18,7 +20,24 @@ def do_call(name: str, *args):
     logger.debug("do_call: Function %r returned err: %r", name, err)
 
     if err != ErrorCode.Success:
-        raise IndyCryptoError(ErrorCode(err))
+        raise _get_indy_error(err)
+
+
+def _get_indy_error(err: int) -> IndyCryptoError:
+    error_details = _get_error_details()
+    return IndyCryptoError(ErrorCode(err), error_details['message'], error_details['backtrace'])
+
+
+def _get_error_details() -> dict:
+    logger = logging.getLogger(__name__)
+    logger.debug("_get_error_details: >>>")
+
+    error_c = c_char_p()
+    getattr(_cdll(), 'indy_crypto_get_current_error')(byref(error_c))
+    error_details = json.loads(error_c.value.decode())
+
+    logger.debug("_get_error_details: <<< error_details: %s", error_details)
+    return error_details
 
 
 def _cdll() -> CDLL:
