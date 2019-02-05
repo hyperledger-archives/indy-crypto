@@ -2,7 +2,6 @@
 
 @Library('SovrinHelpers') _
 
-env.BRANCH_NAME = 'master'
 testReleaseVersion = env.INDY_CRYPTO_TEST_RELEASE_VERSION ?: null
 
 gitHubUserCredId = env.GITHUB_BOT_USER ?: 'sovbot-github'
