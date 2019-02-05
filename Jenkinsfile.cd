@@ -1,7 +1,5 @@
 #!groovy
 
-env.BRANCH_NAME = 'master'
-
 @Library('SovrinHelpers') _
 
 gitHubUserCredId = env.GITHUB_BOT_USER ?: 'sovbot-github'
