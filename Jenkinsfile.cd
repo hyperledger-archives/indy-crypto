@@ -2,6 +2,11 @@
 
 @Library('SovrinHelpers') _
 
+gitHubUserCredId = env.GITHUB_BOT_USER ?: 'sovbot-github'
+sovrinPackagingRepo = env.SOVRIN_PACKAGING_REPO ?: 'https://github.com/sovrin-foundation/sovrin-packaging'
+sovrinPackagingBranch = env.SOVRIN_PACKAGING_BRANCH ?: 'master'
+mavenDeployAddOptions = env.MAVEN_DEPLOY_ADD_OPTIONS ?: ''
+
 try {
     testing()
     publishing()
@@ -241,7 +246,11 @@ def windowsPublishArtifact(testEnv, stashName) {
         unstash name: stashName
 
         withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
-            sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER ./prebuilt"
+            withEnv([
+                "SOVRIN_REPO_HOST=$SOVRIN_REPO_HOST",
+            ]) {
+                sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER ./prebuilt"
+            }
         }
     }
 }
@@ -390,8 +399,8 @@ def publishLibindyCryptoWindowsFilesRCtoStable(version) {
         src = "/var/repository/repos/windows/libindy_crypto/rc/$rcFullVersion/"
         target = "/var/repository/repos/windows/libindy_crypto/stable/$version"
 
-        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 '! ls $target'"
-        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 cp -r $src $target"
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@$SOVRIN_REPO_HOST '! ls $target'"
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@$SOVRIN_REPO_HOST cp -r $src $target"
     }
 }
 
@@ -428,7 +437,7 @@ def uploadDebianFilesToStable() {
 }
 
 def downloadPackagingUtils() {
-    git branch: 'master', credentialsId: 'evernym-github-machine-user', url: 'https://github.com/evernym/sovrin-packaging'
+    git branch: sovrinPackagingBranch, credentialsId: gitHubUserCredId, url: sovrinPackagingRepo
 }
 
 def shell(command) {

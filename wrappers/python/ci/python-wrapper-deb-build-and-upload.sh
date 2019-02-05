@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+set -e
+set -x
+
 if [ "$1" = "--help" ] ; then
   echo "Usage: <type> <suffix>"
   return
