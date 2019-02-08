@@ -1,4 +1,7 @@
-#!/bin/bash -xe
+#!/bin/bash
+
+set -e
+set -x
 
 if [ "$1" = "--help" ] ; then
   echo "Usage: <version> <key> <type> <number> <prebuit_path>"
@@ -27,7 +30,7 @@ cd libindy_crypto-zip && zip -r libindy_crypto_${version}.zip ./* && mv libindy_
 
 rm -rf libindy_crypto-zip
 
-cat <<EOF | sftp -v -oStrictHostKeyChecking=no -i $key repo@192.168.11.115
+cat <<EOF | sftp -v -oStrictHostKeyChecking=no -i $key repo@$SOVRIN_REPO_HOST
 mkdir /var/repository/repos/windows/libindy_crypto/$type/$version-$number
 cd /var/repository/repos/windows/libindy_crypto/$type/$version-$number
 put -r libindy_crypto_"$version".zip

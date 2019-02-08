@@ -2,6 +2,13 @@
 
 @Library('SovrinHelpers') _
 
+testReleaseVersion = env.INDY_CRYPTO_TEST_RELEASE_VERSION ?: null
+
+gitHubUserCredId = env.GITHUB_BOT_USER ?: 'sovbot-github'
+sovrinPackagingRepo = env.SOVRIN_PACKAGING_REPO ?: 'https://github.com/sovrin-foundation/sovrin-packaging'
+sovrinPackagingBranch = env.SOVRIN_PACKAGING_BRANCH ?: 'master'
+mavenDeployAddOptions = env.MAVEN_DEPLOY_ADD_OPTIONS ?: ''
+
 try {
     testing()
     publishing()
@@ -74,10 +81,14 @@ def notifyingFailure() {
     }
 }
 
-void getSrcVersion() {
-    commit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
-    version = sh(returnStdout: true, script: "wget -q https://raw.githubusercontent.com/hyperledger/indy-crypto/$commit/libindy-crypto/Cargo.toml -O - | grep -E '^version =' | head -n1 | cut -f2 -d= | cut -f2 -d '\"'").trim()
-    return version
+String getSrcVersion() {
+    if (testReleaseVersion) {
+        return testReleaseVersion
+    } else {
+        commit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+        version = sh(returnStdout: true, script: "wget -q https://raw.githubusercontent.com/hyperledger/indy-crypto/$commit/libindy-crypto/Cargo.toml -O - | grep -E '^version =' | head -n1 | cut -f2 -d= | cut -f2 -d '\"'").trim()
+        return version
+    }
 }
 
 def linuxTesting(file, env_name) {
@@ -241,7 +252,11 @@ def windowsPublishArtifact(testEnv, stashName) {
         unstash name: stashName
 
         withCredentials([file(credentialsId: 'SovrinRepoSSHKey', variable: 'sovrin_repo_key')]) {
-            sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER ./prebuilt"
+            withEnv([
+                "SOVRIN_REPO_HOST=$SOVRIN_REPO_HOST",
+            ]) {
+                sh "./ci/libindy_crypto-win-zip-and-upload.sh $version '${sovrin_repo_key}' $env.BRANCH_NAME $env.BUILD_NUMBER ./prebuilt"
+            }
         }
     }
 }
@@ -292,7 +307,11 @@ def libindyCryptoCargoPublishing(testEnv, isRelease) {
         echo 'Publish Libindy-Crypto to Cargo'
         testEnv.inside {
             def suffix = getSuffix(isRelease, "Cargo")
-            sh "sed -i -E -e 'H;1h;\$!d;x' -e \"s/version = \\\"([0-9,.]+)/version = \\\"\\1$suffix/\" Cargo.toml"
+            if (testReleaseVersion) {
+                sh "sed -i -E -e 'H;1h;\$!d;x' -e \"s/version = \\\"([0-9,.]+)/version = \\\"$testReleaseVersion$suffix/\" Cargo.toml"
+            } else {
+                sh "sed -i -E -e 'H;1h;\$!d;x' -e \"s/version = \\\"([0-9,.]+)/version = \\\"\\1$suffix/\" Cargo.toml"
+            }
 
             withCredentials([string(credentialsId: 'cargoSecretKey', variable: 'LOGIN')]) {
                 sh 'cargo login $LOGIN'
@@ -311,7 +330,13 @@ def pythonWrapperPypiPublishing(testEnv, isRelease) {
 
             withCredentials([file(credentialsId: 'pypi_credentials', variable: 'credentialsFile')]) {
                 sh 'cp $credentialsFile ./'
-                sh "sed -i -E \"s/version='([0-9,.]+).*/version='\\1$suffix',/\" setup.py"
+
+                if (testReleaseVersion) {
+                    sh "sed -i -E \"s/version='([0-9,.]+).*/version='$testReleaseVersion$suffix',/\" setup.py"
+                } else {
+                    sh "sed -i -E \"s/version='([0-9,.]+).*/version='\\1$suffix',/\" setup.py"
+                }
+
                 sh '''
                     python3.5 setup.py sdist
                     python3.5 -m twine upload dist/* --config-file .pypirc
@@ -390,8 +415,8 @@ def publishLibindyCryptoWindowsFilesRCtoStable(version) {
         src = "/var/repository/repos/windows/libindy_crypto/rc/$rcFullVersion/"
         target = "/var/repository/repos/windows/libindy_crypto/stable/$version"
 
-        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 '! ls $target'"
-        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@192.168.11.115 cp -r $src $target"
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@$SOVRIN_REPO_HOST '! ls $target'"
+        sh "ssh -v -oStrictHostKeyChecking=no -i '$sovrin_repo_key' repo@$SOVRIN_REPO_HOST cp -r $src $target"
     }
 }
 
@@ -428,7 +453,7 @@ def uploadDebianFilesToStable() {
 }
 
 def downloadPackagingUtils() {
-    git branch: 'master', credentialsId: 'evernym-github-machine-user', url: 'https://github.com/evernym/sovrin-packaging'
+    git branch: sovrinPackagingBranch, credentialsId: gitHubUserCredId, url: sovrinPackagingRepo
 }
 
 def shell(command) {
