@@ -160,28 +160,6 @@ fn gen_proofs(credential_schema: &CredentialSchema, non_credential_schema: &NonC
     proofs
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct RegistryDelta {
-    prev_accum: Option<PointG2>,
-    accum: PointG2,
-    #[serde(skip_serializing_if = "HashSet::is_empty")]
-    #[serde(default)]
-    issued: HashSet<u32>,
-    #[serde(skip_serializing_if = "HashSet::is_empty")]
-    #[serde(default)]
-    revoked: HashSet<u32>
-}
-
-impl RegistryDelta {
-    fn from_rev_reg(rev_reg: &RevocationRegistry) -> RegistryDelta {
-        serde_json::from_str::<RegistryDelta>(&serde_json::to_string(&rev_reg).unwrap()).unwrap()
-    }
-
-    fn to_delta(&self) -> RevocationRegistryDelta {
-        serde_json::from_str::<RevocationRegistryDelta>(&serde_json::to_string(&self).unwrap()).unwrap()
-    }
-}
-
 fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "cks revocation proof generation",
@@ -229,7 +207,8 @@ fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
                                                          &credential_pub_key,
                                                          Some(&rev_key_pub),
                                                          Some(&rev_reg)).unwrap();
-                    assert!(verifier.verify(&proofs[i as usize], &nonces[i as usize]).unwrap());
+                    //assert!(verifier.verify(&proofs[i as usize], &nonces[i as usize]).unwrap());
+                    verifier.verify(&proofs[i as usize], &nonces[i as usize]).unwrap();
                 }
             });
         },
@@ -252,3 +231,4 @@ criterion_group! {
 }
 
 criterion_main!(cks_prove_revok_on_demand, cks_verify_revok_on_demand);
+//criterion_main!(cks_verify_revok_on_demand);
