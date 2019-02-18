@@ -681,13 +681,13 @@ impl Prover {
             .mul(&Pair::pair(&cred_rev_pub_key.g, &witness.omega)?.inverse()?)?;
 
         if z_calc != rev_key_pub.z {
-            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data".to_string()));
+            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data. Error with z".to_string()));
         }
         let pair_gg_calc = Pair::pair(&cred_rev_pub_key.pk.add(&r_cred.g_i)?, &r_cred.witness_signature.sigma_i)?;
         let pair_gg = Pair::pair(&cred_rev_pub_key.g, &cred_rev_pub_key.g_dash)?;
 
         if pair_gg_calc != pair_gg {
-            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data".to_string()));
+            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data. Error with g".to_string()));
         }
 
         let m2 = GroupOrderElement::from_bytes(&r_cnxt_m2.to_bytes()?)?;
@@ -702,7 +702,7 @@ impl Prover {
         )?;
 
         if pair_h1 != pair_h2 {
-            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data".to_string()));
+            return Err(IndyCryptoError::InvalidStructure("Issuer is sending incorrect data. Error with h".to_string()));
         }
 
         trace!("Prover::_test_witness_signature: <<<");
