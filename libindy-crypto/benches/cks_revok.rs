@@ -162,7 +162,7 @@ fn gen_proofs(credential_schema: &CredentialSchema, non_credential_schema: &NonC
 
 fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
     c.bench_function_over_inputs(
-        "cks revocation proof generation",
+        "cks revocation proof generation with on demand issuance",
         move |b, max_cred_num| {
             let max_cred_num = *max_cred_num as u32;
             let issuance_by_default = false;
@@ -178,13 +178,13 @@ fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
                 gen_proofs(&credential_schema, &non_credential_schema, &credential_pub_key, &sub_proof_request, &nonces, &rev_reg, &prover_data);
             });
         },
-        vec![10, 100],
+        vec![10000],
     );
 }
 
 fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
     c.bench_function_over_inputs(
-        "cks revocation verify proof",
+        "cks revocation verify proof with on demand issuance",
         move |b, max_cred_num| {
             let max_cred_num = *max_cred_num as u32;
 
@@ -212,20 +212,22 @@ fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
                 }
             });
         },
-        vec![10, 100],
+        vec![10000],
     );
 }
 
 criterion_group! {
     name = cks_prove_revok_on_demand;
-    config = Criterion::default().sample_size(3);
+    //config = Criterion::default().sample_size(3);
+    config = Criterion::default();
     targets =
     bench_cks_prove_revok_on_demand_issuance,
 }
 
 criterion_group! {
     name = cks_verify_revok_on_demand;
-    config = Criterion::default().sample_size(3);
+    //config = Criterion::default().sample_size(3);
+    config = Criterion::default();
     targets =
     bench_cks_verify_revok_on_demand_issuance,
 }
