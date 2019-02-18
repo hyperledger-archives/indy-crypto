@@ -186,7 +186,7 @@ fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
                 gen_proofs(&credential_schema, &non_credential_schema, &credential_pub_key, &sub_proof_request, &nonces, &rev_reg, &prover_data);
             });
         },
-        vec![(10000, 10)],
+        vec![(100, 10), (10000, 10)],
     );
 }
 
@@ -220,7 +220,7 @@ fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
                 }
             });
         },
-        vec![(10000, 10)],
+        vec![(100, 10), (10000, 10)],
     );
 }
 
