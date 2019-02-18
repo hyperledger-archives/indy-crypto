@@ -1,18 +1,12 @@
 #[macro_use]
 extern crate criterion;
 extern crate indy_crypto;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
 
 use criterion::Criterion;
 use indy_crypto::cl::*;
 use indy_crypto::cl::issuer::Issuer;
 use indy_crypto::cl::prover::Prover;
 use indy_crypto::cl::verifier::Verifier;
-use self::indy_crypto::cl::logger::IndyCryptoDefaultLogger;
-use std::collections::HashSet;
-use indy_crypto::pair::PointG2;
 
 
 pub fn get_credential_schema() -> CredentialSchema {
@@ -64,7 +58,7 @@ fn setup_cred_and_issue(max_cred_num: u32, issuance_by_default: bool) -> (Creden
 
     let simple_tail_accessor = SimpleTailsAccessor::new(&mut rev_tails_generator).unwrap();
 
-    let mut prover_data: Vec<(CredentialValues, CredentialSignature, Witness)> = vec![];
+    let mut _prover_data: Vec<(CredentialValues, CredentialSignature, Witness)> = vec![];
 
     let mut rev_reg_delta: Option<RevocationRegistryDelta> = None;
 
@@ -131,7 +125,20 @@ fn setup_cred_and_issue(max_cred_num: u32, issuance_by_default: bool) -> (Creden
                                              Some(&rev_reg),
                                              Some(&witness)).unwrap();
 
-        prover_data.push((credential_values, credential_signature, witness))
+        _prover_data.push((credential_values, credential_signature, witness))
+    }
+
+    let final_delta = rev_reg_delta.unwrap();
+    let mut prover_data: Vec<(CredentialValues, CredentialSignature, Witness)> = vec![];
+    let mut i = 0;
+    for (v, s, _) in _prover_data.drain(0..) {
+        let w = Witness::new(i+1,
+                             max_cred_num,
+                             issuance_by_default,
+                             &final_delta,
+                             &simple_tail_accessor).unwrap();
+        prover_data.push((v, s, w));
+        i += 1;
     }
 
     (credential_schema, non_credential_schema, credential_pub_key, rev_key_pub, rev_reg, prover_data)
@@ -141,18 +148,18 @@ fn gen_proofs(credential_schema: &CredentialSchema, non_credential_schema: &NonC
               credential_pub_key: &CredentialPublicKey, sub_proof_request: &SubProofRequest,
               nonces: &[Nonce], rev_reg: &RevocationRegistry,
               prover_data: &[(CredentialValues, CredentialSignature, Witness)]) -> Vec<Proof>{
-    let mut proofs = vec![];
+    let mut proofs = Vec::with_capacity(nonces.len());
     for i in 0..nonces.len() {
         let (ref credential_values, ref credential_signature, ref witness) = prover_data[i as usize];
 
         let mut proof_builder = Prover::new_proof_builder().unwrap();
         proof_builder.add_common_attribute("master_secret").unwrap();
-        proof_builder.add_sub_proof_request(&sub_proof_request,
+        proof_builder.add_sub_proof_request(sub_proof_request,
                                             credential_schema,
-                                            &non_credential_schema,
+                                            non_credential_schema,
                                             credential_signature,
                                             credential_values,
-                                            &credential_pub_key,
+                                            credential_pub_key,
                                             Some(rev_reg),
                                             Some(witness)).unwrap();
         proofs.push(proof_builder.finalize(&nonces[i as usize]).unwrap());
@@ -163,8 +170,9 @@ fn gen_proofs(credential_schema: &CredentialSchema, non_credential_schema: &NonC
 fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "cks revocation proof generation with on demand issuance",
-        move |b, max_cred_num| {
+        move |b, (max_cred_num, num_proofs_to_do)| {
             let max_cred_num = *max_cred_num as u32;
+            let num_proofs_to_do = *num_proofs_to_do as u32;
             let issuance_by_default = false;
 
             let sub_proof_request = get_sub_proof_request();
@@ -172,22 +180,22 @@ fn bench_cks_prove_revok_on_demand_issuance(c: &mut Criterion) {
                 credential_pub_key, _, rev_reg,
                 prover_data) = setup_cred_and_issue(max_cred_num, issuance_by_default);
 
-            let nonces:Vec<_> = (0..max_cred_num).map(| _ | new_nonce().unwrap()).collect();
+            let nonces:Vec<_> = (0..num_proofs_to_do).map(| _ | new_nonce().unwrap()).collect();
 
             b.iter( || {
                 gen_proofs(&credential_schema, &non_credential_schema, &credential_pub_key, &sub_proof_request, &nonces, &rev_reg, &prover_data);
             });
         },
-        vec![10000],
+        vec![(10000, 10)],
     );
 }
 
 fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
     c.bench_function_over_inputs(
         "cks revocation verify proof with on demand issuance",
-        move |b, max_cred_num| {
+        move |b, (max_cred_num, num_proofs_to_do)| {
             let max_cred_num = *max_cred_num as u32;
-
+            let num_proofs_to_do = *num_proofs_to_do as u32;
             let issuance_by_default = false;
 
             let sub_proof_request = get_sub_proof_request();
@@ -195,11 +203,12 @@ fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
                 credential_pub_key, rev_key_pub, rev_reg,
                 prover_data) = setup_cred_and_issue(max_cred_num, issuance_by_default);
 
-            let nonces:Vec<_> = (0..max_cred_num).map(| _ | new_nonce().unwrap()).collect();
+            let nonces:Vec<_> = (0..num_proofs_to_do).map(| _ | new_nonce().unwrap()).collect();
             let proofs = gen_proofs(&credential_schema, &non_credential_schema, &credential_pub_key, &sub_proof_request, &nonces, &rev_reg, &prover_data);
 
             b.iter(|| {
-                for i in 0..max_cred_num {
+                for i in 0..num_proofs_to_do {
+                    let idx = i as usize;
                     let mut verifier = Verifier::new_proof_verifier().unwrap();
                     verifier.add_sub_proof_request(&sub_proof_request,
                                                          &credential_schema,
@@ -207,30 +216,28 @@ fn bench_cks_verify_revok_on_demand_issuance(c: &mut Criterion) {
                                                          &credential_pub_key,
                                                          Some(&rev_key_pub),
                                                          Some(&rev_reg)).unwrap();
-                    //assert!(verifier.verify(&proofs[i as usize], &nonces[i as usize]).unwrap());
-                    verifier.verify(&proofs[i as usize], &nonces[i as usize]).unwrap();
+                    assert!(verifier.verify(&proofs[idx], &nonces[idx]).unwrap());
                 }
             });
         },
-        vec![10000],
+        vec![(10000, 10)],
     );
 }
 
 criterion_group! {
     name = cks_prove_revok_on_demand;
-    //config = Criterion::default().sample_size(3);
-    config = Criterion::default();
+    config = Criterion::default().sample_size(3);
+    //config = Criterion::default();
     targets =
     bench_cks_prove_revok_on_demand_issuance,
 }
 
 criterion_group! {
     name = cks_verify_revok_on_demand;
-    //config = Criterion::default().sample_size(3);
-    config = Criterion::default();
+    config = Criterion::default().sample_size(3);
+    //config = Criterion::default();
     targets =
     bench_cks_verify_revok_on_demand_issuance,
 }
 
 criterion_main!(cks_prove_revok_on_demand, cks_verify_revok_on_demand);
-//criterion_main!(cks_verify_revok_on_demand);
