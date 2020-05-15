@@ -1,0 +1,19 @@
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+repository:
+  name: indy-crypto
+  description: Archive of Indy Crypto library. Superseded by the
+    Hyperledger Ursa Project.
+  homepage: https://wiki.hyperledger.org/display/indy
+  default_branch: master
+  has_downloads: false
+  has_issues: false
+  has_projects: false
+  has_wiki: false
+  archived: true
+  private: false
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: true
