@@ -37,3 +37,10 @@ serde_derive = { version = "1.0",  optional = true}
 lazy_static = "1.0"
 wasm-bindgen = { version = "0.2", optional = true, features = ["serde-serialize"] }
 console_error_panic_hook = { version = "0.1.5", optional = true }
+
+[dev-dependencies]
+criterion = "0.2"
+
+[[bench]]
+name = "cks_revok"
+harness = false
